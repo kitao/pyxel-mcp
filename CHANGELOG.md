@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.5
+
+- Added `inspect_sprite` tool for reading sprite pixel data, symmetry, and colors
+- Added `inspect_layout` tool for analyzing text positioning and layout balance
+- Added `capture_frames` tool for capturing screenshots at multiple frame points
+- Enhanced `render_audio` with musical analysis (key detection, intervals, rhythm, role suggestion)
+
 ## 0.1.4
 
 - Prevented zombie processes on subprocess timeout
