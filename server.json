@@ -1,7 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.kitao/pyxel-mcp",
+  "title": "Pyxel MCP",
   "description": "MCP server for Pyxel, a retro game engine for Python",
+  "websiteUrl": "https://github.com/kitao/pyxel-mcp",
   "repository": {
     "url": "https://github.com/kitao/pyxel-mcp",
     "source": "github"
