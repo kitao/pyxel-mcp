@@ -1,7 +1,7 @@
 [project]
 name = "pyxel-mcp"
 version = "0.1.0"
-description = "MCP server for Pyxel - AI-driven retro game development"
+description = "MCP server for Pyxel, a retro game engine for Python"
 requires-python = ">=3.10"
 license = "MIT"
 dependencies = ["mcp>=1.0.0"]
