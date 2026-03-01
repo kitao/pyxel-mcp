@@ -43,6 +43,9 @@ async def run_and_capture(
         scale: Screenshot scale multiplier (default: 2).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
+    if not _pyxel_dir():
+        return ["Error: Pyxel is not installed. Run: pip install pyxel"]
+
     script_path = os.path.abspath(script_path)
     if not os.path.isfile(script_path):
         return [f"Error: script not found: {script_path}"]
@@ -240,6 +243,9 @@ async def render_audio(
         duration_sec: Duration in seconds. 0 = auto-detect from sound length.
         timeout: Maximum seconds to wait for the script (default: 10).
     """
+    if not _pyxel_dir():
+        return "Error: Pyxel is not installed. Run: pip install pyxel"
+
     script_path = os.path.abspath(script_path)
     if not os.path.isfile(script_path):
         return f"Error: script not found: {script_path}"

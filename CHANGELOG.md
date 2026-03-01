@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.3
+
+- Added Pyxel installation check to run_and_capture and render_audio
+- Pinned mcp dependency to <2.0.0
+
 ## 0.1.2
 
 - Added MCP Registry metadata
