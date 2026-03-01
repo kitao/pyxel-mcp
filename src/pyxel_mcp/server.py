@@ -88,7 +88,11 @@ def pyxel_info() -> str:
     """Get Pyxel installation info: package location, examples path, and API stubs path."""
     pyxel_dir = _pyxel_dir()
     if not pyxel_dir:
-        return "Error: Pyxel is not installed"
+        return (
+            "Pyxel is not installed.\n"
+            "Install it with: pip install pyxel\n"
+            "See https://github.com/kitao/pyxel for details."
+        )
     examples = os.path.join(pyxel_dir, "examples")
     pyi = os.path.join(pyxel_dir, "__init__.pyi")
     lines = [

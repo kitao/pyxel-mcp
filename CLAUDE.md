@@ -8,6 +8,7 @@
   - After writing or modifying code, always run_and_capture to verify the visual result.
 - `pyxel_info` — Get Pyxel's installed location, examples path, and API stubs path.
   - Call this first to find where examples and API docs are on this system.
+  - If Pyxel is not installed, guide the user to run `pip install pyxel`.
 - `render_audio` — Render a Pyxel sound to WAV and analyze the waveform.
   - `sound_index`: sound slot to render, 0-63 (default: 0)
   - `duration_sec`: duration in seconds, 0 = auto-detect (default: 0)
