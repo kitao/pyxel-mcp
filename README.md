@@ -5,7 +5,10 @@ MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for 
 ## Features
 
 - **`run_and_capture`** — Run a Pyxel script and capture a screenshot for visual verification
-- **`render_audio`** — Render a Pyxel sound to WAV and analyze the waveform (note detection, frequency, volume)
+- **`capture_frames`** — Capture screenshots at multiple frame points for animation verification
+- **`inspect_sprite`** — Read sprite pixel data from image banks, report symmetry and colors
+- **`inspect_layout`** — Analyze screen layout, text positioning, and visual balance
+- **`render_audio`** — Render a Pyxel sound to WAV and analyze notes, rhythm, and key
 - **`pyxel_info`** — Get Pyxel installation paths (API stubs, examples)
 
 ## Requirements
