@@ -36,6 +36,10 @@ Add to your project's `.mcp.json`:
 
 Then copy `CLAUDE.md` to your project root to give the AI context about available tools and Pyxel workflows.
 
+## MCP Registry
+
+mcp-name: io.github.kitao/pyxel-mcp
+
 ## License
 
 MIT
