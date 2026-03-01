@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.7
+
+- Fixed screenshot timing: capture after draw instead of after update for accurate frame content
+- Added error handling for WAV analysis in render_audio
+- Added fallback for sound.total_sec() in audio harness
+- Added missing parameters (timeout, duration_sec) to CLAUDE.md tool signatures
+
 ## 0.1.6
 
 - Added PyPI metadata (keywords, classifiers, author, project URLs) for discoverability

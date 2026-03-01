@@ -45,16 +45,16 @@ def _try_capture():
         pyxel.quit()
 
 
-# Patch pyxel.run: wrap update to capture at target frames
+# Patch pyxel.run: wrap draw to capture after rendering target frames
 _original_run = pyxel.run
 
 
 def _patched_run(update, draw):
-    def wrapped_update():
-        update()
+    def wrapped_draw():
+        draw()
         _try_capture()
 
-    _original_run(wrapped_update, draw)
+    _original_run(update, wrapped_draw)
 
 
 pyxel.run = _patched_run

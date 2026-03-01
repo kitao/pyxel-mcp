@@ -2,11 +2,11 @@
 
 ## MCP Tools
 
-- `run_and_capture(script_path, frames=60, scale=2)` — Run script, capture screenshot.
-- `capture_frames(script_path, frames="1,15,30,60", scale=2)` — Capture at multiple frames.
-- `inspect_sprite(script_path, image=0, x, y, w=8, h=8)` — Read sprite pixels and report colors.
-- `inspect_layout(script_path, frames=5)` — Analyze text positioning and layout balance.
-- `render_audio(script_path, sound_index=0)` — Render sound to WAV, analyze notes and rhythm.
+- `run_and_capture(script_path, frames=60, scale=2, timeout=10)` — Run script, capture screenshot.
+- `capture_frames(script_path, frames="1,15,30,60", scale=2, timeout=30)` — Capture at multiple frames.
+- `inspect_sprite(script_path, image=0, x, y, w=8, h=8, timeout=10)` — Read sprite pixels and report colors.
+- `inspect_layout(script_path, frames=5, timeout=10)` — Analyze text positioning and layout balance.
+- `render_audio(script_path, sound_index=0, duration_sec=0, timeout=10)` — Render sound to WAV, analyze notes and rhythm.
 - `pyxel_info()` — Get paths to API stubs and example scripts. Call this first.
 
 ## Workflow

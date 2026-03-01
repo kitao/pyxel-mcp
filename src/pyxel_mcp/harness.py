@@ -45,17 +45,17 @@ def _capture_and_quit():
     pyxel.quit()
 
 
-# Patch pyxel.run: wrap update to count frames and auto-capture
+# Patch pyxel.run: wrap draw to capture after rendering the target frame
 _original_run = pyxel.run
 
 
 def _patched_run(update, draw):
-    def wrapped_update():
-        update()
+    def wrapped_draw():
+        draw()
         if pyxel.frame_count >= target_frames:
             _capture_and_quit()
 
-    _original_run(wrapped_update, draw)
+    _original_run(update, wrapped_draw)
 
 
 pyxel.run = _patched_run

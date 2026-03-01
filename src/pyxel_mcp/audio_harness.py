@@ -46,8 +46,11 @@ sound = pyxel.sounds[sound_index]
 
 # Auto-detect duration if not specified
 if duration_sec <= 0:
-    total = sound.total_sec()
-    duration_sec = (total + 0.5) if total else 5.0
+    try:
+        total = sound.total_sec()
+        duration_sec = (total + 0.5) if total else 5.0
+    except Exception:
+        duration_sec = 5.0
 
 # Render to WAV
 sound.save(output_path, duration_sec)

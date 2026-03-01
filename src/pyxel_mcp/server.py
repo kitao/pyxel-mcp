@@ -450,7 +450,10 @@ async def render_audio(
             except json.JSONDecodeError:
                 pass
 
-        analysis = await asyncio.to_thread(_analyze_wav, output_path)
+        try:
+            analysis = await asyncio.to_thread(_analyze_wav, output_path)
+        except Exception as e:
+            analysis = f"WAV analysis failed: {e}"
         result = (
             f"Sound {sound_index} rendered"
             f" ({meta.get('duration_sec', '?')}s,"
