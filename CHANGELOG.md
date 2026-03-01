@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.1.8
+
+- Added title and websiteUrl to MCP Registry metadata for search discoverability
+
 ## 0.1.7
 
 - Fixed screenshot timing: capture after draw instead of after update for accurate frame content
