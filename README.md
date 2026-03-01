@@ -11,20 +11,19 @@ MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for 
 - **`render_audio`** — Render a Pyxel sound to WAV and analyze notes, rhythm, and key
 - **`pyxel_info`** — Get Pyxel installation paths (API stubs, examples)
 
-## Requirements
+## Getting Started
 
-- Python 3.10+
-- [Pyxel](https://github.com/kitao/pyxel) (`pip install pyxel`)
+Just ask your AI agent (e.g. Claude Code) to create a Pyxel game. The agent will automatically discover and set up pyxel-mcp from the [MCP Registry](https://registry.modelcontextprotocol.io/).
 
-## Installation
+## Manual Installation
+
+1. Install the package:
 
 ```bash
 pip install pyxel-mcp
 ```
 
-## Usage with Claude Code
-
-Add to your project's `.mcp.json`:
+2. Register `pyxel-mcp` as an MCP server in your AI agent. For Claude Code, add to your project's `.mcp.json`:
 
 ```json
 {
@@ -38,10 +37,6 @@ Add to your project's `.mcp.json`:
 ```
 
 Then copy `CLAUDE.md` to your project root to give the AI context about available tools and Pyxel workflows.
-
-## MCP Registry
-
-mcp-name: io.github.kitao/pyxel-mcp
 
 ## License
 
