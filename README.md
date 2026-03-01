@@ -1,6 +1,6 @@
 # pyxel-mcp
 
-MCP server for [Pyxel](https://github.com/kitao/pyxel) that enables AI to autonomously run, verify, and iterate on retro game programs.
+MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for Python. Enables AI to autonomously run, verify, and iterate on retro game programs.
 
 ## Features
 

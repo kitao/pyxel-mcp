@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.1.4
+
+- Prevented zombie processes on subprocess timeout
+- Avoided importing Pyxel in the server process (use importlib.util.find_spec)
+- Added parameter validation (frames, scale, timeout, sound_index, duration_sec)
+- Added safe stderr decoding and truncation
+- Moved WAV analysis to a background thread to prevent event loop blocking
+- Unified description text across project files
+
 ## 0.1.3
 
 - Added Pyxel installation check to run_and_capture and render_audio

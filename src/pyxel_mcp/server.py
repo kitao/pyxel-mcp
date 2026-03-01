@@ -1,4 +1,4 @@
-"""MCP server for Pyxel - enables AI to run and visually verify Pyxel programs."""
+"""MCP server for Pyxel, a retro game engine for Python."""
 
 import asyncio
 import glob
@@ -9,20 +9,38 @@ import struct
 import sys
 import tempfile
 import wave
+from importlib.util import find_spec
 
 from mcp.server.fastmcp import FastMCP, Image
 
 HARNESS_PATH = os.path.join(os.path.dirname(__file__), "harness.py")
 AUDIO_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "audio_harness.py")
 
+_MAX_STDERR = 4000
+
 
 def _pyxel_dir():
-    """Find installed Pyxel package directory."""
+    """Find installed Pyxel package directory (without importing Pyxel)."""
     try:
-        import pyxel
-        return os.path.dirname(pyxel.__file__)
-    except ImportError:
-        return None
+        spec = find_spec("pyxel")
+        if spec:
+            if spec.origin:
+                return os.path.dirname(spec.origin)
+            if spec.submodule_search_locations:
+                return list(spec.submodule_search_locations)[0]
+    except (ModuleNotFoundError, ValueError):
+        pass
+    return None
+
+
+def _decode_stderr(stderr):
+    """Decode subprocess stderr, truncating if too long."""
+    if not stderr:
+        return ""
+    text = stderr.decode(errors="replace").strip()
+    if len(text) > _MAX_STDERR:
+        return text[:_MAX_STDERR] + "\n... (truncated)"
+    return text
 
 
 mcp = FastMCP("pyxel-mcp")
@@ -50,6 +68,10 @@ async def run_and_capture(
     if not os.path.isfile(script_path):
         return [f"Error: script not found: {script_path}"]
 
+    frames = max(1, min(frames, 1800))
+    scale = max(1, min(scale, 10))
+    timeout = max(1, min(timeout, 60))
+
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
         output_path = tmp.name
 
@@ -66,20 +88,22 @@ async def run_and_capture(
         )
 
         if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
-            error_msg = stderr.decode().strip() if stderr else "Unknown error"
+            error_msg = _decode_stderr(stderr) or "Unknown error"
             return [f"Capture failed (exit code {proc.returncode}): {error_msg}"]
 
         with open(output_path, "rb") as f:
             image_data = f.read()
         result = [Image(data=image_data, format="png")]
         info = f"Captured at frame {frames}, scale {scale}x"
-        if stderr:
-            info += f"\nstderr: {stderr.decode().strip()}"
+        stderr_text = _decode_stderr(stderr)
+        if stderr_text:
+            info += f"\nstderr: {stderr_text}"
         result.append(info)
         return result
 
     except asyncio.TimeoutError:
         proc.kill()
+        await proc.communicate()
         return [f"Timeout: script did not finish within {timeout}s"]
     finally:
         if os.path.exists(output_path):
@@ -250,6 +274,11 @@ async def render_audio(
     if not os.path.isfile(script_path):
         return f"Error: script not found: {script_path}"
 
+    sound_index = max(0, min(sound_index, 63))
+    timeout = max(1, min(timeout, 60))
+    if duration_sec > 0:
+        duration_sec = min(duration_sec, 30.0)
+
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         output_path = tmp.name
 
@@ -275,28 +304,30 @@ async def render_audio(
         )
 
         if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
-            error_msg = stderr.decode().strip() if stderr else "Unknown error"
+            error_msg = _decode_stderr(stderr) or "Unknown error"
             return f"Render failed (exit code {proc.returncode}): {error_msg}"
 
         meta = {}
         if stdout:
             try:
-                meta = json.loads(stdout.decode().strip())
+                meta = json.loads(stdout.decode(errors="replace").strip())
             except json.JSONDecodeError:
                 pass
 
-        analysis = _analyze_wav(output_path)
+        analysis = await asyncio.to_thread(_analyze_wav, output_path)
         result = (
             f"Sound {sound_index} rendered"
             f" ({meta.get('duration_sec', '?')}s,"
             f" speed={meta.get('speed', '?')})\n\n{analysis}"
         )
-        if stderr and stderr.strip():
-            result += f"\n\nstderr: {stderr.decode().strip()}"
+        stderr_text = _decode_stderr(stderr)
+        if stderr_text:
+            result += f"\n\nstderr: {stderr_text}"
         return result
 
     except asyncio.TimeoutError:
         proc.kill()
+        await proc.communicate()
         return f"Timeout: script did not finish within {timeout}s"
     finally:
         if os.path.exists(output_path):
