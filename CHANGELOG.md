@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.1.6
+
+- Added PyPI metadata (keywords, classifiers, author, project URLs) for discoverability
+
 ## 0.1.5
 
 - Added `inspect_sprite` tool for reading sprite pixel data, symmetry, and colors
