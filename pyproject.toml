@@ -1,6 +1,6 @@
 [project]
 name = "pyxel-mcp"
-version = "0.1.10"
+version = "0.1.11"
 description = "MCP server for Pyxel, a retro game engine for Python. Enables AI to autonomously run, verify, and iterate on retro game programs."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Games/Entertainment",
     "Topic :: Software Development :: Libraries",
 ]
-dependencies = ["mcp>=1.0.0,<2.0.0"]
+dependencies = ["mcp>=1.0.0,<2.0.0", "pyxel"]
 
 [project.urls]
 Homepage = "https://github.com/kitao/pyxel-mcp"

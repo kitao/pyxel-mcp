@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.1.11
+
+- Added pyxel as a package dependency for seamless installation via uvx and pipx
+
 ## 0.1.10
 
 - Restored mcp-name in README for MCP Registry package ownership verification
