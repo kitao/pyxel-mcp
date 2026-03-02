@@ -36,8 +36,6 @@ pip install pyxel-mcp
 }
 ```
 
-Then copy `CLAUDE.md` to your project root to give the AI context about available tools and Pyxel workflows.
-
 ## License
 
 MIT

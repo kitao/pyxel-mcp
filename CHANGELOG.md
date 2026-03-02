@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.9
+
+- Moved development guide from CLAUDE.md into MCP server instructions for all AI agents
+- Removed CLAUDE.md (no longer needed as a separate file)
+- Updated README with MCP Registry as the primary getting started path
+- Enhanced tilemap documentation with detailed format explanation and multi-row examples
+
 ## 0.1.8
 
 - Added title and websiteUrl to MCP Registry metadata for search discoverability
