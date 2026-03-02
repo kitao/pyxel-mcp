@@ -153,6 +153,16 @@ pyxel.playm(msc, loop=False)      # play music
 pyxel.stop(ch)                    # stop channel (omit ch to stop all)
 ```
 
+### Channel Management
+
+Pyxel has 4 audio channels (0-3). `playm()` assigns music tracks to channels
+starting from ch0. `play(ch, snd)` on the same channel **interrupts** the music
+on that channel. Plan channel allocation to avoid BGM/SE conflicts:
+
+- **BGM on ch0-2, SE on ch3**: Use 3-channel music so SE never interrupts BGM.
+- **Title/menu screens**: Can safely use all 4 channels for BGM (no frequent SE).
+- Use `resume=True` for non-critical SE to avoid cutting off other sounds.
+
 ## Math
 
 `sin(deg)`, `cos(deg)` use **degrees** (not radians). `atan2(y, x)` returns degrees.
@@ -248,7 +258,21 @@ Full syntax: fetch the MML commands JSON.
 
 ### Quick BGM
 
-`pyxel.gen_bgm(preset, instr, seed)` generates MML strings for background music.
+```python
+mml_list = pyxel.gen_bgm(preset, instr, seed=None)
+# preset: 0-7 (music style), instr: 0-3 (instrument set)
+# Returns: list of 4 MML strings (one per channel)
+# Always returns 4 channels — drop extras if you need to reserve channels for SE
+
+# Example: 3-channel BGM (reserve ch3 for SE)
+mml = pyxel.gen_bgm(7, 1, seed=42)
+for i in range(3):
+    pyxel.sounds[10 + i].mml(mml[i])
+pyxel.musics[0].set([10], [11], [12])
+
+# Quick play (uses all 4 channels — good for title screens)
+pyxel.gen_bgm(preset, instr, seed=42, play=True)
+```
 
 ### Music
 
@@ -288,10 +312,25 @@ pyxel.sounds[0].pcm("sound.wav")
 0:black 1:navy 2:purple 3:green 4:brown 5:dark_blue 6:light_blue 7:white
 8:red 9:orange 10(a):yellow 11(b):lime 12(c):cyan 13(d):gray 14(e):pink 15(f):peach
 
-## Text Centering
+## Text Layout
+
+Always **calculate** text positions — never hardcode pixel coordinates.
+The built-in font is `FONT_WIDTH=4` px wide, `FONT_HEIGHT=6` px tall.
 
 ```python
-x = (pyxel.width - len(text) * pyxel.FONT_WIDTH) // 2  # FONT_WIDTH = 4
+# Horizontal centering
+x = (pyxel.width - len(text) * pyxel.FONT_WIDTH) // 2
+
+# Right-align (with margin)
+x = pyxel.width - len(text) * pyxel.FONT_WIDTH - margin
+
+# Center a group (e.g., sprite 8px + gap 4px + text)
+group_w = 8 + 4 + len(text) * pyxel.FONT_WIDTH
+x = (pyxel.width - group_w) // 2
+
+# Vertical centering of N lines (with spacing between lines)
+block_h = N * pyxel.FONT_HEIGHT + (N - 1) * spacing
+y = (pyxel.height - block_h) // 2
 ```
 """
 
@@ -415,7 +454,14 @@ def _freq_to_midi(freq):
 
 
 def _estimate_freq(samples, sample_rate):
-    """Estimate fundamental frequency using autocorrelation."""
+    """Estimate fundamental frequency using autocorrelation.
+
+    Uses a "first peak after dip" approach: the autocorrelation naturally
+    starts high at small lags (adjacent samples are correlated) and decays.
+    The true fundamental shows up as the first significant peak *after* this
+    initial decay, not as the global maximum (which is often at min_lag for
+    smooth waveforms like triangle waves, causing ~2000 Hz artifacts).
+    """
     n = len(samples)
     min_lag = max(1, sample_rate // 2000)  # up to 2000 Hz
     max_lag = min(sample_rate // 50, n // 2)  # down to 50 Hz
@@ -426,22 +472,35 @@ def _estimate_freq(samples, sample_rate):
     mean = sum(samples) / n
     centered = [s - mean for s in samples]
 
-    # Autocorrelation: find first peak after initial decay
     energy = sum(s * s for s in centered)
     if energy == 0:
         return 0
 
-    best_corr = -1
-    best_lag = 0
-    for lag in range(min_lag, max_lag):
-        corr = sum(centered[i] * centered[i + lag] for i in range(n - lag))
-        normalized = corr / energy
-        if normalized > best_corr:
-            best_corr = normalized
-            best_lag = lag
+    # Compute normalized autocorrelation for the lag range
+    num_lags = max_lag - min_lag
+    corrs = [0.0] * num_lags
+    for idx in range(num_lags):
+        lag = min_lag + idx
+        corrs[idx] = sum(centered[i] * centered[i + lag] for i in range(n - lag)) / energy
 
-    if best_lag > 0 and best_corr > 0.3:
-        return sample_rate / best_lag
+    # Find where correlation first drops below threshold (end of initial decay)
+    dip_idx = None
+    for i in range(num_lags):
+        if corrs[i] < 0.2:
+            dip_idx = i
+            break
+
+    if dip_idx is None:
+        # Correlation never dipped — either genuinely high frequency or noise.
+        # Fall back to global max with a strict threshold.
+        best_i = max(range(num_lags), key=lambda i: corrs[i])
+        return sample_rate / (min_lag + best_i) if corrs[best_i] > 0.6 else 0
+
+    # Find first peak after the dip (the true fundamental period)
+    for i in range(max(1, dip_idx), num_lags - 1):
+        if corrs[i] > 0.3 and corrs[i] >= corrs[i - 1] and corrs[i] >= corrs[i + 1]:
+            return sample_rate / (min_lag + i)
+
     return 0
 
 
