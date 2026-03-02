@@ -1,5 +1,21 @@
 # Change Log
 
+## 0.2.0
+
+- Overhauled MCP server instructions with comprehensive Pyxel API guide
+  - Added app structure patterns (class-based game loop, static image)
+  - Added drawing API quick reference (all 16 drawing functions)
+  - Added sprite drawing details (colkey, flip, rotate/scale, animation)
+  - Added input API (btn/btnp/btnr, key constants, mouse)
+  - Added audio playback (play/playm/stop with loop and resume)
+  - Added math utilities (sin/cos use degrees, rndi/rndf, atan2)
+  - Added camera & effects (camera, clip, pal, dither)
+  - Added MML quick reference for music composition
+  - Added Music class usage for multi-channel music
+  - Added Advanced section (Tilemap.collide, custom Font, image/TMX loading, wavetable, PCM)
+  - Improved existing sections: tilemap pget/pset, sound effects h/q, FONT_WIDTH constant
+- Fixed error messages to suggest `pip install pyxel-mcp` instead of `pip install pyxel`
+
 ## 0.1.11
 
 - Added pyxel as a package dependency for seamless installation via uvx and pipx

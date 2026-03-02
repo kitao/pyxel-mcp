@@ -77,7 +77,99 @@ Replace input conditions with frame-based triggers, capture, then revert:
 - Local stubs and examples: call `pyxel_info`.
 
 For API details, read the type stubs or fetch the API reference JSON.
-For MML syntax, fetch the MML commands JSON. Use `Sound.mml()` to set sounds via MML.
+For MML syntax, fetch the MML commands JSON.
+User-created games for reference: https://github.com/kitao/pyxel/wiki/Pyxel-User-Examples
+
+## App Structure
+
+```python
+# Class-based game (most common)
+class App:
+    def __init__(self):
+        pyxel.init(160, 120, title="My Game")
+        pyxel.load("my_resource.pyxres")  # optional: load .pyxres file
+        pyxel.run(self.update, self.draw)
+    def update(self):
+        if pyxel.btnp(pyxel.KEY_Q):
+            pyxel.quit()
+    def draw(self):
+        pyxel.cls(0)
+App()
+
+# Static image (no game loop)
+pyxel.init(160, 120)
+pyxel.cls(1)
+pyxel.circ(80, 60, 20, 8)
+pyxel.show()
+```
+
+System variables: `pyxel.width`, `pyxel.height`, `pyxel.frame_count`.
+
+## Drawing API
+
+```
+cls(col)                            clear screen
+pset(x, y, col)                     draw pixel
+line(x1, y1, x2, y2, col)          draw line
+rect(x, y, w, h, col)              filled rectangle
+rectb(x, y, w, h, col)             rectangle border
+circ(x, y, r, col)                 filled circle
+circb(x, y, r, col)                circle border
+elli(x, y, w, h, col)              filled ellipse
+ellib(x, y, w, h, col)             ellipse border
+tri(x1, y1, x2, y2, x3, y3, col)  filled triangle
+trib(x1, y1, x2, y2, x3, y3, col) triangle border
+fill(x, y, col)                     flood fill
+text(x, y, s, col)                  draw text (font: 4px wide, 6px tall)
+blt(x, y, img, u, v, w, h, [colkey], [rotate], [scale])   sprite
+bltm(x, y, tm, u, v, w, h, [colkey], [rotate], [scale])   tilemap
+```
+
+### Sprite Drawing (blt)
+
+- `colkey`: transparent color index (e.g., `colkey=0` treats black as transparent)
+- Negative `w` flips horizontally, negative `h` flips vertically
+- `rotate`: rotation in degrees, `scale`: scaling factor
+- Animation: `u = pyxel.frame_count // 4 % 2 * 8`
+
+## Input
+
+```
+btn(key)                    True while key is held
+btnp(key, [hold], [repeat]) True on press (with optional auto-repeat)
+btnr(key)                   True on release
+mouse_x, mouse_y            mouse position
+```
+
+Common keys: `KEY_LEFT/RIGHT/UP/DOWN`, `KEY_SPACE`, `KEY_RETURN`, \
+`KEY_A`..`KEY_Z`, `MOUSE_BUTTON_LEFT`
+
+## Audio Playback
+
+```python
+pyxel.play(ch, snd, loop=False)   # play sound on channel 0-3
+pyxel.play(ch, snd, resume=True)  # play without stopping current sound on channel
+pyxel.playm(msc, loop=False)      # play music
+pyxel.stop(ch)                    # stop channel (omit ch to stop all)
+```
+
+## Math
+
+`sin(deg)`, `cos(deg)` use **degrees** (not radians). `atan2(y, x)` returns degrees.
+`rndi(a, b)` random int, `rndf(a, b)` random float.
+`ceil(x)`, `floor(x)`, `sgn(x)`, `sqrt(x)`.
+
+## Camera & Effects
+
+```python
+pyxel.camera(x, y)       # shift drawing origin (for scrolling)
+pyxel.camera()            # reset origin
+pyxel.clip(x, y, w, h)   # restrict drawing area
+pyxel.clip()              # reset clip
+pyxel.pal(col1, col2)    # swap palette color (e.g., damage flash)
+pyxel.pal()               # reset palette
+pyxel.dither(alpha)       # dithering (0.0-1.0), affects subsequent draws
+```
 
 ## Resource Creation
 
@@ -118,7 +210,11 @@ pyxel.tilemaps[0].set(0, 0, [
 
 # Draw tilemap (colkey for transparent color)
 pyxel.bltm(0, 0, 0, 0, 0, 128, 128, colkey=0)
-# bltm(x, y, tm, u, v, w, h, colkey) — u,v,w,h select region of tilemap in pixels
+# bltm(x, y, tm, u, v, w, h, colkey) — u,v,w,h in pixels
+
+# Read/write individual tiles
+tile = pyxel.tilemaps[0].pget(tx, ty)  # returns (tile_x, tile_y)
+pyxel.tilemaps[0].pset(tx, ty, (tile_x, tile_y))
 ```
 
 Typical workflow: define tiles in an image bank with `images[N].set()`, then arrange \
@@ -131,24 +227,71 @@ pyxel.sounds[0].set(
     notes="c2e2g2c3",    # notes: [cdefgab][0-4], r=rest
     tones="ssss",         # t=triangle s=square p=pulse n=noise
     volumes="7654",       # 0-7
-    effects="nnnn",       # n=none s=slide v=vibrato f=fadeout
+    effects="nnnn",       # n=none s=slide v=vibrato f=fadeout h=half_fadeout q=quarter_fadeout
     speed=20,
 )
 ```
+
+### MML (Music Macro Language)
+
+`Sound.mml()` provides flexible music composition beyond `Sound.set()`:
+
+```python
+pyxel.sounds[0].mml("T120 @1 V100 L8 O4 CDEFGAB>C")
+```
+
+Key commands: `T`=tempo, `@`=tone(0:tri 1:sq 2:pulse 3:noise), `V`=volume(0-127), \
+`O`=octave, `>`/`<`=octave up/down, `L`=default length, `R`=rest, `#`/`-`=sharp/flat, \
+`.`=dotted, `&`=tie, `[`..`]N`=repeat N times.
+Advanced: `@ENV`=envelope, `@VIB`=vibrato, `@GLI`=glide.
+Full syntax: fetch the MML commands JSON.
 
 ### Quick BGM
 
 `pyxel.gen_bgm(preset, instr, seed)` generates MML strings for background music.
 
-### Color Palette
+### Music
+
+```python
+# Combine sounds into multi-channel music
+pyxel.musics[0].set([0, 1], [2, 3], [4])  # ch0: snd 0,1  ch1: snd 2,3  ch2: snd 4
+pyxel.playm(0, loop=True)
+```
+
+## Advanced
+
+```python
+# Tilemap collision (for platformers)
+dx, dy = pyxel.tilemaps[0].collide(x, y, w, h, dx, dy, wall_tiles)
+# wall_tiles: list of (tile_x, tile_y) tuples treated as walls
+
+# Custom font (TTF)
+font = pyxel.Font("font.ttf", 12)
+pyxel.text(x, y, "Hello", col, font)
+w = font.text_width("Hello")
+
+# Load external images
+pyxel.images[0].load(0, 0, "sprite.png")
+
+# Load Tiled map
+tm = pyxel.Tilemap.from_tmx("map.tmx", layer=0)
+
+# Custom tone (wavetable)
+pyxel.tones[0].wavetable[:] = [0, 4, 8, 12, 15, 12, 8, 4] * 4  # 32 samples, 0-15
+
+# PCM audio
+pyxel.sounds[0].pcm("sound.wav")
+```
+
+## Color Palette
 
 0:black 1:navy 2:purple 3:green 4:brown 5:dark_blue 6:light_blue 7:white
 8:red 9:orange 10(a):yellow 11(b):lime 12(c):cyan 13(d):gray 14(e):pink 15(f):peach
 
-### Text Centering
+## Text Centering
 
 ```python
-x = (pyxel.width - len(text) * 4) // 2
+x = (pyxel.width - len(text) * pyxel.FONT_WIDTH) // 2  # FONT_WIDTH = 4
 ```
 """
 
@@ -171,7 +314,7 @@ async def run_and_capture(
         timeout: Maximum seconds to wait for the script (default: 10).
     """
     if not _pyxel_dir():
-        return ["Error: Pyxel is not installed. Run: pip install pyxel"]
+        return ["Error: Pyxel is not installed. Run: pip install pyxel-mcp"]
 
     script_path = os.path.abspath(script_path)
     if not os.path.isfile(script_path):
@@ -226,7 +369,7 @@ def pyxel_info() -> str:
     if not pyxel_dir:
         return (
             "Pyxel is not installed.\n"
-            "Install it with: pip install pyxel\n"
+            "Install it with: pip install pyxel-mcp\n"
             "See https://github.com/kitao/pyxel for details."
         )
     examples = os.path.join(pyxel_dir, "examples")
@@ -509,7 +652,7 @@ async def render_audio(
         timeout: Maximum seconds to wait for the script (default: 10).
     """
     if not _pyxel_dir():
-        return "Error: Pyxel is not installed. Run: pip install pyxel"
+        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
 
     script_path = os.path.abspath(script_path)
     if not os.path.isfile(script_path):
@@ -646,7 +789,7 @@ async def inspect_sprite(
         timeout: Maximum seconds to wait for the script (default: 10).
     """
     if not _pyxel_dir():
-        return "Error: Pyxel is not installed. Run: pip install pyxel"
+        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
 
     script_path = os.path.abspath(script_path)
     if not os.path.isfile(script_path):
@@ -713,7 +856,7 @@ async def capture_frames(
         timeout: Maximum seconds to wait for the script (default: 30).
     """
     if not _pyxel_dir():
-        return ["Error: Pyxel is not installed. Run: pip install pyxel"]
+        return ["Error: Pyxel is not installed. Run: pip install pyxel-mcp"]
 
     script_path = os.path.abspath(script_path)
     if not os.path.isfile(script_path):
@@ -858,7 +1001,7 @@ async def inspect_layout(
         timeout: Maximum seconds to wait for the script (default: 10).
     """
     if not _pyxel_dir():
-        return "Error: Pyxel is not installed. Run: pip install pyxel"
+        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
 
     script_path = os.path.abspath(script_path)
     if not os.path.isfile(script_path):
