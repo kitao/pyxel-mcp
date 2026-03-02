@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.1.10
+
+- Restored mcp-name in README for MCP Registry package ownership verification
+
 ## 0.1.9
 
 - Moved development guide from CLAUDE.md into MCP server instructions for all AI agents

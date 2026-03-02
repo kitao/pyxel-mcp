@@ -36,6 +36,10 @@ pip install pyxel-mcp
 }
 ```
 
+## MCP Registry
+
+mcp-name: io.github.kitao/pyxel-mcp
+
 ## License
 
 MIT
