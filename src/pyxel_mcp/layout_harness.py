@@ -23,6 +23,17 @@ sys.argv = [script_path]
 
 import pyxel
 
+# Turbo mode: override FPS to run as fast as possible
+_original_init = pyxel.init
+
+
+def _turbo_init(*args, **kwargs):
+    kwargs["fps"] = 10000
+    _original_init(*args, **kwargs)
+
+
+pyxel.init = _turbo_init
+
 _captured = False
 
 
@@ -234,8 +245,8 @@ _original_run = pyxel.run
 
 def _patched_run(update, draw):
     def wrapped_draw():
-        draw()
         if pyxel.frame_count >= target_frames:
+            draw()
             _analyze_and_quit()
 
     _original_run(update, wrapped_draw)

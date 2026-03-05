@@ -61,6 +61,32 @@ _INSTRUCTIONS = """\
    - Other tools as needed for the task.
 5. Fix and re-verify.
 
+### Error Recovery
+
+- **`run_and_capture` timeout**: Script has an infinite loop or heavy computation. \
+Check `update()`/`draw()` for blocking logic. Reduce `frames` parameter to test earlier.
+- **`run_and_capture` black screen**: `cls()` called but nothing drawn, or drawing \
+with the same color as background. Check draw coordinates are within screen bounds.
+- **`render_audio` empty output**: Sound slot not populated. Verify the script calls \
+`pyxel.sounds[N].set()` or `.mml()` before the game loop.
+- **`inspect_sprite` all zeros**: Image bank not populated. Ensure `pyxel.images[N].set()` \
+or `.load()` runs before the game loop starts.
+- **`inspect_layout` no text detected**: Text may be too small, overlapping, or same \
+color as background. Try a different frame number.
+
+### Reading Tool Output
+
+- **`run_and_capture`**: Returns a screenshot image. Visually verify layout, colors, \
+and sprite positions.
+- **`render_audio`**: Returns note sequence with timing/frequency. Check that notes \
+match the intended melody and rhythm feels correct.
+- **`inspect_sprite`**: Returns a pixel grid + symmetry report. Asymmetric pixels \
+are listed by row — fix those coordinates in `images[N].set()`.
+- **`inspect_layout`**: Returns text positions and horizontal balance ratio. \
+Balance close to 1.0 = centered. Offset > 2px from center = likely misaligned.
+- **`capture_frames`**: Returns multiple screenshots. Compare frames to verify \
+animation progresses smoothly without jumps or flicker.
+
 ### Testing Input-Dependent Logic
 
 Replace input conditions with frame-based triggers, capture, then revert:
@@ -69,6 +95,12 @@ Replace input conditions with frame-based triggers, capture, then revert:
 # Original:  if pyxel.btnp(pyxel.KEY_SPACE): jump()
 # Test:      if pyxel.frame_count == 30: jump()
 ```
+
+### Letting the User Play
+
+When suggesting the user run a script directly, check for a virtual environment \
+(`.venv/bin/python` or similar) and include the full path in the command. \
+Users may not have Pyxel installed globally.
 
 ## Pyxel Reference
 
@@ -104,6 +136,11 @@ pyxel.show()
 ```
 
 System variables: `pyxel.width`, `pyxel.height`, `pyxel.frame_count`.
+
+## Coordinate System
+
+Origin `(0, 0)` is the **top-left** corner. X increases rightward, Y increases downward.
+Screen bounds: `0 <= x < pyxel.width`, `0 <= y < pyxel.height`.
 
 ## Drawing API
 
@@ -307,10 +344,169 @@ pyxel.tones[0].wavetable[:] = [0, 4, 8, 12, 15, 12, 8, 4] * 4  # 32 samples, 0-1
 pyxel.sounds[0].pcm("sound.wav")
 ```
 
+## Common Mistakes
+
+| Don't | Why | Do Instead |
+|-------|-----|------------|
+| Hardcode pixel positions | Breaks on different screen sizes | Calculate from `pyxel.width`/`pyxel.height` |
+| Forget `cls()` in `draw()` | Previous frame bleeds through | Always call `pyxel.cls(col)` first |
+| Use radians with `sin()`/`cos()` | Pyxel trig uses **degrees** | `pyxel.sin(90)` returns 1.0 |
+| Draw UI before sprites | UI hidden behind game objects | Draw order: background → objects → UI |
+| `play()` on BGM channel | Interrupts background music | Reserve ch3 for SE, BGM on ch0-2 |
+| Omit `colkey` in `blt()` | Sprite background not transparent | Add `colkey=0` (or the bg color index) |
+| Static animation frame | Sprite never animates | `u = pyxel.frame_count // speed % count * size` |
+| `if btn():` for one-shot action | Action fires every frame | Use `btnp()` for press-once events |
+| Deep nesting in `update()` | Hard to read and debug | Extract logic into methods/functions |
+| Modify list while iterating | Skips elements or crashes | Iterate over a copy: `for e in list(enemies):` |
+| Use noise tone for SE | Hard to hear over BGM | Use square (`"s"`) or pulse (`"p"`) tone, volume 5-7 |
+| Skip SE for core actions | Game feels unresponsive | Add SE for move, rotate, land, clear, game over |
+
+## Animation Timing
+
+Recommended frame counts for common animations:
+
+| Animation | Frames | Speed (frames/update) |
+|-----------|--------|-----------------------|
+| Idle breathing | 2-4 | 20-30 |
+| Walk cycle | 4-6 | 4-6 |
+| Run cycle | 4-6 | 2-3 |
+| Attack | 3-5 | 2-4 |
+| Jump | 3-4 | 3-5 |
+| Explosion | 4-8 | 3-4 |
+| Coin spin | 4 | 5-8 |
+
+```python
+# Standard animation pattern
+ANIM_FRAMES = 4
+ANIM_SPEED = 5  # change sprite every 5 game frames
+frame = pyxel.frame_count // ANIM_SPEED % ANIM_FRAMES
+u = frame * SPRITE_W  # offset into sprite sheet
+pyxel.blt(x, y, 0, u, v, SPRITE_W, SPRITE_H, colkey=0)
+```
+
+## Game Patterns
+
+### Platformer
+
+```python
+# Gravity + jump
+GRAVITY = 0.4
+JUMP_FORCE = -5.0
+vy += GRAVITY
+if on_ground and pyxel.btnp(pyxel.KEY_SPACE):
+    vy = JUMP_FORCE
+y += vy
+
+# Tilemap collision for solid ground
+dx, dy = pyxel.tilemaps[0].collide(x, y, w, h, dx, dy, wall_tiles)
+```
+
+### Shooter (top-down / side-scroll)
+
+```python
+# Bullet management
+if pyxel.btnp(pyxel.KEY_SPACE):
+    bullets.append({"x": player_x, "y": player_y})
+for b in list(bullets):
+    b["y"] -= BULLET_SPEED
+    if b["y"] < 0:
+        bullets.remove(b)
+
+# Enemy-bullet collision
+for e in list(enemies):
+    for b in list(bullets):
+        if abs(e["x"] - b["x"]) < 8 and abs(e["y"] - b["y"]) < 8:
+            enemies.remove(e)
+            bullets.remove(b)
+            break
+```
+
+### Scene Management
+
+```python
+# Simple state machine for title/game/gameover
+SCENE_TITLE, SCENE_GAME, SCENE_GAMEOVER = 0, 1, 2
+scene = SCENE_TITLE
+
+def update(self):
+    if self.scene == SCENE_TITLE:
+        if pyxel.btnp(pyxel.KEY_RETURN):
+            self.scene = SCENE_GAME
+    elif self.scene == SCENE_GAME:
+        self.update_game()
+    elif self.scene == SCENE_GAMEOVER:
+        if pyxel.btnp(pyxel.KEY_RETURN):
+            self.reset()
+            self.scene = SCENE_TITLE
+
+def draw(self):
+    pyxel.cls(0)
+    if self.scene == SCENE_TITLE:
+        # center title text
+        t = "MY GAME"
+        pyxel.text((pyxel.width - len(t) * 4) // 2, 50, t, 7)
+    elif self.scene == SCENE_GAME:
+        self.draw_game()
+    elif self.scene == SCENE_GAMEOVER:
+        pyxel.text(60, 50, "GAME OVER", 8)
+```
+
+## Game Polish Checklist
+
+Before considering a game complete, ensure these essentials are in place:
+
+- **BGM**: Add background music. Use `pyxel.gen_bgm()` for quick results, or compose \
+with MML. Reserve ch3 for SE and use ch0-2 for BGM.
+- **Sound effects**: Every player-visible event needs SE. Movement, rotation, landing, \
+clearing/collecting, chain/combo, game over, and menu select must ALL have distinct sounds. \
+Use square wave (`"s"`) for clear, audible SE — noise (`"n"`) is hard to hear. \
+Set volume to 5-7 (out of 7) so SE cuts through the BGM.
+- **Title screen**: Show game name and "PRESS ENTER" before gameplay starts.
+- **Game over screen**: Display final score and restart prompt.
+- **Controls hint**: Show key bindings on the title screen or during gameplay \
+(in a non-intrusive location).
+- **Screen layout**: Main play area centered, info panels in margins, no overlapping text.
+- **Visual feedback**: Flashing, shaking, or palette swap on hit/damage/chain.
+
 ## Color Palette
 
 0:black 1:navy 2:purple 3:green 4:brown 5:dark_blue 6:light_blue 7:white
 8:red 9:orange 10(a):yellow 11(b):lime 12(c):cyan 13(d):gray 14(e):pink 15(f):peach
+
+## Screen Layout
+
+Plan the screen composition **before** coding. Allocate regions for each element, \
+then derive all coordinates from those regions.
+
+```python
+# Example: game with side panel (160x120 screen)
+MARGIN = 4
+PANEL_W = 32
+GAME_W = pyxel.width - PANEL_W - MARGIN * 3   # play area width
+GAME_X = MARGIN                                 # play area left
+GAME_Y = MARGIN                                 # play area top
+GAME_H = pyxel.height - MARGIN * 2             # play area height
+PANEL_X = GAME_X + GAME_W + MARGIN             # panel left
+
+# Center play area if no side panel
+GAME_W = COLS * CELL
+GAME_X = (pyxel.width - GAME_W) // 2
+```
+
+Layout rules:
+- **Center the main play area**: The play area is the player's focal point — \
+center it both horizontally and vertically. Compute total content height \
+(play area + gaps + controls) and derive `BY = (pyxel.height - content_h) // 2`. \
+Place secondary info (score, next piece) in the remaining margins.
+- **Define regions first**: Assign rectangles for play area, HUD, and panels. \
+Derive all draw coordinates from these — never scatter magic numbers.
+- **Uniform margins**: Use a consistent `MARGIN` (typically 4-8px) around and between regions.
+- **No overlap**: HUD text must not intrude into the play area. Draw a border or \
+leave a gap between regions.
+- **Fill the screen**: Avoid large dead zones. If the play area is narrow, center it \
+and use side margins for info panels.
+- **Verify with `inspect_layout`**: Check horizontal balance is close to 50% and \
+text offsets are small.
 
 ## Text Layout
 

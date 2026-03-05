@@ -1,5 +1,21 @@
 # Change Log
 
+## 0.3.0
+
+- Added common mistakes table to instructions
+- Added animation timing guide with frame count recommendations
+- Added game patterns (platformer, shooter, scene management)
+- Added error recovery guidance for each tool
+- Added tool output interpretation guide
+- Added coordinate system documentation
+- Added screen layout guidelines (center main play area, vertical/horizontal centering)
+- Added game polish checklist (BGM, SE, title screen, game over, controls)
+- Added SE design guidance (use square wave, volume 5-7, cover all core actions)
+- Added venv execution guidance for letting users play games
+- Added turbo mode to harnesses (FPS override + draw skip for non-target frames)
+- Added uv.lock to .gitignore
+- Removed unused variable in frames_harness.py
+
 ## 0.2.1
 
 - Added .mcp.json for local development with Claude Code

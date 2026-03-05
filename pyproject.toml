@@ -1,6 +1,6 @@
 [project]
 name = "pyxel-mcp"
-version = "0.2.1"
+version = "0.3.0"
 description = "MCP server for Pyxel, a retro game engine for Python. Enables AI to autonomously run, verify, and iterate on retro game programs."
 readme = "README.md"
 requires-python = ">=3.10"
