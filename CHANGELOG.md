@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.3.1
+
+- Added visual design guide to instructions (background tiers, color hierarchy, title screen design, visual feedback patterns)
+- Enhanced common mistakes table with visual design anti-patterns
+- Improved game polish checklist with background art, color hierarchy, and HUD guidance
+- Based on analysis of 142 Pyxel user examples
+
 ## 0.3.0
 
 - Added common mistakes table to instructions

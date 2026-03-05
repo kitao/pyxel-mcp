@@ -360,6 +360,11 @@ pyxel.sounds[0].pcm("sound.wav")
 | Modify list while iterating | Skips elements or crashes | Iterate over a copy: `for e in list(enemies):` |
 | Use noise tone for SE | Hard to hear over BGM | Use square (`"s"`) or pulse (`"p"`) tone, volume 5-7 |
 | Skip SE for core actions | Game feels unresponsive | Add SE for move, rotate, land, clear, game over |
+| Plain black background | Game looks empty and amateur | Add star field, gradient, or subtle pattern |
+| No title screen | Game feels incomplete | Add title with game name, controls, animated elements |
+| No visual feedback on actions | Game feels unresponsive | Add flash, particles, or shake on hit/collect/clear |
+| Player blends into background | Can't distinguish elements | Use bright unique colors for player, high contrast |
+| Large empty screen areas | Wasted space, looks unfinished | Center game area, add decorative borders or HUD info |
 
 ## Animation Timing
 
@@ -442,13 +447,15 @@ def update(self):
 def draw(self):
     pyxel.cls(0)
     if self.scene == SCENE_TITLE:
-        # center title text
-        t = "MY GAME"
-        pyxel.text((pyxel.width - len(t) * 4) // 2, 50, t, 7)
+        self.draw_title()   # see Visual Design Guide for title patterns
     elif self.scene == SCENE_GAME:
         self.draw_game()
     elif self.scene == SCENE_GAMEOVER:
-        pyxel.text(60, 50, "GAME OVER", 8)
+        pyxel.text(60, 40, "GAME OVER", 8)
+        t = f"SCORE: {self.score}"
+        pyxel.text((pyxel.width - len(t) * 4) // 2, 55, t, 7)
+        if pyxel.frame_count % 40 < 28:
+            pyxel.text(44, 80, "PRESS ENTER", 13)
 ```
 
 ## Game Polish Checklist
@@ -461,17 +468,133 @@ with MML. Reserve ch3 for SE and use ch0-2 for BGM.
 clearing/collecting, chain/combo, game over, and menu select must ALL have distinct sounds. \
 Use square wave (`"s"`) for clear, audible SE — noise (`"n"`) is hard to hear. \
 Set volume to 5-7 (out of 7) so SE cuts through the BGM.
-- **Title screen**: Show game name and "PRESS ENTER" before gameplay starts.
+- **Title screen**: Pixel art game name (not plain text), animated elements, controls hint, \
+blinking "PRESS ENTER". See the Visual Design Guide for patterns.
 - **Game over screen**: Display final score and restart prompt.
-- **Controls hint**: Show key bindings on the title screen or during gameplay \
-(in a non-intrusive location).
+- **Background art**: Never use plain solid color. Add at minimum a star field, gradient, \
+or dithered pattern. For platformers/shmups, add parallax scrolling (even 2-layer helps).
+- **Color hierarchy**: Dark background → mid-tone environment → bright interactive elements. \
+Use 10+ of the 16 palette colors with clear visual layers.
 - **Screen layout**: Main play area centered, info panels in margins, no overlapping text.
-- **Visual feedback**: Flashing, shaking, or palette swap on hit/damage/chain.
+- **Visual feedback**: Flash (`pal()`), particles, or screen shake on every player action. \
+Hit, collect, clear, and death all need distinct visual responses — not just SE.
+- **HUD**: Score/stage at top, lives visible. Use color for emphasis (red for danger, \
+yellow for score).
 
 ## Color Palette
 
 0:black 1:navy 2:purple 3:green 4:brown 5:dark_blue 6:light_blue 7:white
 8:red 9:orange 10(a):yellow 11(b):lime 12(c):cyan 13(d):gray 14(e):pink 15(f):peach
+
+## Visual Design Guide
+
+Based on analysis of 140+ Pyxel user games, the key principles that separate \
+polished games from amateur ones:
+
+### Background Design (The #1 Quality Differentiator)
+
+Background quality is the single biggest factor in visual polish. Never leave \
+the background as a plain solid color.
+
+| Tier | Technique | Example |
+|------|-----------|---------|
+| S | Multi-layer parallax, atmospheric gradients, detailed tile art | Mountains + sky layers scrolling at different speeds |
+| A | Varied tile patterns, color-coded zones | Brick walls with shading, biome-colored terrain |
+| B | Dark background + subtle detail | Black sky with star particles, dark blue with dithering |
+| C | Solid single color (looks amateur) | `cls(0)` with nothing else — avoid this |
+
+Even a simple star field transforms the visual impression:
+
+```python
+# Minimal star background (huge improvement over plain black)
+import pyxel
+stars = [(pyxel.rndi(0, 159), pyxel.rndi(0, 119), pyxel.rndi(1, 3)) for _ in range(30)]
+# In draw():
+for sx, sy, brightness in stars:
+    pyxel.pset(sx, sy, [1, 5, 6, 7][brightness])
+
+# 2-layer parallax (great for shmups/platformers)
+# In draw():
+for i in range(20):
+    x = (i * 40 - pyxel.frame_count // 2) % (pyxel.width + 20) - 10
+    pyxel.circ(x, 20, 6, 1)   # far clouds (slow)
+for i in range(10):
+    x = (i * 50 - pyxel.frame_count) % (pyxel.width + 20) - 10
+    pyxel.circ(x, 40, 10, 5)  # near clouds (fast)
+```
+
+### Color Hierarchy
+
+Polished games establish a clear 3-layer color hierarchy:
+
+1. **Background** (dark): 0 (black), 1 (navy), 5 (dark_blue) — recedes visually
+2. **Environment** (mid-tones): 3 (green), 4 (brown), 13 (gray) — terrain, walls
+3. **Interactive** (bright): 8 (red), 10 (yellow), 11 (lime) — player, items, danger
+
+Use 10-14 of the 16 colors. Restrict each sprite to 3-4 colors for readability. \
+The player sprite should use a unique color not shared with enemies.
+
+### Title Screen Design
+
+A plain text title looks amateur. Good title screens include:
+
+1. **Pixel art game name** — larger than regular text, styled
+2. **Animated elements** — bouncing sprites, scrolling background
+3. **Controls hint** — key bindings visible
+4. **Blinking prompt** — "PRESS ENTER" toggled with `frame_count`
+
+```python
+def draw_title(self):
+    # Animated sprite decoration
+    for i in range(5):
+        x = 20 + i * 28
+        y = 20 + pyxel.sin(pyxel.frame_count * 3 + i * 72) * 3
+        pyxel.blt(x, int(y), 0, i * 8, 0, 8, 8, colkey=0)
+    # Game title (centered)
+    t = "MY GAME"
+    pyxel.text((pyxel.width - len(t) * 4) // 2, 48, t, 7)
+    # Controls
+    pyxel.text(40, 70, "ARROWS:MOVE  Z:JUMP", 13)
+    # Blinking prompt
+    if pyxel.frame_count % 40 < 28:
+        t2 = "PRESS ENTER"
+        pyxel.text((pyxel.width - len(t2) * 4) // 2, 100, t2, 10)
+```
+
+### Visual Feedback
+
+Every player-visible event needs visual feedback, not just SE:
+
+| Event | Visual technique |
+|-------|-----------------|
+| Hit/damage | `pyxel.pal()` flash to white for 2-3 frames |
+| Collect item | Sparkle particles (small dots expanding outward) |
+| Destroy enemy | Explosion circle expanding then fading |
+| Clear/combo | Screen flash with `dither()`, or brief color inversion |
+| Death | Player sprite blink (toggle visibility), then fade |
+
+```python
+# Damage flash (in draw)
+if self.hit_timer > 0:
+    pyxel.pal(player_color, 7)  # flash white
+# After drawing player:
+    pyxel.pal()  # reset
+
+# Simple explosion particles
+class Particle:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+        self.dx = pyxel.rndf(-2, 2)
+        self.dy = pyxel.rndf(-2, 2)
+        self.life = 10
+    def update(self):
+        self.x += self.dx
+        self.y += self.dy
+        self.life -= 1
+    def draw(self):
+        if self.life > 0:
+            pyxel.pset(int(self.x), int(self.y), 10 if self.life > 5 else 9)
+```
 
 ## Screen Layout
 
