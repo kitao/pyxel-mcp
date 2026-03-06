@@ -309,6 +309,21 @@ pyxel.musics[0].set([10], [11], [12])
 
 # Quick play (uses all 4 channels — good for title screens)
 pyxel.gen_bgm(preset, instr, seed=42, play=True)
+
+# Scene-specific BGM — vary preset/seed per scene for distinct moods
+def play_bgm(self, scene):
+    BGM = {
+        "title":    (0, 1, 100),  # (preset, instr, seed)
+        "game":     (3, 2, 200),
+        "boss":     (7, 0, 300),
+        "gameover": (5, 1, 400),
+    }
+    preset, instr, seed = BGM[scene]
+    mml = pyxel.gen_bgm(preset, instr, seed=seed)
+    for i in range(3):
+        pyxel.sounds[60 + i].mml(mml[i])
+    pyxel.musics[0].set([60], [61], [62])
+    pyxel.playm(0, loop=True)
 ```
 
 ### Music
@@ -322,9 +337,11 @@ pyxel.playm(0, loop=True)
 ## Advanced
 
 ```python
-# Tilemap collision (for platformers)
-dx, dy = pyxel.tilemaps[0].collide(x, y, w, h, dx, dy, wall_tiles)
-# wall_tiles: list of (tile_x, tile_y) tuples treated as walls
+# Tilemap collision — ALWAYS prefer this over hand-rolled Python loops.
+# It is C-optimized and handles edge cases (wall penetration, corner clips).
+WALL_TILES = [(1, 0), (2, 0), (3, 0)]  # tile coords treated as solid
+dx, dy = pyxel.tilemaps[0].collide(x, y, w, h, dx, dy, WALL_TILES)
+# Returns adjusted (dx, dy) that stops at walls. Apply: x += dx; y += dy
 
 # Custom font (TTF)
 font = pyxel.Font("font.ttf", 12)
@@ -1080,6 +1097,52 @@ frame = pyxel.frame_count // ANIM_SPEED % ANIM_FRAMES
 u = frame * SPRITE_W  # offset into sprite sheet
 pyxel.blt(x, y, 0, u, v, SPRITE_W, SPRITE_H, colkey=0)
 ```
+
+### State-Based Animator
+
+For games with multiple character states (idle, walk, attack), use a state-machine \
+animator instead of inline frame math:
+
+```python
+SPRITE_W, SPRITE_H = 8, 8  # adjust to match your sprite size
+
+class Animator:
+    ANIMS = {
+        "idle":   {"u": 0,  "frames": 2, "speed": 20, "loop": True},
+        "walk":   {"u": 16, "frames": 4, "speed": 5,  "loop": True},
+        "attack": {"u": 48, "frames": 3, "speed": 4,  "loop": False},
+        "jump":   {"u": 72, "frames": 2, "speed": 6,  "loop": False},
+    }
+
+    def __init__(self):
+        self.state = "idle"
+        self.tick = 0
+        self.flip = False  # True = face left
+
+    def set(self, state):
+        if state != self.state:
+            self.state = state
+            self.tick = 0
+
+    def update(self):
+        anim = self.ANIMS[self.state]
+        self.tick += 1
+        if self.tick >= anim["frames"] * anim["speed"]:
+            if anim["loop"]:
+                self.tick = 0
+            else:
+                self.tick = anim["frames"] * anim["speed"] - 1
+
+    def draw(self, x, y):
+        anim = self.ANIMS[self.state]
+        frame = self.tick // anim["speed"]
+        u = anim["u"] + frame * SPRITE_W
+        w = -SPRITE_W if self.flip else SPRITE_W
+        pyxel.blt(x, y, 0, u, 0, w, SPRITE_H, colkey=0)
+```
+
+Usage: call `animator.set("walk")` on state change, `animator.update()` every frame, \
+`animator.draw(x, y)` in draw. Set `animator.flip = True` to face left.
 
 ## Quality Checklist
 

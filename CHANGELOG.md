@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.4.1
+
+- Added state-based Animator class pattern for multi-state character animation
+- Added scene-specific gen_bgm pattern with per-scene preset/seed switching
+- Strengthened Tilemap.collide() guidance over hand-rolled collision loops
+
 ## 0.4.0
 
 - Restructured instructions: deduplicated content, reorganized 24→23 sections with logical grouping
