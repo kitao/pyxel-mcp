@@ -1,5 +1,22 @@
 # Change Log
 
+## 0.4.0
+
+- Restructured instructions: deduplicated content, reorganized 24→23 sections with logical grouping
+- Merged Color Palette + Color Hierarchy + Genre Palettes → Color Palette & Hierarchy
+- Merged Screen Layout + Text Layout → Screen & Text Layout
+- Merged Common Mistakes + Game Polish Checklist → Quality Checklist (reference-based)
+- Moved Screen Shake + Hitstop → Visual Feedback section
+- Moved Parallax Scrolling → Background Design section
+- Split Visual Design Guide into Background Design / Title Screen Design / Visual Feedback
+- Added pixel art rules (3-color-per-material, outlines, size guidelines, anti-patterns)
+- Added 8 ready-to-use 8x8 sprite templates (ship, character, slime, coin, heart, skull, shield, sword)
+- Added sound effects cookbook with 10 copy-paste SE definitions
+- Added game feel constants (platformer physics, variable jump, coyote time, knockback, shooter, puzzle, hitbox, camera)
+- Added genre color palettes (space, forest, dungeon, castle, underwater, Game Boy)
+- Fixed tilemap bltm example size mismatch (128x128 → 32x24)
+- Fixed GRAVITY inconsistency between Game Patterns and Game Feel Constants
+
 ## 0.3.1
 
 - Added visual design guide to instructions (background tiers, color hierarchy, title screen design, visual feedback patterns)

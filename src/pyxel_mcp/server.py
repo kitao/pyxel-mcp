@@ -256,7 +256,7 @@ pyxel.tilemaps[0].set(0, 0, [
 ])
 
 # Draw tilemap (colkey for transparent color)
-pyxel.bltm(0, 0, 0, 0, 0, 128, 128, colkey=0)
+pyxel.bltm(0, 0, 0, 0, 0, 32, 24, colkey=0)
 # bltm(x, y, tm, u, v, w, h, colkey) — u,v,w,h in pixels
 
 # Read/write individual tiles
@@ -344,49 +344,516 @@ pyxel.tones[0].wavetable[:] = [0, 4, 8, 12, 15, 12, 8, 4] * 4  # 32 samples, 0-1
 pyxel.sounds[0].pcm("sound.wav")
 ```
 
-## Common Mistakes
+## Color Palette & Hierarchy
 
-| Don't | Why | Do Instead |
-|-------|-----|------------|
-| Hardcode pixel positions | Breaks on different screen sizes | Calculate from `pyxel.width`/`pyxel.height` |
-| Forget `cls()` in `draw()` | Previous frame bleeds through | Always call `pyxel.cls(col)` first |
-| Use radians with `sin()`/`cos()` | Pyxel trig uses **degrees** | `pyxel.sin(90)` returns 1.0 |
-| Draw UI before sprites | UI hidden behind game objects | Draw order: background → objects → UI |
-| `play()` on BGM channel | Interrupts background music | Reserve ch3 for SE, BGM on ch0-2 |
-| Omit `colkey` in `blt()` | Sprite background not transparent | Add `colkey=0` (or the bg color index) |
-| Static animation frame | Sprite never animates | `u = pyxel.frame_count // speed % count * size` |
-| `if btn():` for one-shot action | Action fires every frame | Use `btnp()` for press-once events |
-| Deep nesting in `update()` | Hard to read and debug | Extract logic into methods/functions |
-| Modify list while iterating | Skips elements or crashes | Iterate over a copy: `for e in list(enemies):` |
-| Use noise tone for SE | Hard to hear over BGM | Use square (`"s"`) or pulse (`"p"`) tone, volume 5-7 |
-| Skip SE for core actions | Game feels unresponsive | Add SE for move, rotate, land, clear, game over |
-| Plain black background | Game looks empty and amateur | Add star field, gradient, or subtle pattern |
-| No title screen | Game feels incomplete | Add title with game name, controls, animated elements |
-| No visual feedback on actions | Game feels unresponsive | Add flash, particles, or shake on hit/collect/clear |
-| Player blends into background | Can't distinguish elements | Use bright unique colors for player, high contrast |
-| Large empty screen areas | Wasted space, looks unfinished | Center game area, add decorative borders or HUD info |
+0:black 1:navy 2:purple 3:green 4:brown 5:dark_blue 6:light_blue 7:white
+8:red 9:orange 10(a):yellow 11(b):lime 12(c):cyan 13(d):gray 14(e):pink 15(f):peach
 
-## Animation Timing
+### 3-Layer Color Hierarchy
 
-Recommended frame counts for common animations:
+Establish clear visual layers in every game:
 
-| Animation | Frames | Speed (frames/update) |
-|-----------|--------|-----------------------|
-| Idle breathing | 2-4 | 20-30 |
-| Walk cycle | 4-6 | 4-6 |
-| Run cycle | 4-6 | 2-3 |
-| Attack | 3-5 | 2-4 |
-| Jump | 3-4 | 3-5 |
-| Explosion | 4-8 | 3-4 |
-| Coin spin | 4 | 5-8 |
+1. **Background** (dark): 0 (black), 1 (navy), 5 (dark_blue) — recedes visually
+2. **Environment** (mid-tones): 3 (green), 4 (brown), 13 (gray) — terrain, walls
+3. **Interactive** (bright): 8 (red), 10 (yellow), 11 (lime) — player, items, danger
+
+Use 10-14 of the 16 colors. Restrict each sprite to 3-4 colors for readability. \
+The player sprite should use a unique color not shared with enemies.
+
+### Genre Palettes
+
+Concrete color assignments by game theme:
+
+- **Space / Shmup**: BG: 0, 1 | Stars: 5, 6, 7 | Player: 12, 7 | Enemies: 8, 9 | Bullets: 10, 11
+- **Forest / Platformer**: BG: 1, 5 | Ground: 3, 4, 11 | Player: 8, 7, 15 | Items: 10, 9 | Sky: 6, 12
+- **Dungeon / RPG**: BG: 0, 1 | Walls: 4, 13, 5 | Player: 7, 6, 15 | Enemies: 2, 8 | Items: 10, 9
+- **Castle / Lava**: BG: 0 | Walls: 13, 5, 1 | Lava: 8, 9, 10 | Player: 7, 12 | Fire: 9, 10
+- **Underwater / Ice**: BG: 1, 5 | Terrain: 6, 12, 7 | Player: 8, 9, 15 | Items: 10, 14
+
+### Game Boy (4-color)
 
 ```python
-# Standard animation pattern
-ANIM_FRAMES = 4
-ANIM_SPEED = 5  # change sprite every 5 game frames
-frame = pyxel.frame_count // ANIM_SPEED % ANIM_FRAMES
-u = frame * SPRITE_W  # offset into sprite sheet
-pyxel.blt(x, y, 0, u, v, SPRITE_W, SPRITE_H, colkey=0)
+pyxel.pal(0, 1)   # black → navy
+pyxel.pal(1, 3)   # navy → green
+pyxel.pal(3, 11)  # green → lime
+pyxel.pal(7, 7)   # white stays white
+```
+
+### Palette Swap for Level Theming
+
+Same tiles, different mood — use `pyxel.pal()`:
+
+```python
+# Underground: warm browns → cold blues
+pyxel.pal(4, 1)   # brown → navy
+pyxel.pal(9, 12)  # orange → cyan
+pyxel.pal(3, 5)   # green → dark_blue
+```
+
+## Pixel Art Rules
+
+### 3-Color-Per-Material Rule
+
+Every surface in a sprite uses 3 colors: base, shadow, highlight. \
+Shift hue slightly between them (not just brightness) for richer results.
+
+| Material | Shadow | Base | Highlight |
+|----------|--------|------|-----------|
+| Skin | 4 (brown) | 15 (peach) | 7 (white) |
+| Green | 3 (green) | 11 (lime) | 10 (yellow) |
+| Blue | 1 (navy) | 6 (light_blue) | 12 (cyan) |
+| Red | 2 (purple) | 8 (red) | 9 (orange) |
+| Metal | 5 (dark_blue) | 13 (gray) | 7 (white) |
+| Wood | 4 (brown) | 9 (orange) | 15 (peach) |
+
+### Outline Strategy
+
+Use **black outlines** (color 0) for maximum readability at small sizes. \
+At 8x8, outlines define the silhouette — draw silhouette first, then fill.
+
+### Sprite Size Guidelines
+
+| Size | Use Case | Colors |
+|------|----------|--------|
+| 8x8 | Tiles, items, bullets, small enemies | 3-4 colors |
+| 16x16 | Player, main enemies, NPCs | 5-6 colors |
+| 24x24 | RPG characters, detailed sprites | 5-7 colors |
+
+Player/item sprites should be **horizontally symmetric**. \
+Enemy sprites can be asymmetric for organic/alien look. \
+Use `inspect_sprite` to verify symmetry after creation.
+
+### Anti-Patterns
+
+- **Pillow shading**: Shadow around edges, highlight in center — looks puffy. \
+Shadow goes on bottom/right, highlight on top/left.
+- **Too many colors**: 3-4 colors per 8x8, 5-6 per 16x16. More = messy.
+- **Random dithering**: Only dither in transition zones, never randomly.
+
+## Sprite Templates
+
+Ready-to-use hex sprites for `pyxel.images[N].set()`. Color 0 = transparent.
+
+### 8x8 Player Ship (shmup)
+
+```python
+pyxel.images[0].set(0, 0, [
+    "00c00c00",
+    "0c7007c0",
+    "0c7007c0",
+    "c703b07c",
+    "77033077",
+    "785cc587",
+    "85c77c58",
+    "0c0880c0",
+])
+```
+
+### 8x8 Player Character (platformer)
+
+```python
+pyxel.images[0].set(0, 0, [
+    "00777700",
+    "77711100",
+    "77711100",
+    "77777700",
+    "77777777",
+    "00777000",
+    "00700700",
+    "00700700",
+])
+```
+
+### 8x8 Slime Enemy
+
+```python
+pyxel.images[0].set(8, 0, [
+    "00000000",
+    "00333300",
+    "03b33b30",
+    "0b3333b0",
+    "33333333",
+    "33333333",
+    "03333330",
+    "00333300",
+])
+```
+
+### 8x8 Coin
+
+```python
+pyxel.images[0].set(16, 0, [
+    "00aaaa00",
+    "0a9aa9a0",
+    "a99aa99a",
+    "a99aa99a",
+    "a99aa99a",
+    "a99aa99a",
+    "0a9aa9a0",
+    "00aaaa00",
+])
+```
+
+### 8x8 Heart
+
+```python
+pyxel.images[0].set(24, 0, [
+    "08800880",
+    "88888888",
+    "88888888",
+    "88888888",
+    "08888880",
+    "00888800",
+    "00088000",
+    "00000000",
+])
+```
+
+### 8x8 Skull Enemy
+
+```python
+pyxel.images[0].set(32, 0, [
+    "07777770",
+    "70700707",
+    "70700707",
+    "77777777",
+    "70777707",
+    "07700770",
+    "07777770",
+    "00000000",
+])
+```
+
+### 8x8 Shield Collectible
+
+```python
+pyxel.images[0].set(40, 0, [
+    "00c77c00",
+    "0c6666c0",
+    "c670076c",
+    "c670076c",
+    "0c6666c0",
+    "00c66c00",
+    "000cc000",
+    "00000000",
+])
+```
+
+### 8x8 Sword
+
+```python
+pyxel.images[0].set(48, 0, [
+    "00000070",
+    "00000770",
+    "00007700",
+    "00077000",
+    "04077000",
+    "00440000",
+    "00940000",
+    "00090000",
+])
+```
+
+### Sprite Sheet Organization
+
+Pack sprites in image bank 0 at 8px intervals:
+- (0,0): Player | (8,0): Enemy1 | (16,0): Item1 | (24,0): Item2
+- (0,8): Player walk frame 2 | (8,8): Enemy2 | etc.
+- Animation frames: adjacent horizontally \
+`u = pyxel.frame_count // speed % frame_count * 8`
+
+## Background Design
+
+Background quality is the single biggest factor in visual polish. \
+Never leave the background as a plain solid color.
+
+| Tier | Technique | Example |
+|------|-----------|---------|
+| S | Multi-layer parallax, atmospheric gradients, detailed tile art | Mountains + sky layers scrolling at different speeds |
+| A | Varied tile patterns, color-coded zones | Brick walls with shading, biome-colored terrain |
+| B | Dark background + subtle detail | Black sky with star particles, dark blue with dithering |
+| C | Solid single color (looks amateur) | `cls(0)` with nothing else — avoid this |
+
+```python
+# Minimal star background (huge improvement over plain black)
+stars = [(pyxel.rndi(0, 159), pyxel.rndi(0, 119), pyxel.rndi(1, 3)) for _ in range(30)]
+# In draw():
+for sx, sy, brightness in stars:
+    pyxel.pset(sx, sy, [1, 5, 6, 7][brightness])
+```
+
+### Parallax Scrolling
+
+```python
+# 2-layer parallax (great for shmups/platformers)
+# In draw():
+for i in range(20):
+    x = (i * 40 - pyxel.frame_count // 2) % (pyxel.width + 20) - 10
+    pyxel.circ(x, 20, 6, 1)   # far clouds (slow)
+for i in range(10):
+    x = (i * 50 - pyxel.frame_count) % (pyxel.width + 20) - 10
+    pyxel.circ(x, 40, 10, 5)  # near clouds (fast)
+
+# Draw layers back-to-front with different scroll speeds:
+# Layer 1 (far): offset = frame_count // 16
+# Layer 2 (mid): offset = frame_count // 8
+# Layer 3 (near): offset = frame_count // 4
+# Layer 4 (ground): offset = frame_count (1:1 with camera)
+
+# Seamless wrap:
+for i in range(2):
+    pyxel.blt(i * pyxel.width - offset % pyxel.width, y,
+              0, u, v, pyxel.width, h, colkey=0)
+```
+
+## Screen & Text Layout
+
+Plan the screen composition **before** coding. Allocate regions for each element, \
+then derive all coordinates from those regions.
+
+```python
+# Example: game with side panel (160x120 screen)
+MARGIN = 4
+PANEL_W = 32
+GAME_W = pyxel.width - PANEL_W - MARGIN * 3   # play area width
+GAME_X = MARGIN                                 # play area left
+GAME_Y = MARGIN                                 # play area top
+GAME_H = pyxel.height - MARGIN * 2             # play area height
+PANEL_X = GAME_X + GAME_W + MARGIN             # panel left
+
+# Center play area if no side panel
+GAME_W = COLS * CELL
+GAME_X = (pyxel.width - GAME_W) // 2
+```
+
+Layout rules:
+- **Center the main play area**: The play area is the player's focal point — \
+center it both horizontally and vertically. Compute total content height \
+(play area + gaps + controls) and derive `BY = (pyxel.height - content_h) // 2`. \
+Place secondary info (score, next piece) in the remaining margins.
+- **Define regions first**: Assign rectangles for play area, HUD, and panels. \
+Derive all draw coordinates from these — never scatter magic numbers.
+- **Uniform margins**: Use a consistent `MARGIN` (typically 4-8px) around and between regions.
+- **No overlap**: HUD text must not intrude into the play area. Draw a border or \
+leave a gap between regions.
+- **Fill the screen**: Avoid large dead zones. If the play area is narrow, center it \
+and use side margins for info panels.
+- **Verify with `inspect_layout`**: Check horizontal balance is close to 50% and \
+text offsets are small.
+
+### Text Positioning
+
+Always **calculate** text positions — never hardcode pixel coordinates.
+The built-in font is `FONT_WIDTH=4` px wide, `FONT_HEIGHT=6` px tall.
+
+```python
+# Horizontal centering
+x = (pyxel.width - len(text) * pyxel.FONT_WIDTH) // 2
+
+# Right-align (with margin)
+x = pyxel.width - len(text) * pyxel.FONT_WIDTH - margin
+
+# Center a group (e.g., sprite 8px + gap 4px + text)
+group_w = 8 + 4 + len(text) * pyxel.FONT_WIDTH
+x = (pyxel.width - group_w) // 2
+
+# Vertical centering of N lines (with spacing between lines)
+block_h = N * pyxel.FONT_HEIGHT + (N - 1) * spacing
+y = (pyxel.height - block_h) // 2
+
+# Text shadow for readability over any background
+pyxel.text(x + 1, y + 1, s, 1)  # shadow (dark)
+pyxel.text(x, y, s, 7)          # foreground (bright)
+```
+
+## Title Screen Design
+
+A plain text title looks amateur. Good title screens include:
+
+1. **Pixel art game name** — larger than regular text, styled
+2. **Animated elements** — bouncing sprites, scrolling background
+3. **Controls hint** — key bindings visible
+4. **Blinking prompt** — "PRESS ENTER" toggled with `frame_count`
+
+```python
+def draw_title(self):
+    # Animated sprite decoration
+    for i in range(5):
+        x = 20 + i * 28
+        y = 20 + pyxel.sin(pyxel.frame_count * 3 + i * 72) * 3
+        pyxel.blt(x, int(y), 0, i * 8, 0, 8, 8, colkey=0)
+    # Game title (centered)
+    t = "MY GAME"
+    pyxel.text((pyxel.width - len(t) * 4) // 2, 48, t, 7)
+    # Controls
+    pyxel.text(40, 70, "ARROWS:MOVE  Z:JUMP", 13)
+    # Blinking prompt
+    if pyxel.frame_count % 40 < 28:
+        t2 = "PRESS ENTER"
+        pyxel.text((pyxel.width - len(t2) * 4) // 2, 100, t2, 10)
+```
+
+## Visual Feedback
+
+Every player-visible event needs visual and audio feedback:
+
+| Event | Visual | Sound |
+|-------|--------|-------|
+| Hit/damage | `pal()` flash to white 2-3f | Descending (snd 2) |
+| Collect item | Sparkle particles | Ascending (snd 1) |
+| Destroy enemy | Expanding explosion | Noise burst (snd 3) |
+| Clear/combo | Screen flash with `dither()` | Fanfare (snd 5) |
+| Death | Sprite blink then fade | Game over (snd 4) |
+| Land | Screen shake 1-2px | Impact noise (snd 8) |
+
+```python
+# Damage flash (in draw)
+if self.hit_timer > 0:
+    pyxel.pal(player_color, 7)  # flash white
+# After drawing player:
+    pyxel.pal()  # reset
+
+# Simple explosion particles
+class Particle:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+        self.dx = pyxel.rndf(-2, 2)
+        self.dy = pyxel.rndf(-2, 2)
+        self.life = 10
+    def update(self):
+        self.x += self.dx
+        self.y += self.dy
+        self.life -= 1
+    def draw(self):
+        if self.life > 0:
+            pyxel.pset(int(self.x), int(self.y), 10 if self.life > 5 else 9)
+```
+
+### Screen Shake
+
+```python
+# Trigger: self.shake_mag, self.shake_dur = magnitude, frames
+# In update():
+if self.shake_dur > 0:
+    ox = pyxel.rndi(-int(self.shake_mag), int(self.shake_mag))
+    oy = pyxel.rndi(-int(self.shake_mag), int(self.shake_mag))
+    self.shake_mag *= 0.7
+    self.shake_dur -= 1
+    pyxel.camera(ox, oy)
+else:
+    pyxel.camera()
+
+# Magnitudes: dash/land 1-2px 2-3f | hit 2-3px 3-5f | explosion 3-5px 5-8f | boss 5-8px 10-15f
+```
+
+### Hitstop (Freeze Frames)
+
+```python
+# On impact: self.hitstop = 2  (light) or 4 (heavy)
+# In update():
+if self.hitstop > 0:
+    self.hitstop -= 1
+    return  # skip physics, keep drawing effects
+```
+
+## Sound Effects Cookbook
+
+Copy-paste sound definitions for common game events. \
+All SE on ch3 via `pyxel.play(3, N)`. BGM on ch0-2.
+
+Design rules:
+- Use square (`"s"`) or pulse (`"p"`) for melodic SE — noise (`"n"`) only for impacts
+- SE speed 3-10 (fast, snappy), BGM speed 16-25 (slower, musical)
+- SE volume 5-7 to cut through BGM (volume 3-5)
+- Ascending notes = positive (collect, power-up, level clear)
+- Descending notes = negative (damage, death, game over)
+
+### Jump
+
+```python
+pyxel.sounds[0].set(
+    notes="c2e2g2c3", tones="s", volumes="7776", effects="nnnn", speed=8,
+)
+```
+
+### Coin / Collect
+
+```python
+pyxel.sounds[1].set(
+    notes="c3e3g3c4c4", tones="s", volumes="44444",
+    effects="nnnnf", speed=7,
+)
+```
+
+### Hit / Damage
+
+```python
+pyxel.sounds[2].set(
+    notes="g3c3", tones="s", volumes="74", effects="nn", speed=5,
+)
+```
+
+### Explosion
+
+```python
+pyxel.sounds[3].set(
+    notes="c4d4e3f3g3a3b2c2d2e1f1g1",
+    tones="n",
+    volumes="776655443210",
+    effects="nnnnnnnnnnnn",
+    speed=5,
+)
+```
+
+### Game Over
+
+```python
+pyxel.sounds[4].set(
+    notes="f3b2f2b1f1f1f1f1", tones="p",
+    volumes="44444321", effects="nnnnnnnf", speed=9,
+)
+```
+
+### Level Clear
+
+```python
+pyxel.sounds[5].set(
+    notes="c2e2g2c3e3g3c4", tones="s",
+    volumes="7777777", effects="nnnnnnn", speed=8,
+)
+```
+
+### Menu Select / Cursor
+
+```python
+pyxel.sounds[6].set(
+    notes="e3", tones="s", volumes="5", effects="f", speed=10,
+)
+```
+
+### Power-Up
+
+```python
+pyxel.sounds[7].set(
+    notes="c1c2c3c4", tones="s",
+    volumes="5567", effects="nnnn", speed=6,
+)
+```
+
+### Landing
+
+```python
+pyxel.sounds[8].set(
+    notes="c1", tones="n", volumes="5", effects="f", speed=3,
+)
+```
+
+### Shoot / Laser
+
+```python
+pyxel.sounds[9].set(
+    notes="a3a2c1a1", tones="p", volumes="7", effects="s", speed=5,
+)
 ```
 
 ## Game Patterns
@@ -394,12 +861,12 @@ pyxel.blt(x, y, 0, u, v, SPRITE_W, SPRITE_H, colkey=0)
 ### Platformer
 
 ```python
-# Gravity + jump
-GRAVITY = 0.4
-JUMP_FORCE = -5.0
-vy += GRAVITY
+# Gravity + jump (see Game Feel Constants for tuned variants)
+GRAVITY = 0.35
+JUMP_VEL = -4.5
+vy = min(vy + GRAVITY, 3.5)  # terminal velocity
 if on_ground and pyxel.btnp(pyxel.KEY_SPACE):
-    vy = JUMP_FORCE
+    vy = JUMP_VEL
 y += vy
 
 # Tilemap collision for solid ground
@@ -447,7 +914,7 @@ def update(self):
 def draw(self):
     pyxel.cls(0)
     if self.scene == SCENE_TITLE:
-        self.draw_title()   # see Visual Design Guide for title patterns
+        self.draw_title()   # see Title Screen Design
     elif self.scene == SCENE_GAME:
         self.draw_game()
     elif self.scene == SCENE_GAMEOVER:
@@ -458,199 +925,187 @@ def draw(self):
             pyxel.text(44, 80, "PRESS ENTER", 13)
 ```
 
-## Game Polish Checklist
+## Game Feel Constants
 
-Before considering a game complete, ensure these essentials are in place:
+Tested physics values. At 30fps, 1 frame = 33ms. At 60fps, 1 frame = 16ms. \
+Pyxel defaults to 30fps. Values below are for 30fps unless noted.
 
-- **BGM**: Add background music. Use `pyxel.gen_bgm()` for quick results, or compose \
-with MML. Reserve ch3 for SE and use ch0-2 for BGM.
-- **Sound effects**: Every player-visible event needs SE. Movement, rotation, landing, \
-clearing/collecting, chain/combo, game over, and menu select must ALL have distinct sounds. \
-Use square wave (`"s"`) for clear, audible SE — noise (`"n"`) is hard to hear. \
-Set volume to 5-7 (out of 7) so SE cuts through the BGM.
-- **Title screen**: Pixel art game name (not plain text), animated elements, controls hint, \
-blinking "PRESS ENTER". See the Visual Design Guide for patterns.
-- **Game over screen**: Display final score and restart prompt.
-- **Background art**: Never use plain solid color. Add at minimum a star field, gradient, \
-or dithered pattern. For platformers/shmups, add parallax scrolling (even 2-layer helps).
-- **Color hierarchy**: Dark background → mid-tone environment → bright interactive elements. \
-Use 10+ of the 16 palette colors with clear visual layers.
-- **Screen layout**: Main play area centered, info panels in margins, no overlapping text.
-- **Visual feedback**: Flash (`pal()`), particles, or screen shake on every player action. \
-Hit, collect, clear, and death all need distinct visual responses — not just SE.
-- **HUD**: Score/stage at top, lives visible. Use color for emphasis (red for danger, \
-yellow for score).
-
-## Color Palette
-
-0:black 1:navy 2:purple 3:green 4:brown 5:dark_blue 6:light_blue 7:white
-8:red 9:orange 10(a):yellow 11(b):lime 12(c):cyan 13(d):gray 14(e):pink 15(f):peach
-
-## Visual Design Guide
-
-Based on analysis of 140+ Pyxel user games, the key principles that separate \
-polished games from amateur ones:
-
-### Background Design (The #1 Quality Differentiator)
-
-Background quality is the single biggest factor in visual polish. Never leave \
-the background as a plain solid color.
-
-| Tier | Technique | Example |
-|------|-----------|---------|
-| S | Multi-layer parallax, atmospheric gradients, detailed tile art | Mountains + sky layers scrolling at different speeds |
-| A | Varied tile patterns, color-coded zones | Brick walls with shading, biome-colored terrain |
-| B | Dark background + subtle detail | Black sky with star particles, dark blue with dithering |
-| C | Solid single color (looks amateur) | `cls(0)` with nothing else — avoid this |
-
-Even a simple star field transforms the visual impression:
+### Platformer Physics
 
 ```python
-# Minimal star background (huge improvement over plain black)
-import pyxel
-stars = [(pyxel.rndi(0, 159), pyxel.rndi(0, 119), pyxel.rndi(1, 3)) for _ in range(30)]
-# In draw():
-for sx, sy, brightness in stars:
-    pyxel.pset(sx, sy, [1, 5, 6, 7][brightness])
+# Tight / responsive (Celeste-style)
+GRAVITY = 0.35
+JUMP_VEL = -4.5
+MAX_FALL = 3.5
+WALK_SPEED = 1.5
+RUN_SPEED = 2.5
+ACCEL = 0.5           # frames to top speed: ~5
+DECEL = 0.8           # frames to stop: ~2
 
-# 2-layer parallax (great for shmups/platformers)
-# In draw():
-for i in range(20):
-    x = (i * 40 - pyxel.frame_count // 2) % (pyxel.width + 20) - 10
-    pyxel.circ(x, 20, 6, 1)   # far clouds (slow)
-for i in range(10):
-    x = (i * 50 - pyxel.frame_count) % (pyxel.width + 20) - 10
-    pyxel.circ(x, 40, 10, 5)  # near clouds (fast)
+# Floaty / momentum (Mario-style)
+GRAVITY = 0.25
+JUMP_VEL = -3.5
+MAX_FALL = 3.0
+WALK_SPEED = 1.0
+RUN_SPEED = 2.0
+ACCEL = 0.15          # frames to top speed: ~13
+DECEL = 0.1           # frames to stop: ~20 (slippery)
 ```
 
-### Color Hierarchy
-
-Polished games establish a clear 3-layer color hierarchy:
-
-1. **Background** (dark): 0 (black), 1 (navy), 5 (dark_blue) — recedes visually
-2. **Environment** (mid-tones): 3 (green), 4 (brown), 13 (gray) — terrain, walls
-3. **Interactive** (bright): 8 (red), 10 (yellow), 11 (lime) — player, items, danger
-
-Use 10-14 of the 16 colors. Restrict each sprite to 3-4 colors for readability. \
-The player sprite should use a unique color not shared with enemies.
-
-### Title Screen Design
-
-A plain text title looks amateur. Good title screens include:
-
-1. **Pixel art game name** — larger than regular text, styled
-2. **Animated elements** — bouncing sprites, scrolling background
-3. **Controls hint** — key bindings visible
-4. **Blinking prompt** — "PRESS ENTER" toggled with `frame_count`
+### Variable Jump Height
 
 ```python
-def draw_title(self):
-    # Animated sprite decoration
-    for i in range(5):
-        x = 20 + i * 28
-        y = 20 + pyxel.sin(pyxel.frame_count * 3 + i * 72) * 3
-        pyxel.blt(x, int(y), 0, i * 8, 0, 8, 8, colkey=0)
-    # Game title (centered)
-    t = "MY GAME"
-    pyxel.text((pyxel.width - len(t) * 4) // 2, 48, t, 7)
-    # Controls
-    pyxel.text(40, 70, "ARROWS:MOVE  Z:JUMP", 13)
-    # Blinking prompt
-    if pyxel.frame_count % 40 < 28:
-        t2 = "PRESS ENTER"
-        pyxel.text((pyxel.width - len(t2) * 4) // 2, 100, t2, 10)
+if on_ground and pyxel.btnp(pyxel.KEY_SPACE):
+    vy = JUMP_VEL
+    jump_hold = JUMP_HOLD_MAX  # e.g., 8
+
+if pyxel.btn(pyxel.KEY_SPACE) and jump_hold > 0:
+    vy += JUMP_HOLD_BOOST  # e.g., -0.25
+    jump_hold -= 1
+
+if pyxel.btnr(pyxel.KEY_SPACE):
+    jump_hold = 0
+
+vy = min(vy + GRAVITY, MAX_FALL)
 ```
 
-### Visual Feedback
-
-Every player-visible event needs visual feedback, not just SE:
-
-| Event | Visual technique |
-|-------|-----------------|
-| Hit/damage | `pyxel.pal()` flash to white for 2-3 frames |
-| Collect item | Sparkle particles (small dots expanding outward) |
-| Destroy enemy | Explosion circle expanding then fading |
-| Clear/combo | Screen flash with `dither()`, or brief color inversion |
-| Death | Player sprite blink (toggle visibility), then fade |
+### Forgiveness Mechanics (Critical)
 
 ```python
-# Damage flash (in draw)
-if self.hit_timer > 0:
-    pyxel.pal(player_color, 7)  # flash white
-# After drawing player:
-    pyxel.pal()  # reset
+COYOTE_FRAMES = 3          # jump after leaving edge
+JUMP_BUFFER_FRAMES = 4     # pre-land jump input
 
-# Simple explosion particles
-class Particle:
-    def __init__(self, x, y):
-        self.x, self.y = x, y
-        self.dx = pyxel.rndf(-2, 2)
-        self.dy = pyxel.rndf(-2, 2)
-        self.life = 10
-    def update(self):
-        self.x += self.dx
-        self.y += self.dy
-        self.life -= 1
-    def draw(self):
-        if self.life > 0:
-            pyxel.pset(int(self.x), int(self.y), 10 if self.life > 5 else 9)
+# Coyote time
+if on_ground:
+    coyote = COYOTE_FRAMES
+else:
+    coyote = max(0, coyote - 1)
+
+can_jump = on_ground or coyote > 0
+
+# Jump buffer
+if pyxel.btnp(pyxel.KEY_SPACE):
+    jump_buffer = JUMP_BUFFER_FRAMES
+
+if jump_buffer > 0:
+    jump_buffer -= 1
+    if can_jump:
+        vy = JUMP_VEL
+        jump_buffer = 0
 ```
 
-## Screen Layout
-
-Plan the screen composition **before** coding. Allocate regions for each element, \
-then derive all coordinates from those regions.
+### Knockback and Invincibility
 
 ```python
-# Example: game with side panel (160x120 screen)
-MARGIN = 4
-PANEL_W = 32
-GAME_W = pyxel.width - PANEL_W - MARGIN * 3   # play area width
-GAME_X = MARGIN                                 # play area left
-GAME_Y = MARGIN                                 # play area top
-GAME_H = pyxel.height - MARGIN * 2             # play area height
-PANEL_X = GAME_X + GAME_W + MARGIN             # panel left
-
-# Center play area if no side panel
-GAME_W = COLS * CELL
-GAME_X = (pyxel.width - GAME_W) // 2
+KNOCKBACK_VX = 2.0         # horizontal push
+KNOCKBACK_VY = -2.0        # upward bounce
+KNOCKBACK_DUR = 6          # frames
+INVINCIBLE_FRAMES = 60     # 2 seconds at 30fps
+I_BLINK_RATE = 3           # toggle visibility every 3 frames
+HIT_PAUSE = 2              # freeze frames on impact
 ```
 
-Layout rules:
-- **Center the main play area**: The play area is the player's focal point — \
-center it both horizontally and vertically. Compute total content height \
-(play area + gaps + controls) and derive `BY = (pyxel.height - content_h) // 2`. \
-Place secondary info (score, next piece) in the remaining margins.
-- **Define regions first**: Assign rectangles for play area, HUD, and panels. \
-Derive all draw coordinates from these — never scatter magic numbers.
-- **Uniform margins**: Use a consistent `MARGIN` (typically 4-8px) around and between regions.
-- **No overlap**: HUD text must not intrude into the play area. Draw a border or \
-leave a gap between regions.
-- **Fill the screen**: Avoid large dead zones. If the play area is narrow, center it \
-and use side margins for info panels.
-- **Verify with `inspect_layout`**: Check horizontal balance is close to 50% and \
-text offsets are small.
-
-## Text Layout
-
-Always **calculate** text positions — never hardcode pixel coordinates.
-The built-in font is `FONT_WIDTH=4` px wide, `FONT_HEIGHT=6` px tall.
+### Shooter Constants
 
 ```python
-# Horizontal centering
-x = (pyxel.width - len(text) * pyxel.FONT_WIDTH) // 2
-
-# Right-align (with margin)
-x = pyxel.width - len(text) * pyxel.FONT_WIDTH - margin
-
-# Center a group (e.g., sprite 8px + gap 4px + text)
-group_w = 8 + 4 + len(text) * pyxel.FONT_WIDTH
-x = (pyxel.width - group_w) // 2
-
-# Vertical centering of N lines (with spacing between lines)
-block_h = N * pyxel.FONT_HEIGHT + (N - 1) * spacing
-y = (pyxel.height - block_h) // 2
+PLAYER_SPEED = 2.0
+BULLET_SPEED = 4.0
+ENEMY_BULLET_SPEED = 2.0
+FIRE_RATE = 5              # frames between shots
+MAX_PLAYER_BULLETS = 8
+ENEMY_SPEED = 1.0
+SPAWN_INTERVAL = 30        # frames between spawns
 ```
+
+### Puzzle / Tetris Constants
+
+```python
+DROP_FRAMES = [30, 27, 24, 21, 18, 15, 12, 10, 8, 6, 5, 4, 3, 2, 1]
+SOFT_DROP_MULT = 5
+LOCK_DELAY = 20            # frames after landing before lock
+DAS_INITIAL = 8            # frames before auto-repeat starts
+DAS_REPEAT = 3             # frames between repeats
+LINE_CLEAR_ANIM = 15       # frames for clear animation
+```
+
+### Hitbox Design
+
+- **Hazards**: hitbox **smaller** than sprite (forgiving)
+- **Rewards/Stomp targets**: hitbox matches sprite (accurate)
+- Player: use 60-75% of sprite size as hitbox (e.g., 6x6 for 8x8 sprite)
+- `abs(a.x - b.x) < HIT_W and abs(a.y - b.y) < HIT_H`
+
+### Timing Constants
+
+```python
+GET_READY_DURATION = 60      # 2s at 30fps
+GAME_OVER_DURATION = 90      # 3s
+STAGE_CLEAR_DURATION = 90    # 3s
+TITLE_BLINK_RATE = 40        # frame_count % 40 < 28 for blink
+```
+
+### Camera (Side-Scroller)
+
+```python
+# Smooth follow (lerp)
+camera_x += (player_x - camera_x - pyxel.width // 2) * 0.1
+# 0.1 = smooth, 0.2 = responsive, 0.05 = cinematic
+
+# Look-ahead: offset camera in movement direction
+if facing_right:
+    target = player_x - pyxel.width // 3
+else:
+    target = player_x - pyxel.width * 2 // 3
+```
+
+## Animation Timing
+
+Recommended frame counts for common animations:
+
+| Animation | Frames | Speed (frames/update) |
+|-----------|--------|-----------------------|
+| Idle breathing | 2-4 | 20-30 |
+| Walk cycle | 4-6 | 4-6 |
+| Run cycle | 4-6 | 2-3 |
+| Attack | 3-5 | 2-4 |
+| Jump | 3-4 | 3-5 |
+| Explosion | 4-8 | 3-4 |
+| Coin spin | 4 | 5-8 |
+
+```python
+# Standard animation pattern
+ANIM_FRAMES = 4
+ANIM_SPEED = 5  # change sprite every 5 game frames
+frame = pyxel.frame_count // ANIM_SPEED % ANIM_FRAMES
+u = frame * SPRITE_W  # offset into sprite sheet
+pyxel.blt(x, y, 0, u, v, SPRITE_W, SPRITE_H, colkey=0)
+```
+
+## Quality Checklist
+
+Quick-reference of common mistakes. See linked sections for details.
+
+| Category | Don't | Do |
+|----------|-------|----|
+| Code | Hardcode pixel positions | Calculate from `width`/`height` |
+| Code | Forget `cls()` in `draw()` | Always call `pyxel.cls(col)` first |
+| Code | Use radians with `sin()`/`cos()` | Pyxel trig uses degrees |
+| Code | `btn()` for one-shot action | Use `btnp()` for press-once events |
+| Code | Modify list while iterating | Iterate over a copy: `for e in list(enemies):` |
+| Drawing | Draw UI before sprites | Draw order: bg → objects → UI |
+| Drawing | Omit `colkey` in `blt()` | Add `colkey=0` for transparency |
+| Drawing | Static animation frame | See Animation Timing |
+| Visual | Plain black background | See Background Design |
+| Visual | No title screen | See Title Screen Design |
+| Visual | No visual feedback on actions | See Visual Feedback |
+| Visual | Player blends into bg | See Color Palette & Hierarchy |
+| Audio | `play()` on BGM channel | SE on ch3, BGM on ch0-2 |
+| Audio | Noise tone for melodic SE | Square or pulse, vol 5-7 |
+| Audio | Skip SE for core actions | SE for every player event |
+
+Before release, verify: BGM present, distinct SE for all events, \
+title screen with animation, game over with score, \
+non-solid background, HUD with score/lives.
 """
 
 mcp = FastMCP("pyxel-mcp", instructions=_INSTRUCTIONS)
