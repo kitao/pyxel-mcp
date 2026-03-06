@@ -32,6 +32,24 @@ Pure Python — no build step. Uses UV for dependency management.
 - Each harness is a standalone subprocess script: parse args, patch Pyxel, execute, output JSON
 - Never import Pyxel in the main server process — only in subprocess harnesses
 
+## Release
+
+Always confirm the version number before releasing.
+Update version in `pyproject.toml`, `server.json` (2 places), and `CHANGELOG.md`.
+
+```
+rm -rf dist/ && .venv/bin/python -m build
+.venv/bin/python -m twine upload dist/*
+git push origin main
+```
+
+Publish to MCP Registry (token may need re-login):
+
+```
+/tmp/mcp-publisher login github
+/tmp/mcp-publisher publish server.json
+```
+
 ## CHANGELOG
 
 Maintained in `CHANGELOG.md` at the repo root.
