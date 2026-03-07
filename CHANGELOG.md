@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.4.2
+
+- Fixed harness chdir for scripts using relative asset paths
+
 ## 0.4.1
 
 - Added state-based Animator class pattern for multi-state character animation

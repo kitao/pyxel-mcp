@@ -33,6 +33,7 @@ _original_init = pyxel.init
 def _turbo_init(*args, **kwargs):
     kwargs["fps"] = 10000
     _original_init(*args, **kwargs)
+    os.chdir(os.path.dirname(script_path) or ".")
 
 
 pyxel.init = _turbo_init

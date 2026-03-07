@@ -35,6 +35,9 @@ _original_init = pyxel.init
 def _turbo_init(*args, **kwargs):
     kwargs["fps"] = 10000
     _original_init(*args, **kwargs)
+    # pyxel.init() chdir's to the caller's directory via inspect.stack(),
+    # but under runpy that resolves to the harness, not the user script.
+    os.chdir(os.path.dirname(script_path) or ".")
 
 
 pyxel.init = _turbo_init
