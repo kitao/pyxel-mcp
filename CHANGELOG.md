@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.5.0
+
+- Added play_and_capture tool for input simulation testing
+- Added inspect_state tool for game state debugging
+- Added error hints for common Pyxel mistakes
+- Fixed turbo-mode draw skipping in capture harnesses
+
 ## 0.4.2
 
 - Fixed harness chdir for scripts using relative asset paths

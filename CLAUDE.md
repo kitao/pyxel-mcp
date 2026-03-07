@@ -12,6 +12,8 @@ src/pyxel_mcp/
   audio_harness.py       Sound rendering to WAV
   sprite_harness.py      Sprite pixel inspection
   layout_harness.py      Screen layout analysis
+  input_harness.py       Input simulation + capture
+  state_harness.py       Game state inspection
 ```
 
 ## Build

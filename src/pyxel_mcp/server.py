@@ -5,6 +5,7 @@ import glob
 import json
 import math
 import os
+import re
 import shutil
 import struct
 import sys
@@ -19,6 +20,8 @@ AUDIO_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "audio_harness.py")
 SPRITE_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "sprite_harness.py")
 FRAMES_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "frames_harness.py")
 LAYOUT_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "layout_harness.py")
+INPUT_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "input_harness.py")
+STATE_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "state_harness.py")
 
 _MAX_STDERR = 4000
 
@@ -43,8 +46,58 @@ def _decode_stderr(stderr):
         return ""
     text = stderr.decode(errors="replace").strip()
     if len(text) > _MAX_STDERR:
-        return text[:_MAX_STDERR] + "\n... (truncated)"
-    return text
+        text = text[:_MAX_STDERR] + "\n... (truncated)"
+    return _enrich_error(text)
+
+
+_ERROR_HINTS = [
+    (
+        r"TypeError.*blt\(\)",
+        "blt(x, y, img, u, v, w, h, [colkey]). Use colkey=0 for transparency."
+        " img must be int 0-2.",
+    ),
+    (
+        r"TypeError.*bltm\(\)",
+        "bltm(x, y, tm, u, v, w, h, [colkey]). u,v,w,h are in pixels."
+        " tm is int 0-7.",
+    ),
+    (
+        r"IndexError.*(image|sound|music|tilemap)",
+        "Valid ranges: images[0-2], tilemaps[0-7], sounds[0-63], musics[0-7].",
+    ),
+    (
+        r"AttributeError.*module.*pyxel.*has no attribute",
+        "Check API spelling. Common: btnp (not button_pressed),"
+        " rndi (not randint), cls (not clear). Run pyxel_info for stubs.",
+    ),
+    (
+        r"NameError.*name '(\w+)' is not defined",
+        "If using a Pyxel constant like KEY_SPACE, use pyxel.KEY_SPACE.",
+    ),
+    (
+        r"TypeError.*'int' object is not callable",
+        "pyxel.mouse_x and pyxel.mouse_y are variables, not functions."
+        " Use them without ().",
+    ),
+    (
+        r"RecursionError",
+        "Check that update()/draw() don't call pyxel.run() again."
+        " Ensure __init__ doesn't create recursive instances.",
+    ),
+]
+
+
+def _enrich_error(text):
+    """Append fix suggestions to common Pyxel error messages."""
+    if not text:
+        return text
+    hints = []
+    for pattern, suggestion in _ERROR_HINTS:
+        if re.search(pattern, text, re.IGNORECASE | re.DOTALL):
+            hints.append(suggestion)
+    if not hints:
+        return text
+    return text + "\n\nHint: " + " ".join(hints)
 
 
 _INSTRUCTIONS = """\
@@ -58,6 +111,8 @@ _INSTRUCTIONS = """\
 4. Verify with tools:
    - `run_and_capture` after every visual change.
    - `render_audio` for each sound channel separately.
+   - `play_and_capture` to test input-dependent logic (menus, movement).
+   - `inspect_state` to debug logic bugs by inspecting variable values.
    - Other tools as needed for the task.
 5. Fix and re-verify.
 
@@ -86,15 +141,51 @@ are listed by row — fix those coordinates in `images[N].set()`.
 Balance close to 1.0 = centered. Offset > 2px from center = likely misaligned.
 - **`capture_frames`**: Returns multiple screenshots. Compare frames to verify \
 animation progresses smoothly without jumps or flicker.
+- **`play_and_capture`**: Returns screenshots with simulated input. Verify that \
+input causes expected state changes (player moved, menu changed, bullet spawned).
+- **`inspect_state`**: Returns game object attributes at a specific frame. \
+Check that variable values match expectations (score, position, game state).
 
 ### Testing Input-Dependent Logic
 
-Replace input conditions with frame-based triggers, capture, then revert:
+Use `play_and_capture` to test input-dependent logic by simulating key presses:
 
+```python
+# Press SPACE at frame 30, release at frame 50, capture at frames 29,31,51
+play_and_capture("game.py",
+    inputs='[{"frame":30,"keys":["KEY_SPACE"]},{"frame":50,"keys":[]}]',
+    frames="29,31,51")
+```
+
+Input events persist until changed by a later entry. Use this for:
+- Menu navigation (KEY_RETURN to start, verify game screen)
+- Movement (KEY_LEFT/RIGHT held for multiple frames)
+- Shooting (KEY_SPACE press, check bullet spawns)
+- Mouse clicks (set mouse_x/mouse_y with MOUSE_BUTTON_LEFT)
+
+For simple one-shot tests, the frame-based trigger approach also works:
 ```python
 # Original:  if pyxel.btnp(pyxel.KEY_SPACE): jump()
 # Test:      if pyxel.frame_count == 30: jump()
 ```
+
+### Debugging Game Logic
+
+Use `inspect_state` to read variable values at a specific frame:
+
+```python
+inspect_state("game.py", frames=60, attributes="score,lives,player_x,player_y")
+```
+
+This captures the App instance (the class calling `pyxel.run()`) and dumps its \
+attributes. Useful for:
+- Physics bugs: check position/velocity values
+- Score/state bugs: verify counter values
+- Collision issues: check object positions relative to each other
+
+Note: `inspect_state` does not support input simulation. It captures state at a \
+given frame without any key presses. To test input-dependent logic, temporarily \
+replace input conditions with frame-based triggers in the script, then revert.
 
 ### Letting the User Play
 
@@ -240,6 +331,16 @@ pyxel.images[0].set(0, 0, [
 Tilemaps compose maps from 8x8 tile regions in an image bank. Each tile is referenced \
 by its (x, y) position in the image bank in tile units (0-based, where tile (1, 0) = \
 pixels (8, 0)).
+
+**Important**: All tilemap cells default to tile (0, 0). Keep position (0, 0) in the \
+image bank empty (transparent) — if you place a visible tile there, it fills the \
+entire tilemap as background.
+
+If tiles are in a different image bank than sprites, set `imgsrc`:
+
+```python
+pyxel.tilemaps[0].imgsrc = 1  # draw tiles from image bank 1
+```
 
 ```python
 # Tilemap data format: each tile = 4 hex chars "XXYY" (x, y in tile units)
@@ -1820,6 +1921,118 @@ async def capture_frames(
         shutil.rmtree(output_dir, ignore_errors=True)
 
 
+# --- Input simulation ---
+
+
+@mcp.tool()
+async def play_and_capture(
+    script_path: str,
+    inputs: str,
+    frames: str = "1,30,60",
+    scale: int = 2,
+    timeout: int = 30,
+) -> list:
+    """Play a game by sending simulated input and capture screenshots.
+
+    Simulates keyboard/mouse input at specific frames and captures screenshots
+    at specified frame points. Use this to test input-dependent game logic
+    (menus, movement, shooting) without manual play.
+
+    Args:
+        script_path: Absolute path to the .py script to run.
+        inputs: JSON array of input events. Each event:
+            {"frame": N, "keys": ["KEY_SPACE", ...], "mouse_x": X, "mouse_y": Y}
+            Keys are held from their frame until a later entry changes them.
+            Default state: no keys pressed, mouse at (0,0).
+        frames: Comma-separated frame numbers to capture screenshots (default: "1,30,60").
+        scale: Screenshot scale multiplier (default: 2).
+        timeout: Maximum seconds to wait for the script (default: 30).
+    """
+    if not _pyxel_dir():
+        return ["Error: Pyxel is not installed. Run: pip install pyxel-mcp"]
+
+    script_path = os.path.abspath(script_path)
+    if not os.path.isfile(script_path):
+        return [f"Error: script not found: {script_path}"]
+
+    try:
+        input_data = json.loads(inputs)
+        if not isinstance(input_data, list):
+            return ["Error: inputs must be a JSON array"]
+    except json.JSONDecodeError as e:
+        return [f"Error: invalid inputs JSON: {e}"]
+
+    try:
+        frame_list = [max(1, min(int(f.strip()), 1800)) for f in frames.split(",")]
+    except ValueError:
+        return ["Error: frames must be comma-separated integers (e.g. '1,30,60')"]
+
+    frame_list = sorted(set(frame_list))
+    if not frame_list:
+        return ["Error: no valid frame numbers provided"]
+
+    scale = max(1, min(scale, 10))
+    timeout = max(1, min(timeout, 120))
+
+    output_dir = tempfile.mkdtemp(prefix="pyxel_input_")
+    input_tmp = None
+
+    try:
+        # Write input schedule to temp file
+        fd, input_tmp = tempfile.mkstemp(prefix="pyxel_input_", suffix=".json")
+        with os.fdopen(fd, "w") as f:
+            json.dump(input_data, f)
+
+        frame_csv = ",".join(str(f) for f in frame_list)
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, INPUT_HARNESS_PATH,
+            script_path, output_dir, frame_csv, str(scale), input_tmp,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=os.path.dirname(script_path),
+        )
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=timeout
+        )
+
+        result = []
+        for frame_num in frame_list:
+            png_path = os.path.join(output_dir, f"frame_{frame_num:04d}.png")
+            if os.path.isfile(png_path) and os.path.getsize(png_path) > 0:
+                with open(png_path, "rb") as f:
+                    result.append(Image(data=f.read(), format="png"))
+                result.append(f"Frame {frame_num}")
+
+        if not result:
+            show_path = os.path.join(output_dir, "frame_show.png")
+            if os.path.isfile(show_path):
+                with open(show_path, "rb") as f:
+                    result.append(Image(data=f.read(), format="png"))
+                result.append("Captured via pyxel.show()")
+
+        if not result:
+            error_msg = _decode_stderr(stderr) or "No frames captured"
+            return [f"Capture failed (exit code {proc.returncode}): {error_msg}"]
+
+        stderr_text = _decode_stderr(stderr)
+        info = f"Captured {len([r for r in result if isinstance(r, Image)])} frames"
+        n_inputs = len(input_data)
+        info += f" with {n_inputs} input event{'s' if n_inputs != 1 else ''}"
+        if stderr_text:
+            info += f"\nstderr: {stderr_text}"
+        result.append(info)
+        return result
+
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()
+        return [f"Timeout: script did not finish within {timeout}s"]
+    finally:
+        shutil.rmtree(output_dir, ignore_errors=True)
+        if input_tmp and os.path.isfile(input_tmp):
+            os.unlink(input_tmp)
+
+
 # --- Layout analysis ---
 
 
@@ -1936,6 +2149,106 @@ async def inspect_layout(
         return f"Timeout: script did not finish within {timeout}s"
     except json.JSONDecodeError as e:
         return f"Failed to parse layout data: {e}"
+
+
+# --- State inspection ---
+
+
+def _format_state_report(data):
+    """Format state inspection JSON into a readable report."""
+    lines = [f"State at frame {data['frame']}"]
+
+    app_type = data.get("app_type")
+    if app_type:
+        lines.append(f"App class: {app_type}")
+    else:
+        lines.append("No App instance found")
+        if data.get("note"):
+            lines.append(f"Note: {data['note']}")
+
+    attrs = data.get("attributes", {})
+    if isinstance(attrs, dict):
+        for key, val in attrs.items():
+            if key == "__type__":
+                continue
+            val_str = json.dumps(val, default=str) if not isinstance(val, str) else val
+            if len(val_str) > 200:
+                val_str = val_str[:200] + "..."
+            lines.append(f"  {key}: {val_str}")
+
+    pyxel_state = data.get("pyxel", {})
+    if pyxel_state:
+        lines.append("")
+        lines.append("Pyxel system:")
+        for key, val in pyxel_state.items():
+            lines.append(f"  {key}: {val}")
+
+    return "\n".join(lines)
+
+
+@mcp.tool()
+async def inspect_state(
+    script_path: str,
+    frames: int = 60,
+    attributes: str = "",
+    timeout: int = 10,
+) -> str:
+    """Read game object attributes at a specific frame for debugging.
+
+    Captures the App instance (the class that calls pyxel.run()) and
+    dumps its attributes as JSON at the target frame. Use this to debug
+    logic bugs by inspecting variable values during gameplay.
+
+    Args:
+        script_path: Absolute path to the .py script to run.
+        frames: Frame number at which to inspect state (default: 60).
+        attributes: Comma-separated attribute names to inspect (default: all).
+        timeout: Maximum seconds to wait for the script (default: 10).
+    """
+    if not _pyxel_dir():
+        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
+
+    script_path = os.path.abspath(script_path)
+    if not os.path.isfile(script_path):
+        return f"Error: script not found: {script_path}"
+
+    frames = max(1, min(frames, 1800))
+    timeout = max(1, min(timeout, 60))
+
+    args = [sys.executable, STATE_HARNESS_PATH, script_path, str(frames)]
+    if attributes.strip():
+        attr_list = [a.strip() for a in attributes.split(",") if a.strip()]
+        args.append(json.dumps(attr_list))
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=os.path.dirname(script_path),
+        )
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=timeout
+        )
+
+        if proc.returncode != 0:
+            error_msg = _decode_stderr(stderr) or "Unknown error"
+            return f"State inspection failed (exit code {proc.returncode}): {error_msg}"
+
+        data = json.loads(stdout.decode(errors="replace").strip())
+        report = _format_state_report(data)
+
+        stderr_text = _decode_stderr(stderr)
+        if stderr_text:
+            report += f"\n\nstderr: {stderr_text}"
+        return report
+
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()
+        return f"Timeout: script did not finish within {timeout}s"
+    except json.JSONDecodeError as e:
+        return f"Failed to parse state data: {e}"
 
 
 def main():
