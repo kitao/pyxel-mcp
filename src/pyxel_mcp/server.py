@@ -1,5 +1,6 @@
 """MCP server for Pyxel, a retro game engine for Python."""
 
+import ast
 import asyncio
 import glob
 import json
@@ -22,6 +23,9 @@ FRAMES_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "frames_harness.py
 LAYOUT_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "layout_harness.py")
 INPUT_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "input_harness.py")
 STATE_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "state_harness.py")
+SCREEN_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "screen_harness.py")
+TILEMAP_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "tilemap_harness.py")
+BANK_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "bank_harness.py")
 
 _MAX_STDERR = 4000
 
@@ -100,6 +104,27 @@ def _enrich_error(text):
     return text + "\n\nHint: " + " ".join(hints)
 
 
+def _extract_stdout(raw_stdout):
+    """Separate user print output from harness JSON in stdout.
+
+    Returns (json_str, user_output). The harness always prints JSON as
+    the last non-empty line. Everything before it is user print output.
+    """
+    text = raw_stdout.decode(errors="replace").strip()
+    if not text:
+        return "", ""
+    lines = text.split("\n")
+    # Find the last line that looks like JSON
+    for i in range(len(lines) - 1, -1, -1):
+        stripped = lines[i].strip()
+        if stripped.startswith(("{", "[")):
+            json_str = stripped
+            user_lines = lines[:i]
+            user_output = "\n".join(user_lines).strip()
+            return json_str, user_output
+    return text, ""
+
+
 _INSTRUCTIONS = """\
 # Pyxel App Development
 
@@ -113,7 +138,12 @@ _INSTRUCTIONS = """\
    - `render_audio` for each sound channel separately.
    - `play_and_capture` to test input-dependent logic (menus, movement).
    - `inspect_state` to debug logic bugs by inspecting variable values.
-   - Other tools as needed for the task.
+   - `validate_script` before running to catch syntax errors and anti-patterns.
+   - `inspect_palette` to check color usage and contrast issues.
+   - `inspect_tilemap` to verify tilemap content and detect (0,0) trap.
+   - `inspect_bank` to see all sprites/tiles in an image bank.
+   - `compare_frames` for visual regression testing between frames.
+   - `inspect_screen` for compact color grid (no image tokens).
 5. Fix and re-verify.
 
 ### Error Recovery
@@ -128,6 +158,10 @@ with the same color as background. Check draw coordinates are within screen boun
 or `.load()` runs before the game loop starts.
 - **`inspect_layout` no text detected**: Text may be too small, overlapping, or same \
 color as background. Try a different frame number.
+- **`validate_script` false positive**: Anti-pattern checks are heuristic. If a warning \
+seems wrong, it's safe to ignore and run the script.
+- **`inspect_tilemap` all zeros**: Tilemap not populated. Ensure `tilemaps[N].set()` runs \
+before the game loop. Check `imgsrc` matches the image bank with tile data.
 
 ### Reading Tool Output
 
@@ -144,7 +178,20 @@ animation progresses smoothly without jumps or flicker.
 - **`play_and_capture`**: Returns screenshots with simulated input. Verify that \
 input causes expected state changes (player moved, menu changed, bullet spawned).
 - **`inspect_state`**: Returns game object attributes at a specific frame. \
-Check that variable values match expectations (score, position, game state).
+Check that variable values match expectations (score, position, game state). \
+Use comma-separated frames for timeline diff: `frames="10,30,60"`.
+- **`validate_script`**: Returns syntax errors and anti-pattern warnings. \
+Run before `run_and_capture` to catch issues without Pyxel execution overhead.
+- **`inspect_screen`**: Returns screen as hex color grid (0-f per pixel). \
+Compact token usage. Good for programmatic comparison.
+- **`compare_frames`**: Returns changed pixel count, percentage, and region \
+between two frames. Use to verify only intended areas changed.
+- **`inspect_palette`**: Returns color distribution and contrast warnings. \
+Check that foreground colors have sufficient contrast against background.
+- **`inspect_tilemap`**: Returns tile grid, usage stats, and bounding box. \
+Check `imgsrc` matches your image bank. Verify (0,0) tiles are empty.
+- **`inspect_bank`**: Returns full 256x256 image bank as screenshot. \
+Verify sprite/tile placement and find available space.
 
 ### Testing Input-Dependent Logic
 
@@ -174,7 +221,7 @@ For simple one-shot tests, the frame-based trigger approach also works:
 Use `inspect_state` to read variable values at a specific frame:
 
 ```python
-inspect_state("game.py", frames=60, attributes="score,lives,player_x,player_y")
+inspect_state("game.py", frames="60", attributes="score,lives,player_x,player_y")
 ```
 
 This captures the App instance (the class calling `pyxel.run()`) and dumps its \
@@ -382,7 +429,8 @@ pyxel.sounds[0].set(
 
 ### MML (Music Macro Language)
 
-`Sound.mml()` provides flexible music composition beyond `Sound.set()`:
+`Sound.mml()` provides flexible music composition beyond `Sound.set()`. \
+Learn MML to craft distinctive BGM — don't rely solely on `gen_bgm`.
 
 ```python
 pyxel.sounds[0].mml("T120 @1 V100 L8 O4 CDEFGAB>C")
@@ -394,7 +442,37 @@ Key commands: `T`=tempo, `@`=tone(0:tri 1:sq 2:pulse 3:noise), `V`=volume(0-127)
 Advanced: `@ENV`=envelope, `@VIB`=vibrato, `@GLI`=glide.
 Full syntax: fetch the MML commands JSON.
 
+### MML Composition Guide
+
+Structure BGM as 3 channels: melody (ch0), bass (ch1), harmony/arpeggio (ch2). \
+Reserve ch3 for SE. Use `render_audio` to verify each channel separately.
+
+**3-channel template:**
+
+```python
+# Ch0: Melody — carries the theme
+pyxel.sounds[10].mml("T120 @1 V80 L8 O4 [CEGC>C<BAGFEDC R4]2")
+# Ch1: Bass — root notes, steady rhythm
+pyxel.sounds[11].mml("T120 @0 V60 L4 O2 [CC8C8 GG8G8 AA8A8 FF8F8]2")
+# Ch2: Arpeggio — fills space, adds texture
+pyxel.sounds[12].mml("T120 @1 V40 L16 O4 [CEGCEGCEGCEG <B>DG<B>DG<B>DG<B>DG]2")
+pyxel.musics[0].set([10], [11], [12])
+```
+
+**Genre moods by key and tempo:**
+
+| Genre | Key | Tempo | Tones | Tips |
+|-------|-----|-------|-------|------|
+| Action/Gothic | A- minor, C minor | T100-120 | @1 melody, @0 bass | Use E-/A-/B- for dark feel, 8th note arpeggios |
+| Adventure | C major, G major | T120-140 | @1 melody, @0 bass | Ascending phrases for heroic mood |
+| Puzzle/Calm | F major | T80-100 | @0 melody, @1 harmony | Dotted notes, gentle tempo |
+| Horror | B- minor | T60-80 | @2 melody, @3 accents | Half notes, chromatic movement, sparse |
+| Boss battle | E minor | T140-160 | @1 melody, @0 bass | Driving 16th bass, syncopated melody |
+
 ### Quick BGM
+
+`gen_bgm` generates procedural music — great for rapid iteration, but all outputs \
+share a similar flavor. Combine with hand-written MML for variety.
 
 ```python
 mml_list = pyxel.gen_bgm(preset, instr, seed=None)
@@ -548,6 +626,25 @@ Shadow goes on bottom/right, highlight on top/left.
 - **Too many colors**: 3-4 colors per 8x8, 5-6 per 16x16. More = messy.
 - **Random dithering**: Only dither in transition zones, never randomly.
 
+### Sprite Design Process
+
+Never use a single static frame for the player. Follow this minimum standard:
+
+1. **Silhouette first**: Draw the outline in black (0). The shape must read clearly at 1x zoom.
+2. **Fill base color**: One color per material region (skin, armor, cloth).
+3. **Add shadow/highlight**: Using the 3-color-per-material table above.
+4. **Required sprite images** (minimum distinct images to draw per state):
+
+| Character | Required States | Images Each |
+|-----------|----------------|-------------|
+| Player (platformer) | idle, walk, jump, attack | idle:1, walk:2, jump:1, attack:1 = **5 min** |
+| Player (shmup) | idle, bank-left, bank-right | 1 each = **3 min** |
+| Player (RPG) | idle, walk-down, walk-side | idle:1, walk:2 each = **5 min** |
+| Enemy (ground) | walk | 2 frames min |
+| Enemy (flying) | flap | 2 frames min |
+
+Place animation frames adjacent horizontally in the image bank. Use `inspect_sprite` after each sprite to verify quality.
+
 ## Sprite Templates
 
 Ready-to-use hex sprites for `pyxel.images[N].set()`. Color 0 = transparent.
@@ -700,11 +797,47 @@ for sx, sy, brightness in stars:
     pyxel.pset(sx, sy, [1, 5, 6, 7][brightness])
 ```
 
+### Genre Background Recipes
+
+Each recipe builds atmosphere with layered elements. Implement at least 2 layers.
+
+**Castle/Dungeon interior:**
+- cls(1) navy base
+- Far layer (1/3 speed): window rectangles with warm glow (color 5 frame, 9 inner)
+- Mid layer: torch brackets (sprite) with flickering flame (pset, alternate 9/10)
+- Tile layer: varied wall tiles (stone + brick + dark stone), pillar decorations
+- Atmosphere: chain sprites on walls, occasional dripping particle
+
+**Forest/Outdoor:**
+- cls(1) or cls(5) sky
+- Far layer (1/4 speed): mountain silhouettes (tri, color 1)
+- Mid layer (1/2 speed): tree canopy shapes (circ clusters, color 3)
+- Near layer: bushes, grass detail tiles
+- Atmosphere: leaf particles drifting down, birds (small sprites)
+
+**Space/Shmup:**
+- cls(0) black
+- Star field: 30+ pset at random positions, 3 brightness tiers
+- Twinkling: `if (sx + frame_count) % 60 < 5: brighter`
+- Nebula: dither(0.3) + large circ in color 2 or 5
+
 ### Parallax Scrolling
 
+Draw layers back-to-front with different scroll speeds:
+
 ```python
-# 2-layer parallax (great for shmups/platformers)
-# In draw():
+# Layer speeds (general principle)
+# Layer 1 (far):    offset = scroll // 4   (or frame_count // 4 for auto-scroll)
+# Layer 2 (mid):    offset = scroll // 2
+# Layer 3 (near):   offset = scroll        (1:1 with camera)
+
+# Parallax with camera offset (side-scroller)
+far_offset = camera_x // 3
+mid_offset = camera_x // 2
+# Draw far objects at (x + far_offset % spacing - spacing, y)
+# Draw mid objects at (x + mid_offset % spacing - spacing, y)
+
+# Auto-scroll parallax (shmup / title screen)
 for i in range(20):
     x = (i * 40 - pyxel.frame_count // 2) % (pyxel.width + 20) - 10
     pyxel.circ(x, 20, 6, 1)   # far clouds (slow)
@@ -712,16 +845,24 @@ for i in range(10):
     x = (i * 50 - pyxel.frame_count) % (pyxel.width + 20) - 10
     pyxel.circ(x, 40, 10, 5)  # near clouds (fast)
 
-# Draw layers back-to-front with different scroll speeds:
-# Layer 1 (far): offset = frame_count // 16
-# Layer 2 (mid): offset = frame_count // 8
-# Layer 3 (near): offset = frame_count // 4
-# Layer 4 (ground): offset = frame_count (1:1 with camera)
-
-# Seamless wrap:
+# Seamless wrap for tilemap-based parallax:
 for i in range(2):
     pyxel.blt(i * pyxel.width - offset % pyxel.width, y,
               0, u, v, pyxel.width, h, colkey=0)
+```
+
+### Decorative Elements
+
+Add life to backgrounds with small animated details:
+
+```python
+# Torch flame (in draw, world space)
+fy = torch_y + pyxel.rndi(-1, 0)
+pyxel.pset(torch_x, fy, 10 if pyxel.frame_count % 4 < 2 else 9)
+pyxel.pset(torch_x, fy - 1, 10)
+
+# Dripping water (update + draw)
+if pyxel.frame_count % 60 == 0: drips.append({"x": x, "y": y, "vy": 0.5})
 ```
 
 ## Screen & Text Layout
@@ -1043,6 +1184,60 @@ def draw(self):
             pyxel.text(44, 80, "PRESS ENTER", 13)
 ```
 
+### Level Design
+
+Never place platforms, enemies, or items randomly. Every placement serves a purpose.
+
+**Zone-based structure** — divide the map into 3-5 zones with escalating challenge:
+
+| Zone | Purpose | Elements |
+|------|---------|----------|
+| 1 (Start) | Teach mechanics safely | Wide platforms, 1 weak enemy, first item |
+| 2 (Build) | Introduce combinations | Narrower gaps, 2 enemy types, vertical platforms |
+| 3 (Challenge) | Test skill | Enemies on platforms, timed jumps, fewer items |
+| 4 (Climax) | Peak difficulty | Multiple hazards at once, tight spacing |
+| 5 (Reward) | Resolution | Boss or clear condition, generous items |
+
+**Pacing rules:**
+- After a hard section, add a brief safe zone (empty platform, health item)
+- First enemy encounter should be solvable without jumping
+- Candles/items near new mechanics hint at the correct approach
+- Place checkpoints (candles/hearts) before difficult jumps, not after
+
+**Enemy placement:**
+- Ground enemies on flat ground (never floating in air)
+- Flying enemies in open vertical space (not crammed in corridors)
+- Never place enemies where the player spawns or lands from a required jump
+- Pair enemies with terrain: skeleton patrols platform edges, bats guard gaps
+
+### Enemy Design
+
+Every enemy needs: a **behavior pattern**, **visual distinction** from the player, \
+and at least **2 animation frames**.
+
+| Pattern | Movement | Good For | Example |
+|---------|----------|----------|---------|
+| Patrol | Walk left/right, turn at edges | Ground enemies | Skeleton, Slime |
+| Sine float | Sinusoidal Y + X orbit around base | Flying enemies | Bat, Ghost |
+| Chase | Move toward player when in range | Aggressive enemies | Ghost, Dog |
+| Stationary | Fixed position, fires projectiles | Turrets, traps | Cannon, Spike |
+| Swoop | Hover, then dive at player | Air enemies | Eagle, Demon |
+
+```python
+# Patrol: turn at platform edges
+e["x"] += e["vx"]
+if not tile_solid(edge_x, below_y):  # no ground ahead
+    e["vx"] = -e["vx"]              # reverse
+
+# Chase: drift toward player within range
+if abs(player_x - e["x"]) < 100:
+    e["x"] += (player_x - e["x"]) * 0.01
+
+# Sine float: orbit around base position (never use += for x/y)
+e["x"] = e["base_x"] + pyxel.sin(pyxel.frame_count * 2) * 16
+e["y"] = e["base_y"] + pyxel.sin(pyxel.frame_count * 4) * 12
+```
+
 ## Game Feel Constants
 
 Tested physics values. At 30fps, 1 frame = 33ms. At 60fps, 1 frame = 16ms. \
@@ -1178,9 +1373,10 @@ else:
 
 ## Animation Timing
 
-Recommended frame counts for common animations:
+Recommended sprite image counts for smooth animation (ideal targets; \
+see Sprite Design Process for minimums):
 
-| Animation | Frames | Speed (frames/update) |
+| Animation | Sprite Images | Speed (game frames per image) |
 |-----------|--------|-----------------------|
 | Idle breathing | 2-4 | 20-30 |
 | Walk cycle | 4-6 | 4-6 |
@@ -1266,10 +1462,15 @@ Quick-reference of common mistakes. See linked sections for details.
 | Audio | `play()` on BGM channel | SE on ch3, BGM on ch0-2 |
 | Audio | Noise tone for melodic SE | Square or pulse, vol 5-7 |
 | Audio | Skip SE for core actions | SE for every player event |
+| Audio | Only gen_bgm, no MML | Mix gen_bgm with hand-written MML for variety |
+| Sprite | Single static player frame | Min 5 images (idle/walk:2/jump/attack) |
+| Sprite | Single static enemy frame | Min 2 animation frames per enemy |
+| Level | Random platform placement | Zone-based progression (see Level Design) |
+| Level | Enemies floating in void | Ground enemies on ground, flyers in open space |
 
-Before release, verify: BGM present, distinct SE for all events, \
-title screen with animation, game over with score, \
-non-solid background, HUD with score/lives.
+Before release, verify: BGM present (MML or gen_bgm), distinct SE for all events, \
+title screen with animation, game over with score, non-solid background, \
+HUD with score/lives, player has walk animation, enemies have 2+ frames.
 """
 
 mcp = FastMCP("pyxel-mcp", instructions=_INSTRUCTIONS)
@@ -1689,10 +1890,12 @@ async def render_audio(
             return f"Render failed (exit code {proc.returncode}): {error_msg}"
 
         meta = {}
+        user_output = ""
         if stdout:
             try:
-                meta = json.loads(stdout.decode(errors="replace").strip())
-            except json.JSONDecodeError:
+                json_str, user_output = _extract_stdout(stdout)
+                meta = json.loads(json_str) if json_str else {}
+            except (json.JSONDecodeError, ValueError):
                 pass
 
         try:
@@ -1704,6 +1907,8 @@ async def render_audio(
             f" ({meta.get('duration_sec', '?')}s,"
             f" speed={meta.get('speed', '?')})\n\n{analysis}"
         )
+        if user_output:
+            result = f"Script output:\n{user_output}\n\n{result}"
         stderr_text = _decode_stderr(stderr)
         if stderr_text:
             result += f"\n\nstderr: {stderr_text}"
@@ -1815,9 +2020,12 @@ async def inspect_sprite(
             error_msg = _decode_stderr(stderr) or "Unknown error"
             return f"Inspect failed (exit code {proc.returncode}): {error_msg}"
 
-        data = json.loads(stdout.decode(errors="replace").strip())
+        json_str, user_output = _extract_stdout(stdout)
+        data = json.loads(json_str)
         report = _format_sprite_report(data)
 
+        if user_output:
+            report = f"Script output:\n{user_output}\n\n{report}"
         stderr_text = _decode_stderr(stderr)
         if stderr_text:
             report += f"\n\nstderr: {stderr_text}"
@@ -2135,9 +2343,12 @@ async def inspect_layout(
             error_msg = _decode_stderr(stderr) or "Unknown error"
             return f"Layout analysis failed (exit code {proc.returncode}): {error_msg}"
 
-        data = json.loads(stdout.decode(errors="replace").strip())
+        json_str, user_output = _extract_stdout(stdout)
+        data = json.loads(json_str)
         report = _format_layout_report(data)
 
+        if user_output:
+            report = f"Script output:\n{user_output}\n\n{report}"
         stderr_text = _decode_stderr(stderr)
         if stderr_text:
             report += f"\n\nstderr: {stderr_text}"
@@ -2186,22 +2397,67 @@ def _format_state_report(data):
     return "\n".join(lines)
 
 
+def _format_state_timeline(snapshots):
+    """Format multi-frame state snapshots into a timeline diff report."""
+    if not snapshots:
+        return "No state captured"
+    if len(snapshots) == 1:
+        return _format_state_report(snapshots[0])
+
+    lines = [f"State timeline ({len(snapshots)} frames)"]
+    lines.append("")
+
+    # Show first frame fully
+    lines.append(_format_state_report(snapshots[0]))
+
+    # Show diffs for subsequent frames
+    for i in range(1, len(snapshots)):
+        prev = snapshots[i - 1].get("attributes", {})
+        curr = snapshots[i].get("attributes", {})
+        lines.append("")
+        lines.append(f"--- Changes at frame {snapshots[i]['frame']} ---")
+
+        changes = []
+        all_keys = set(list(prev.keys()) + list(curr.keys()))
+        for key in sorted(all_keys):
+            if key == "__type__":
+                continue
+            old_val = prev.get(key)
+            new_val = curr.get(key)
+            if old_val != new_val:
+                old_s = json.dumps(old_val, default=str) if not isinstance(old_val, str) else (old_val or "(none)")
+                new_s = json.dumps(new_val, default=str) if not isinstance(new_val, str) else (new_val or "(none)")
+                if len(old_s) > 80:
+                    old_s = old_s[:80] + "..."
+                if len(new_s) > 80:
+                    new_s = new_s[:80] + "..."
+                changes.append(f"  {key}: {old_s} -> {new_s}")
+
+        if changes:
+            lines.extend(changes)
+        else:
+            lines.append("  (no changes)")
+
+    return "\n".join(lines)
+
+
 @mcp.tool()
 async def inspect_state(
     script_path: str,
-    frames: int = 60,
+    frames: str = "60",
     attributes: str = "",
     timeout: int = 10,
 ) -> str:
-    """Read game object attributes at a specific frame for debugging.
+    """Read game object attributes at specific frames for debugging.
 
     Captures the App instance (the class that calls pyxel.run()) and
-    dumps its attributes as JSON at the target frame. Use this to debug
-    logic bugs by inspecting variable values during gameplay.
+    dumps its attributes as JSON. Supports single frame or comma-separated
+    multi-frame timeline with automatic diff between frames.
 
     Args:
         script_path: Absolute path to the .py script to run.
-        frames: Frame number at which to inspect state (default: 60).
+        frames: Frame number(s) to inspect, comma-separated (default: "60").
+            Use multiple frames for timeline diff: "10,30,60"
         attributes: Comma-separated attribute names to inspect (default: all).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
@@ -2212,10 +2468,16 @@ async def inspect_state(
     if not os.path.isfile(script_path):
         return f"Error: script not found: {script_path}"
 
-    frames = max(1, min(frames, 1800))
+    try:
+        frame_list = [max(1, min(int(f.strip()), 1800)) for f in frames.split(",")]
+    except ValueError:
+        return "Error: frames must be comma-separated integers"
+
+    frame_list = sorted(set(frame_list))
     timeout = max(1, min(timeout, 60))
 
-    args = [sys.executable, STATE_HARNESS_PATH, script_path, str(frames)]
+    frame_csv = ",".join(str(f) for f in frame_list)
+    args = [sys.executable, STATE_HARNESS_PATH, script_path, frame_csv]
     if attributes.strip():
         attr_list = [a.strip() for a in attributes.split(",") if a.strip()]
         args.append(json.dumps(attr_list))
@@ -2235,8 +2497,16 @@ async def inspect_state(
             error_msg = _decode_stderr(stderr) or "Unknown error"
             return f"State inspection failed (exit code {proc.returncode}): {error_msg}"
 
-        data = json.loads(stdout.decode(errors="replace").strip())
-        report = _format_state_report(data)
+        json_str, user_output = _extract_stdout(stdout)
+        data = json.loads(json_str)
+
+        if isinstance(data, list):
+            report = _format_state_timeline(data)
+        else:
+            report = _format_state_report(data)
+
+        if user_output:
+            report = f"Script output:\n{user_output}\n\n{report}"
 
         stderr_text = _decode_stderr(stderr)
         if stderr_text:
@@ -2249,6 +2519,576 @@ async def inspect_state(
         return f"Timeout: script did not finish within {timeout}s"
     except json.JSONDecodeError as e:
         return f"Failed to parse state data: {e}"
+
+
+# --- Script validation ---
+
+
+_PYXEL_ANTIPATTERNS = [
+    (
+        r"pyxel\.run\s*\(",
+        "draw",
+        "pyxel.run() called inside draw(). Move it to __init__.",
+    ),
+    (
+        r"pyxel\.init\s*\(",
+        "update",
+        "pyxel.init() called inside update(). Move it to __init__.",
+    ),
+    (
+        r"pyxel\.init\s*\(",
+        "draw",
+        "pyxel.init() called inside draw(). Move it to __init__.",
+    ),
+    (
+        r"math\.sin\b|math\.cos\b",
+        None,
+        "Using math.sin/cos (radians). Pyxel's pyxel.sin/cos use degrees.",
+    ),
+    (
+        r"random\.randint\b",
+        None,
+        "Using random.randint. Prefer pyxel.rndi(a, b) for Pyxel games.",
+    ),
+]
+
+
+@mcp.tool()
+async def validate_script(script_path: str) -> str:
+    """Validate a Pyxel script without running it.
+
+    Performs AST parsing and checks for common Pyxel anti-patterns.
+    Much faster than run_and_capture for catching syntax errors and
+    obvious mistakes before execution.
+
+    Args:
+        script_path: Absolute path to the .py script to validate.
+    """
+    script_path = os.path.abspath(script_path)
+    if not os.path.isfile(script_path):
+        return f"Error: script not found: {script_path}"
+
+    try:
+        with open(script_path) as f:
+            source = f.read()
+    except Exception as e:
+        return f"Error reading file: {e}"
+
+    # Syntax check
+    issues = []
+    try:
+        tree = ast.parse(source, filename=script_path)
+    except SyntaxError as e:
+        return f"Syntax error at line {e.lineno}: {e.msg}"
+
+    # Collect function/method bodies for context-aware checks
+    method_bodies = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            start = node.lineno
+            end = node.end_lineno or start
+            body_lines = source.split("\n")[start - 1:end]
+            body_text = "\n".join(body_lines)
+            method_bodies[node.name] = body_text
+
+    # Anti-pattern checks
+    for pattern, context, message in _PYXEL_ANTIPATTERNS:
+        if context:
+            text = method_bodies.get(context, "")
+        else:
+            text = source
+        if re.search(pattern, text):
+            issues.append(message)
+
+    # Check for missing pyxel import
+    has_pyxel_import = bool(re.search(r"import\s+pyxel|from\s+pyxel", source))
+    if not has_pyxel_import:
+        issues.append("No 'import pyxel' found.")
+
+    # Check for missing pyxel.init
+    if not re.search(r"pyxel\.init\s*\(", source):
+        issues.append("No pyxel.init() call found.")
+
+    # Check for game loop
+    has_run = bool(re.search(r"pyxel\.run\s*\(", source))
+    has_show = bool(re.search(r"pyxel\.show\s*\(", source))
+    has_flip = bool(re.search(r"pyxel\.flip\s*\(", source))
+    if not (has_run or has_show or has_flip):
+        issues.append("No pyxel.run(), show(), or flip() call found.")
+
+    # Check for cls in draw
+    if "draw" in method_bodies:
+        if not re.search(r"pyxel\.cls\s*\(|cls\s*\(", method_bodies["draw"]):
+            issues.append("draw() may be missing pyxel.cls(). Screen won't clear.")
+
+    # Basic stats
+    n_classes = sum(1 for n in ast.walk(tree) if isinstance(n, ast.ClassDef))
+    n_functions = sum(1 for n in ast.walk(tree) if isinstance(n, ast.FunctionDef))
+    n_lines = len(source.split("\n"))
+
+    report = f"Script: {os.path.basename(script_path)}"
+    report += f"  ({n_lines} lines, {n_classes} classes, {n_functions} functions)"
+
+    if issues:
+        report += f"\n\nWarnings ({len(issues)}):"
+        for issue in issues:
+            report += f"\n  - {issue}"
+    else:
+        report += "\n\nNo issues found."
+
+    return report
+
+
+# --- Screen analysis ---
+
+
+_PALETTE_RGB = {
+    0: (0, 0, 0), 1: (43, 51, 95), 2: (126, 32, 114), 3: (25, 149, 56),
+    4: (139, 72, 82), 5: (57, 92, 152), 6: (169, 193, 255), 7: (238, 238, 238),
+    8: (212, 24, 108), 9: (211, 132, 65), 10: (233, 195, 91), 11: (112, 198, 169),
+    12: (118, 150, 222), 13: (163, 163, 163), 14: (255, 151, 152), 15: (237, 199, 176),
+}
+
+
+def _color_contrast(c1, c2):
+    """Simple luminance contrast ratio between two palette indices."""
+    r1, g1, b1 = _PALETTE_RGB.get(c1, (0, 0, 0))
+    r2, g2, b2 = _PALETTE_RGB.get(c2, (0, 0, 0))
+    lum1 = 0.299 * r1 + 0.587 * g1 + 0.114 * b1
+    lum2 = 0.299 * r2 + 0.587 * g2 + 0.114 * b2
+    lighter = max(lum1, lum2) + 0.05
+    darker = min(lum1, lum2) + 0.05
+    return lighter / darker
+
+
+async def _run_screen_harness(script_path, frame_csv, timeout=10):
+    """Run screen_harness and return parsed JSON + user output."""
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, SCREEN_HARNESS_PATH,
+        script_path, frame_csv,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=os.path.dirname(script_path),
+    )
+    stdout, stderr = await asyncio.wait_for(
+        proc.communicate(), timeout=timeout
+    )
+    if proc.returncode != 0:
+        error_msg = _decode_stderr(stderr) or "Unknown error"
+        raise RuntimeError(
+            f"Screen capture failed (exit code {proc.returncode}): {error_msg}"
+        )
+    json_str, user_output = _extract_stdout(stdout)
+    data = json.loads(json_str)
+    return data, user_output, _decode_stderr(stderr)
+
+
+@mcp.tool()
+async def inspect_screen(
+    script_path: str,
+    frames: int = 5,
+    timeout: int = 10,
+) -> str:
+    """Capture screen as a compact color index grid.
+
+    Returns the screen contents as a 2D array of Pyxel palette indices
+    (0-15). Much smaller than a screenshot image and enables programmatic
+    comparison. Each row is a string of hex digits (0-f).
+
+    Args:
+        script_path: Absolute path to the .py script to run.
+        frames: Frame number to capture (default: 5).
+        timeout: Maximum seconds to wait for the script (default: 10).
+    """
+    if not _pyxel_dir():
+        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
+
+    script_path = os.path.abspath(script_path)
+    if not os.path.isfile(script_path):
+        return f"Error: script not found: {script_path}"
+
+    frames = max(1, min(frames, 1800))
+    timeout = max(1, min(timeout, 60))
+
+    try:
+        data, user_output, stderr_text = await _run_screen_harness(
+            script_path, str(frames), timeout
+        )
+    except (RuntimeError, json.JSONDecodeError) as e:
+        return str(e)
+    except asyncio.TimeoutError:
+        return f"Timeout: script did not finish within {timeout}s"
+
+    snap = data[0] if isinstance(data, list) else data
+    w, h = snap["width"], snap["height"]
+    grid = snap["grid"]
+
+    lines = [f"Screen {w}x{h} at frame {snap['frame']}"]
+    lines.append("")
+    for row in grid:
+        lines.append("".join(f"{c:x}" for c in row))
+
+    result = "\n".join(lines)
+    if user_output:
+        result = f"Script output:\n{user_output}\n\n{result}"
+    if stderr_text:
+        result += f"\n\nstderr: {stderr_text}"
+    return result
+
+
+@mcp.tool()
+async def compare_frames(
+    script_path: str,
+    frame_a: int = 1,
+    frame_b: int = 30,
+    timeout: int = 15,
+) -> str:
+    """Compare screenshots at two frames and report pixel differences.
+
+    Captures the screen as color grids at two frames and computes a diff.
+    Returns changed pixel count, percentage, and which screen regions changed.
+    Use this for visual regression testing.
+
+    Args:
+        script_path: Absolute path to the .py script to run.
+        frame_a: First frame number (default: 1).
+        frame_b: Second frame number (default: 30).
+        timeout: Maximum seconds to wait for the script (default: 15).
+    """
+    if not _pyxel_dir():
+        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
+
+    script_path = os.path.abspath(script_path)
+    if not os.path.isfile(script_path):
+        return f"Error: script not found: {script_path}"
+
+    frame_a = max(1, min(frame_a, 1800))
+    frame_b = max(1, min(frame_b, 1800))
+    if frame_a == frame_b:
+        return "Error: frame_a and frame_b must be different"
+    timeout = max(1, min(timeout, 60))
+
+    frame_csv = f"{frame_a},{frame_b}"
+
+    try:
+        data, user_output, stderr_text = await _run_screen_harness(
+            script_path, frame_csv, timeout
+        )
+    except (RuntimeError, json.JSONDecodeError) as e:
+        return str(e)
+    except asyncio.TimeoutError:
+        return f"Timeout: script did not finish within {timeout}s"
+
+    if len(data) < 2:
+        return "Error: could not capture both frames"
+
+    snap_a, snap_b = data[0], data[1]
+    w, h = snap_a["width"], snap_a["height"]
+    grid_a, grid_b = snap_a["grid"], snap_b["grid"]
+
+    # Compute diff
+    changed = 0
+    total = w * h
+    min_x, min_y = w, h
+    max_x, max_y = -1, -1
+    changed_colors = {}
+
+    for y in range(h):
+        for x in range(w):
+            if grid_a[y][x] != grid_b[y][x]:
+                changed += 1
+                min_x = min(min_x, x)
+                min_y = min(min_y, y)
+                max_x = max(max_x, x)
+                max_y = max(max_y, y)
+                key = f"{grid_a[y][x]:x}->{grid_b[y][x]:x}"
+                changed_colors[key] = changed_colors.get(key, 0) + 1
+
+    pct = changed / total * 100 if total > 0 else 0
+    lines = [
+        f"Frame {snap_a['frame']} vs {snap_b['frame']} ({w}x{h})",
+        f"Changed pixels: {changed}/{total} ({pct:.1f}%)",
+    ]
+
+    if changed == 0:
+        lines.append("Frames are identical.")
+    else:
+        lines.append(
+            f"Changed region: ({min_x},{min_y}) to ({max_x},{max_y})"
+            f" = {max_x - min_x + 1}x{max_y - min_y + 1}px"
+        )
+        lines.append("")
+        lines.append("Color transitions (top 10):")
+        for trans, count in sorted(changed_colors.items(), key=lambda x: -x[1])[:10]:
+            lines.append(f"  {trans}: {count}px")
+
+    result = "\n".join(lines)
+    if user_output:
+        result = f"Script output:\n{user_output}\n\n{result}"
+    if stderr_text:
+        result += f"\n\nstderr: {stderr_text}"
+    return result
+
+
+@mcp.tool()
+async def inspect_palette(
+    script_path: str,
+    frames: int = 5,
+    timeout: int = 10,
+) -> str:
+    """Analyze color usage and contrast in a Pyxel screenshot.
+
+    Captures the screen and reports which of Pyxel's 16 colors are used,
+    their distribution, background color, and potential contrast issues.
+
+    Args:
+        script_path: Absolute path to the .py script to run.
+        frames: Frame number to analyze (default: 5).
+        timeout: Maximum seconds to wait for the script (default: 10).
+    """
+    if not _pyxel_dir():
+        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
+
+    script_path = os.path.abspath(script_path)
+    if not os.path.isfile(script_path):
+        return f"Error: script not found: {script_path}"
+
+    frames = max(1, min(frames, 1800))
+    timeout = max(1, min(timeout, 60))
+
+    try:
+        data, user_output, stderr_text = await _run_screen_harness(
+            script_path, str(frames), timeout
+        )
+    except (RuntimeError, json.JSONDecodeError) as e:
+        return str(e)
+    except asyncio.TimeoutError:
+        return f"Timeout: script did not finish within {timeout}s"
+
+    snap = data[0] if isinstance(data, list) else data
+    w, h = snap["width"], snap["height"]
+    grid = snap["grid"]
+    total = w * h
+
+    # Count colors
+    counts = {}
+    for row in grid:
+        for c in row:
+            counts[c] = counts.get(c, 0) + 1
+
+    # Detect background (most common color)
+    bg_color = max(counts, key=counts.get)
+    bg_name = _PALETTE_NAMES.get(bg_color, "?")
+    fg_colors = {c for c in counts if c != bg_color}
+
+    lines = [
+        f"Palette analysis at frame {snap['frame']} ({w}x{h})",
+        f"Background: {bg_color:x} ({bg_name}) — {counts[bg_color]}/{total} pixels"
+        f" ({counts[bg_color] / total * 100:.0f}%)",
+        f"Colors used: {len(counts)}/16",
+        "",
+        "Color distribution:",
+    ]
+
+    for c in sorted(counts, key=counts.get, reverse=True):
+        name = _PALETTE_NAMES.get(c, "?")
+        pct = counts[c] / total * 100
+        bar = "#" * max(1, int(pct / 2))
+        lines.append(f"  {c:x} ({name:10s}): {counts[c]:6d}px ({pct:5.1f}%) {bar}")
+
+    # Contrast warnings
+    warnings = []
+    for c in fg_colors:
+        ratio = _color_contrast(c, bg_color)
+        if ratio < 1.5:
+            name = _PALETTE_NAMES.get(c, "?")
+            warnings.append(
+                f"  Low contrast: {c:x}({name}) on {bg_color:x}({bg_name})"
+                f" — ratio {ratio:.1f}:1"
+            )
+
+    unused = [c for c in range(16) if c not in counts]
+    if unused:
+        lines.append(f"\nUnused colors: {', '.join(f'{c:x}' for c in unused)}")
+
+    if warnings:
+        lines.append("\nContrast warnings:")
+        lines.extend(warnings)
+
+    result = "\n".join(lines)
+    if user_output:
+        result = f"Script output:\n{user_output}\n\n{result}"
+    if stderr_text:
+        result += f"\n\nstderr: {stderr_text}"
+    return result
+
+
+# --- Tilemap inspection ---
+
+
+@mcp.tool()
+async def inspect_tilemap(
+    script_path: str,
+    tilemap: int = 0,
+    frames: int = 1,
+    timeout: int = 10,
+) -> str:
+    """Inspect tilemap content, tile usage, and layout.
+
+    Reads tilemap data and reports tile grid, usage statistics,
+    bounding box of non-empty tiles, and imgsrc setting.
+
+    Args:
+        script_path: Absolute path to the .py script to run.
+        tilemap: Tilemap index 0-7 (default: 0).
+        frames: Frame at which to read tilemap (default: 1).
+        timeout: Maximum seconds to wait for the script (default: 10).
+    """
+    if not _pyxel_dir():
+        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
+
+    script_path = os.path.abspath(script_path)
+    if not os.path.isfile(script_path):
+        return f"Error: script not found: {script_path}"
+
+    tilemap = max(0, min(tilemap, 7))
+    frames = max(1, min(frames, 1800))
+    timeout = max(1, min(timeout, 60))
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, TILEMAP_HARNESS_PATH,
+            script_path, str(tilemap), str(frames),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=os.path.dirname(script_path),
+        )
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=timeout
+        )
+
+        if proc.returncode != 0:
+            error_msg = _decode_stderr(stderr) or "Unknown error"
+            return f"Tilemap inspection failed (exit code {proc.returncode}): {error_msg}"
+
+        json_str, user_output = _extract_stdout(stdout)
+        data = json.loads(json_str)
+
+        lines = [
+            f"Tilemap {data['tilemap_index']} ({data['width']}x{data['height']} tiles)",
+            f"Image source: bank {data['imgsrc']}",
+            f"Non-zero tiles: {data['non_zero_tiles']}/{data['total_scanned']}"
+            f" ({data['unique_tiles']} unique)",
+        ]
+
+        bbox = data.get("bbox")
+        if bbox:
+            lines.append(
+                f"Content bounds: ({bbox['x']},{bbox['y']})"
+                f" {bbox['w']}x{bbox['h']} tiles"
+            )
+            lines.append("")
+            lines.append("Tile grid (within bounds):")
+            for row in data["tiles"]:
+                cells = []
+                for tile in row:
+                    if tile == [0, 0]:
+                        cells.append("  . ")
+                    else:
+                        cells.append(f"{tile[0]:2d},{tile[1]:<1d}")
+                lines.append("  " + " ".join(cells))
+        else:
+            lines.append("Tilemap is empty (all tiles are (0,0)).")
+
+        lines.append("")
+        lines.append("Tile usage (top entries):")
+        for key, count in list(data["tile_usage"].items())[:15]:
+            lines.append(f"  ({key}): {count} tiles")
+
+        result = "\n".join(lines)
+        if user_output:
+            result = f"Script output:\n{user_output}\n\n{result}"
+        stderr_text = _decode_stderr(stderr)
+        if stderr_text:
+            result += f"\n\nstderr: {stderr_text}"
+        return result
+
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()
+        return f"Timeout: script did not finish within {timeout}s"
+    except json.JSONDecodeError as e:
+        return f"Failed to parse tilemap data: {e}"
+
+
+# --- Image bank visualization ---
+
+
+@mcp.tool()
+async def inspect_bank(
+    script_path: str,
+    bank: int = 0,
+    scale: int = 2,
+    timeout: int = 10,
+) -> list:
+    """Visualize an entire Pyxel image bank as a single screenshot.
+
+    Renders the full 256x256 pixel contents of an image bank, showing
+    all sprites and tiles at once. Useful for verifying sprite sheet
+    organization and finding available space.
+
+    Args:
+        script_path: Absolute path to the .py script to run.
+        bank: Image bank index 0-2 (default: 0).
+        scale: Screenshot scale multiplier (default: 2).
+        timeout: Maximum seconds to wait for the script (default: 10).
+    """
+    if not _pyxel_dir():
+        return ["Error: Pyxel is not installed. Run: pip install pyxel-mcp"]
+
+    script_path = os.path.abspath(script_path)
+    if not os.path.isfile(script_path):
+        return [f"Error: script not found: {script_path}"]
+
+    bank = max(0, min(bank, 2))
+    scale = max(1, min(scale, 4))
+    timeout = max(1, min(timeout, 60))
+
+    output_dir = tempfile.mkdtemp(prefix="pyxel_bank_")
+    output_path = os.path.join(output_dir, "bank.png")
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, BANK_HARNESS_PATH,
+            script_path, output_path, str(bank), str(scale),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=os.path.dirname(script_path),
+        )
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=timeout
+        )
+
+        result = []
+        if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
+            with open(output_path, "rb") as f:
+                result.append(Image(data=f.read(), format="png"))
+            result.append(f"Image bank {bank} (256x256 pixels)")
+        else:
+            error_msg = _decode_stderr(stderr) or "No output captured"
+            return [f"Bank capture failed (exit code {proc.returncode}): {error_msg}"]
+
+        stderr_text = _decode_stderr(stderr)
+        if stderr_text:
+            result.append(f"stderr: {stderr_text}")
+        return result
+
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()
+        return [f"Timeout: script did not finish within {timeout}s"]
+    finally:
+        shutil.rmtree(output_dir, ignore_errors=True)
 
 
 def main():

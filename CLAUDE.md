@@ -14,6 +14,9 @@ src/pyxel_mcp/
   layout_harness.py      Screen layout analysis
   input_harness.py       Input simulation + capture
   state_harness.py       Game state inspection
+  screen_harness.py      Screen pixel grid capture
+  tilemap_harness.py     Tilemap data inspection
+  bank_harness.py        Image bank visualization
 ```
 
 ## Build

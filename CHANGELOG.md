@@ -1,5 +1,25 @@
 # Change Log
 
+## 0.6.0
+
+- Added validate_script tool for pre-run syntax and anti-pattern checks
+- Added inspect_screen tool for compact color grid capture
+- Added compare_frames tool for visual regression testing
+- Added inspect_palette tool for color usage analysis
+- Added inspect_tilemap tool for tilemap data inspection
+- Added inspect_bank tool for image bank visualization
+- Added multi-frame timeline support to inspect_state
+- Added stdout capture (print output) to text-based tools
+- Documented tilemap (0,0) default trap and imgsrc property
+- Added sprite design process with min animation frame requirements
+- Added MML composition guide with genre mood table
+- Added guidance to mix gen_bgm with hand-written MML
+- Added level design principles (zone structure, pacing, enemy placement)
+- Added enemy design patterns (patrol, chase, sine float, swoop)
+- Added genre background recipes (castle, forest, space)
+- Added decorative element patterns (torch flames, dripping water)
+- Strengthened quality checklist with sprite/level/audio items
+
 ## 0.5.0
 
 - Added play_and_capture tool for input simulation testing

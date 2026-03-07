@@ -1,10 +1,12 @@
-"""State inspection harness - captures game object attributes at a target frame.
+"""State inspection harness - captures game object attributes at target frames.
 
 Runs a Pyxel script, captures the App instance (the object that calls
-pyxel.run()), and at the target frame dumps its attributes as JSON.
+pyxel.run()), and at each target frame dumps its attributes as JSON.
+
+Supports single frame or comma-separated multi-frame timeline.
 
 Usage:
-    python state_harness.py <script> <target_frame> [attrs_json]
+    python state_harness.py <script> <frame_list> [attrs_json]
 """
 
 import json
@@ -14,13 +16,13 @@ import sys
 
 if len(sys.argv) < 3:
     print(
-        "Usage: state_harness <script> <target_frame> [attrs_json]",
+        "Usage: state_harness <script> <frame_list> [attrs_json]",
         file=sys.stderr,
     )
     sys.exit(1)
 
 script_path = os.path.abspath(sys.argv[1])
-target_frame = int(sys.argv[2])
+frame_list = sorted(set(max(1, int(f)) for f in sys.argv[2].split(",")))
 filter_attrs = None
 if len(sys.argv) > 3:
     filter_attrs = json.loads(sys.argv[3])
@@ -42,7 +44,8 @@ def _turbo_init(*args, **kwargs):
 pyxel.init = _turbo_init
 
 _app_instance = None
-_captured = False
+_results = []
+_capture_idx = 0
 
 
 def _safe_serialize(obj, depth=0, max_depth=3):
@@ -79,13 +82,8 @@ def _safe_serialize(obj, depth=0, max_depth=3):
     return f"<{type(obj).__name__}>"
 
 
-def _dump_state():
-    """Dump the captured app instance state as JSON."""
-    global _captured
-    if _captured:
-        return
-    _captured = True
-
+def _capture_state():
+    """Capture current state as a dict."""
     result = {"frame": pyxel.frame_count}
     result["pyxel"] = {
         "width": pyxel.width,
@@ -106,12 +104,31 @@ def _dump_state():
         result["app_type"] = None
         result["note"] = "No App instance found (pyxel.run() not called with bound method)"
 
-    print(json.dumps(result, default=str))
+    return result
+
+
+def _flush_and_quit():
+    # Output single object for one frame (backward compatible), array for multiple
+    if len(frame_list) == 1:
+        print(json.dumps(_results[0], default=str))
+    else:
+        print(json.dumps(_results, default=str))
     sys.stdout.flush()
     pyxel.quit()
 
 
-# Patch pyxel.run: capture self from bound methods, dump at target frame
+def _try_capture(fc):
+    global _capture_idx
+    if _capture_idx >= len(frame_list):
+        return
+    if fc >= frame_list[_capture_idx]:
+        _results.append(_capture_state())
+        _capture_idx += 1
+        if _capture_idx >= len(frame_list):
+            _flush_and_quit()
+
+
+# Patch pyxel.run: capture self from bound methods, dump at target frames
 _original_run = pyxel.run
 
 
@@ -124,8 +141,7 @@ def _patched_run(update, draw):
 
     def wrapped_update():
         update()
-        if pyxel.frame_count >= target_frame:
-            _dump_state()
+        _try_capture(pyxel.frame_count)
 
     _original_run(wrapped_update, draw)
 
@@ -137,7 +153,8 @@ _original_show = pyxel.show
 
 
 def _patched_show():
-    _dump_state()
+    _results.append(_capture_state())
+    _flush_and_quit()
 
 
 pyxel.show = _patched_show
@@ -151,8 +168,7 @@ def _patched_flip():
     global _flip_counter
     _original_flip()
     _flip_counter += 1
-    if _flip_counter >= target_frame:
-        _dump_state()
+    _try_capture(_flip_counter)
 
 
 pyxel.flip = _patched_flip
