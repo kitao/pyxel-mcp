@@ -1836,18 +1836,21 @@ async def render_audio(
     sound_index: int = 0,
     duration_sec: float = 0,
     timeout: int = 10,
+    music_index: int = -1,
 ) -> str:
-    """Render a Pyxel sound to WAV and return waveform analysis.
+    """Render a Pyxel sound or music to WAV and return waveform analysis.
 
     Runs the script to set up sounds (without starting the game loop),
-    then renders the specified sound to WAV and analyzes the audio.
+    then renders the specified sound or music to WAV and analyzes the audio.
     Returns note sequence with timing, frequency, and volume data.
 
     Args:
         script_path: Absolute path to the .py script to run.
-        sound_index: Sound slot to render, 0-63 (default: 0).
-        duration_sec: Duration in seconds. 0 = auto-detect from sound length.
+        sound_index: Sound slot to render, 0-63 (default: 0). Ignored when music_index is set.
+        duration_sec: Duration in seconds. 0 = auto-detect from sound length (10s for music).
         timeout: Maximum seconds to wait for the script (default: 10).
+        music_index: Music slot to render, 0-7. When set (>=0), renders the full
+            multi-channel music mix instead of a single sound.
     """
     if not _pyxel_dir():
         return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
@@ -1857,6 +1860,7 @@ async def render_audio(
         return f"Error: script not found: {script_path}"
 
     sound_index = max(0, min(sound_index, 63))
+    music_index = max(-1, min(music_index, 7))
     timeout = max(1, min(timeout, 60))
     if duration_sec > 0:
         duration_sec = min(duration_sec, 30.0)
@@ -1871,9 +1875,10 @@ async def render_audio(
             script_path,
             output_path,
             str(sound_index),
+            str(duration_sec) if duration_sec > 0 else "0",
         ]
-        if duration_sec > 0:
-            args.append(str(duration_sec))
+        if music_index >= 0:
+            args.append(str(music_index))
 
         proc = await asyncio.create_subprocess_exec(
             *args,
@@ -1902,11 +1907,19 @@ async def render_audio(
             analysis = await asyncio.to_thread(_analyze_wav, output_path)
         except Exception as e:
             analysis = f"WAV analysis failed: {e}"
-        result = (
-            f"Sound {sound_index} rendered"
-            f" ({meta.get('duration_sec', '?')}s,"
-            f" speed={meta.get('speed', '?')})\n\n{analysis}"
-        )
+
+        if music_index >= 0:
+            result = (
+                f"Music {music_index} rendered"
+                f" ({meta.get('duration_sec', '?')}s,"
+                f" {meta.get('num_channels', '?')} channels)\n\n{analysis}"
+            )
+        else:
+            result = (
+                f"Sound {sound_index} rendered"
+                f" ({meta.get('duration_sec', '?')}s,"
+                f" speed={meta.get('speed', '?')})\n\n{analysis}"
+            )
         if user_output:
             result = f"Script output:\n{user_output}\n\n{result}"
         stderr_text = _decode_stderr(stderr)

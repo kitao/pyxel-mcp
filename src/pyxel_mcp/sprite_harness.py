@@ -30,6 +30,18 @@ sys.argv = [script_path]
 
 import pyxel
 
+# Headless mode: no window
+_original_init = pyxel.init
+
+
+def _headless_init(*args, **kwargs):
+    kwargs["headless"] = True
+    _original_init(*args, **kwargs)
+    os.chdir(os.path.dirname(script_path) or ".")
+
+
+pyxel.init = _headless_init
+
 # Patch game loop functions to no-ops (we only need resource setup)
 pyxel.run = lambda update, draw: None
 pyxel.show = lambda: None

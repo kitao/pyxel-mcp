@@ -31,17 +31,17 @@ sys.argv = [script_path]
 
 import pyxel
 
-# Turbo mode
+# Headless mode: no window, max speed
 _original_init = pyxel.init
 
 
-def _turbo_init(*args, **kwargs):
-    kwargs["fps"] = 10000
+def _headless_init(*args, **kwargs):
+    kwargs["headless"] = True
     _original_init(*args, **kwargs)
     os.chdir(os.path.dirname(script_path) or ".")
 
 
-pyxel.init = _turbo_init
+pyxel.init = _headless_init
 
 _app_instance = None
 _results = []

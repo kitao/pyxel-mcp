@@ -27,18 +27,18 @@ sys.argv = [script_path]
 
 import pyxel
 
-# Force 256x256 screen to fit entire image bank
+# Force 256x256 screen, headless mode
 _original_init = pyxel.init
 
 
-def _turbo_init(*args, **kwargs):
-    kwargs["fps"] = 10000
+def _headless_init(*args, **kwargs):
+    kwargs["headless"] = True
     new_args = (256, 256) + args[2:]
     _original_init(*new_args, **kwargs)
     os.chdir(os.path.dirname(script_path) or ".")
 
 
-pyxel.init = _turbo_init
+pyxel.init = _headless_init
 
 _captured = False
 

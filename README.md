@@ -27,7 +27,7 @@ MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for 
 
 ### Audio
 
-- **`render_audio`** — Render a Pyxel sound to WAV and analyze notes, rhythm, and key
+- **`render_audio`** — Render a Pyxel sound or music to WAV and analyze notes, rhythm, and key
 
 ### Utility
 

@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.7.0
+
+- Switched all harnesses from turbo mode to native headless mode
+- Added music rendering support to render_audio
+- Added headless init to audio and sprite harnesses
+- Bumped minimum Pyxel version to 2.7.11
+
 ## 0.6.0
 
 - Added validate_script tool for pre-run syntax and anti-pattern checks

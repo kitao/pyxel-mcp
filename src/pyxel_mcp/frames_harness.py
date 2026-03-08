@@ -26,17 +26,17 @@ sys.argv = [script_path]
 
 import pyxel
 
-# Turbo mode: override FPS to run as fast as possible
+# Headless mode: no window, max speed
 _original_init = pyxel.init
 
 
-def _turbo_init(*args, **kwargs):
-    kwargs["fps"] = 10000
+def _headless_init(*args, **kwargs):
+    kwargs["headless"] = True
     _original_init(*args, **kwargs)
     os.chdir(os.path.dirname(script_path) or ".")
 
 
-pyxel.init = _turbo_init
+pyxel.init = _headless_init
 
 _capture_idx = 0  # index into frame_list (sorted)
 
@@ -59,7 +59,7 @@ def _try_capture(fc, draw):
             pyxel.quit()
 
 
-# Patch pyxel.run: capture in update to avoid turbo-mode draw skipping
+# Patch pyxel.run: capture in update after target frame
 _original_run = pyxel.run
 
 
