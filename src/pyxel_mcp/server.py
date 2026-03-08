@@ -479,7 +479,10 @@ share a similar flavor. Combine with hand-written MML for variety.
 
 ```python
 mml_list = pyxel.gen_bgm(preset, instr, seed=None)
-# preset: 0-7 (music style), instr: 0-3 (instrument set)
+# preset (0-7): 0-1 title/departure (mid tempo), 2-3 town/peaceful (slow),
+#               4-5 field/adventure (mid tempo), 6-7 battle/crisis (fast)
+# instr (0-3):  0 melody+reverb+bass (3ch), 1 melody+bass+drums (3ch),
+#               2 melody+sub+bass (3ch), 3 melody+sub+bass+drums (4ch)
 # Returns: list of 4 MML strings (one per channel)
 # Always returns 4 channels — drop extras if you need to reserve channels for SE
 
@@ -495,10 +498,10 @@ pyxel.gen_bgm(preset, instr, seed=42, play=True)
 # Scene-specific BGM — vary preset/seed per scene for distinct moods
 def play_bgm(self, scene):
     BGM = {
-        "title":    (0, 1, 100),  # (preset, instr, seed)
-        "game":     (3, 2, 200),
-        "boss":     (7, 0, 300),
-        "gameover": (5, 1, 400),
+        "title":    (0, 1, 100),  # title/departure, melody+bass+drums
+        "game":     (4, 2, 200),  # field/adventure, melody+sub+bass
+        "boss":     (7, 1, 300),  # battle/crisis, melody+bass+drums
+        "gameover": (2, 0, 400),  # town/peaceful, melody+reverb+bass
     }
     preset, instr, seed = BGM[scene]
     mml = pyxel.gen_bgm(preset, instr, seed=seed)

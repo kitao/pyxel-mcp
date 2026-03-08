@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.7.2
+
+- Added gen_bgm preset and instrumentation details to instructions
+
 ## 0.7.1
 
 - Enhanced inspect_layout with vertical balance, margins, quadrants, and center of mass
