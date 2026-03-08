@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.7.1
+
+- Enhanced inspect_layout with vertical balance, margins, quadrants, and center of mass
+- Added ⚠ warnings for margin asymmetry, imbalance, and empty quadrants
+- Changed layout guidance to derive screen size from content, not fixed dimensions
+- Added layout entries to quality checklist
+- Removed sprite templates to encourage original designs per game
+- Trimmed SE cookbook, genre palettes, and redundant constant tables
+
 ## 0.7.0
 
 - Switched all harnesses from turbo mode to native headless mode

@@ -81,22 +81,57 @@ def _analyze_and_quit():
             "w": max_x - min_x + 1, "h": max_y - min_y + 1,
         }
 
-    # Horizontal balance: count non-bg pixels in left vs right halves
+    # Balance analysis: horizontal, vertical, and quadrant pixel counts
     left_count = 0
     right_count = 0
+    top_count = 0
+    bottom_count = 0
+    quadrants = {"tl": 0, "tr": 0, "bl": 0, "br": 0}
+    sum_x = 0
+    sum_y = 0
     mid_x = w // 2
+    mid_y = h // 2
     for y in range(h):
         for x in range(w):
             if pixels[y][x] != bg_color:
+                sum_x += x
+                sum_y += y
                 if x < mid_x:
                     left_count += 1
                 else:
                     right_count += 1
+                if y < mid_y:
+                    top_count += 1
+                else:
+                    bottom_count += 1
+                if x < mid_x and y < mid_y:
+                    quadrants["tl"] += 1
+                elif x >= mid_x and y < mid_y:
+                    quadrants["tr"] += 1
+                elif x < mid_x and y >= mid_y:
+                    quadrants["bl"] += 1
+                else:
+                    quadrants["br"] += 1
 
     total_fg = left_count + right_count
     h_balance = 0.0
+    v_balance = 0.0
+    center_of_mass = None
     if total_fg > 0:
         h_balance = min(left_count, right_count) / max(left_count, right_count)
+        v_balance = min(top_count, bottom_count) / max(top_count, bottom_count)
+        center_of_mass = {"x": round(sum_x / total_fg, 1),
+                          "y": round(sum_y / total_fg, 1)}
+
+    # Margins: empty space from screen edges to content bbox
+    margins = None
+    if content_bbox:
+        margins = {
+            "top": content_bbox["y"],
+            "bottom": h - (content_bbox["y"] + content_bbox["h"]),
+            "left": content_bbox["x"],
+            "right": w - (content_bbox["x"] + content_bbox["w"]),
+        }
 
     # Detect text-like horizontal spans
     # Pyxel default font: 4px wide per char, 6px tall
@@ -231,8 +266,16 @@ def _analyze_and_quit():
         "screen": {"w": w, "h": h},
         "bg_color": bg_color,
         "content_bbox": content_bbox,
+        "margins": margins,
         "h_balance": round(h_balance, 3),
-        "fg_pixels": {"left": left_count, "right": right_count, "total": total_fg},
+        "v_balance": round(v_balance, 3),
+        "fg_pixels": {
+            "left": left_count, "right": right_count,
+            "top": top_count, "bottom": bottom_count,
+            "total": total_fg,
+        },
+        "quadrants": quadrants,
+        "center_of_mass": center_of_mass,
         "text_lines": text_alignment,
     }
     print(json.dumps(result))

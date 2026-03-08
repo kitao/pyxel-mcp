@@ -158,6 +158,8 @@ with the same color as background. Check draw coordinates are within screen boun
 or `.load()` runs before the game loop starts.
 - **`inspect_layout` no text detected**: Text may be too small, overlapping, or same \
 color as background. Try a different frame number.
+- **`inspect_layout` margin warnings**: Content not centered. Adjust screen size to \
+match content, or reposition content to center it. Margins should be symmetric.
 - **`validate_script` false positive**: Anti-pattern checks are heuristic. If a warning \
 seems wrong, it's safe to ignore and run the script.
 - **`inspect_tilemap` all zeros**: Tilemap not populated. Ensure `tilemaps[N].set()` runs \
@@ -171,8 +173,9 @@ and sprite positions.
 match the intended melody and rhythm feels correct.
 - **`inspect_sprite`**: Returns a pixel grid + symmetry report. Asymmetric pixels \
 are listed by row — fix those coordinates in `images[N].set()`.
-- **`inspect_layout`**: Returns text positions and horizontal balance ratio. \
-Balance close to 1.0 = centered. Offset > 2px from center = likely misaligned.
+- **`inspect_layout`**: Returns margins, horizontal/vertical balance, quadrant \
+density, center of mass, and text positions. Check margins for symmetry, \
+balance > 70%, and quadrant distribution. Warnings (⚠) flag specific issues.
 - **`capture_frames`**: Returns multiple screenshots. Compare frames to verify \
 animation progresses smoothly without jumps or flicker.
 - **`play_and_capture`**: Returns screenshots with simulated input. Verify that \
@@ -556,36 +559,6 @@ Establish clear visual layers in every game:
 Use 10-14 of the 16 colors. Restrict each sprite to 3-4 colors for readability. \
 The player sprite should use a unique color not shared with enemies.
 
-### Genre Palettes
-
-Concrete color assignments by game theme:
-
-- **Space / Shmup**: BG: 0, 1 | Stars: 5, 6, 7 | Player: 12, 7 | Enemies: 8, 9 | Bullets: 10, 11
-- **Forest / Platformer**: BG: 1, 5 | Ground: 3, 4, 11 | Player: 8, 7, 15 | Items: 10, 9 | Sky: 6, 12
-- **Dungeon / RPG**: BG: 0, 1 | Walls: 4, 13, 5 | Player: 7, 6, 15 | Enemies: 2, 8 | Items: 10, 9
-- **Castle / Lava**: BG: 0 | Walls: 13, 5, 1 | Lava: 8, 9, 10 | Player: 7, 12 | Fire: 9, 10
-- **Underwater / Ice**: BG: 1, 5 | Terrain: 6, 12, 7 | Player: 8, 9, 15 | Items: 10, 14
-
-### Game Boy (4-color)
-
-```python
-pyxel.pal(0, 1)   # black → navy
-pyxel.pal(1, 3)   # navy → green
-pyxel.pal(3, 11)  # green → lime
-pyxel.pal(7, 7)   # white stays white
-```
-
-### Palette Swap for Level Theming
-
-Same tiles, different mood — use `pyxel.pal()`:
-
-```python
-# Underground: warm browns → cold blues
-pyxel.pal(4, 1)   # brown → navy
-pyxel.pal(9, 12)  # orange → cyan
-pyxel.pal(3, 5)   # green → dark_blue
-```
-
 ## Pixel Art Rules
 
 ### 3-Color-Per-Material Rule
@@ -645,129 +618,7 @@ Never use a single static frame for the player. Follow this minimum standard:
 
 Place animation frames adjacent horizontally in the image bank. Use `inspect_sprite` after each sprite to verify quality.
 
-## Sprite Templates
-
-Ready-to-use hex sprites for `pyxel.images[N].set()`. Color 0 = transparent.
-
-### 8x8 Player Ship (shmup)
-
-```python
-pyxel.images[0].set(0, 0, [
-    "00c00c00",
-    "0c7007c0",
-    "0c7007c0",
-    "c703b07c",
-    "77033077",
-    "785cc587",
-    "85c77c58",
-    "0c0880c0",
-])
-```
-
-### 8x8 Player Character (platformer)
-
-```python
-pyxel.images[0].set(0, 0, [
-    "00777700",
-    "77711100",
-    "77711100",
-    "77777700",
-    "77777777",
-    "00777000",
-    "00700700",
-    "00700700",
-])
-```
-
-### 8x8 Slime Enemy
-
-```python
-pyxel.images[0].set(8, 0, [
-    "00000000",
-    "00333300",
-    "03b33b30",
-    "0b3333b0",
-    "33333333",
-    "33333333",
-    "03333330",
-    "00333300",
-])
-```
-
-### 8x8 Coin
-
-```python
-pyxel.images[0].set(16, 0, [
-    "00aaaa00",
-    "0a9aa9a0",
-    "a99aa99a",
-    "a99aa99a",
-    "a99aa99a",
-    "a99aa99a",
-    "0a9aa9a0",
-    "00aaaa00",
-])
-```
-
-### 8x8 Heart
-
-```python
-pyxel.images[0].set(24, 0, [
-    "08800880",
-    "88888888",
-    "88888888",
-    "88888888",
-    "08888880",
-    "00888800",
-    "00088000",
-    "00000000",
-])
-```
-
-### 8x8 Skull Enemy
-
-```python
-pyxel.images[0].set(32, 0, [
-    "07777770",
-    "70700707",
-    "70700707",
-    "77777777",
-    "70777707",
-    "07700770",
-    "07777770",
-    "00000000",
-])
-```
-
-### 8x8 Shield Collectible
-
-```python
-pyxel.images[0].set(40, 0, [
-    "00c77c00",
-    "0c6666c0",
-    "c670076c",
-    "c670076c",
-    "0c6666c0",
-    "00c66c00",
-    "000cc000",
-    "00000000",
-])
-```
-
-### 8x8 Sword
-
-```python
-pyxel.images[0].set(48, 0, [
-    "00000070",
-    "00000770",
-    "00007700",
-    "00077000",
-    "04077000",
-    "00440000",
-    "00940000",
-    "00090000",
-])
-```
+Design **original** sprites for each game — never reuse the same design across projects.
 
 ### Sprite Sheet Organization
 
@@ -851,78 +702,58 @@ for i in range(2):
               0, u, v, pyxel.width, h, colkey=0)
 ```
 
-### Decorative Elements
-
-Add life to backgrounds with small animated details:
-
-```python
-# Torch flame (in draw, world space)
-fy = torch_y + pyxel.rndi(-1, 0)
-pyxel.pset(torch_x, fy, 10 if pyxel.frame_count % 4 < 2 else 9)
-pyxel.pset(torch_x, fy - 1, 10)
-
-# Dripping water (update + draw)
-if pyxel.frame_count % 60 == 0: drips.append({"x": x, "y": y, "vy": 0.5})
-```
-
 ## Screen & Text Layout
 
-Plan the screen composition **before** coding. Allocate regions for each element, \
-then derive all coordinates from those regions.
+**Derive screen size from content — never start with a fixed size like 160x120.** \
+Calculate the play area, panels, and margins first, then set `pyxel.init(SCR_W, SCR_H)`.
 
 ```python
-# Example: game with side panel (160x120 screen)
+# Step 1: Define content dimensions
+CELL = 6
+COLS, ROWS = 10, 20
+BOARD_W = COLS * CELL          # 60px
+BOARD_H = ROWS * CELL          # 120px
+PANEL_W = 48
 MARGIN = 4
-PANEL_W = 32
-GAME_W = pyxel.width - PANEL_W - MARGIN * 3   # play area width
-GAME_X = MARGIN                                 # play area left
-GAME_Y = MARGIN                                 # play area top
-GAME_H = pyxel.height - MARGIN * 2             # play area height
-PANEL_X = GAME_X + GAME_W + MARGIN             # panel left
+GAP = 6
 
-# Center play area if no side panel
-GAME_W = COLS * CELL
-GAME_X = (pyxel.width - GAME_W) // 2
+# Step 2: Derive screen size from content
+SCR_W = MARGIN + BOARD_W + GAP + PANEL_W + MARGIN   # content drives size
+SCR_H = MARGIN + BOARD_H + MARGIN
+
+# Step 3: Position regions
+BOARD_X = MARGIN
+BOARD_Y = MARGIN
+PANEL_X = BOARD_X + BOARD_W + GAP
+
+pyxel.init(SCR_W, SCR_H, title="My Game")
 ```
 
 Layout rules:
-- **Center the main play area**: The play area is the player's focal point — \
-center it both horizontally and vertically. Compute total content height \
-(play area + gaps + controls) and derive `BY = (pyxel.height - content_h) // 2`. \
-Place secondary info (score, next piece) in the remaining margins.
-- **Define regions first**: Assign rectangles for play area, HUD, and panels. \
-Derive all draw coordinates from these — never scatter magic numbers.
-- **Uniform margins**: Use a consistent `MARGIN` (typically 4-8px) around and between regions.
-- **No overlap**: HUD text must not intrude into the play area. Draw a border or \
-leave a gap between regions.
-- **Fill the screen**: Avoid large dead zones. If the play area is narrow, center it \
-and use side margins for info panels.
-- **Verify with `inspect_layout`**: Check horizontal balance is close to 50% and \
-text offsets are small.
+- **Content-first sizing**: Define game area, panels, margins as constants. Derive \
+screen size from their sum. Never pick an arbitrary screen size and try to fit content.
+- **Center the play area**: For games without side panels, center both axes: \
+`GAME_X = (SCR_W - GAME_W) // 2; GAME_Y = (SCR_H - GAME_H) // 2`.
+- **Symmetric margins**: Left ≈ right, top ≈ bottom. Compute with `(SCR_W - content_w) // 2`.
+- **No overlap**: HUD must not intrude into the play area.
+- **Verify with `inspect_layout`**: Fix all ⚠ warnings. Margins should be symmetric \
+(ratio < 2x), balance > 70% on both axes, no near-empty quadrants.
 
 ### Text Positioning
 
-Always **calculate** text positions — never hardcode pixel coordinates.
-The built-in font is `FONT_WIDTH=4` px wide, `FONT_HEIGHT=6` px tall.
+Always **calculate** text positions. Font: `FONT_WIDTH=4`, `FONT_HEIGHT=6`.
 
 ```python
 # Horizontal centering
 x = (pyxel.width - len(text) * pyxel.FONT_WIDTH) // 2
 
-# Right-align (with margin)
-x = pyxel.width - len(text) * pyxel.FONT_WIDTH - margin
-
-# Center a group (e.g., sprite 8px + gap 4px + text)
-group_w = 8 + 4 + len(text) * pyxel.FONT_WIDTH
-x = (pyxel.width - group_w) // 2
-
-# Vertical centering of N lines (with spacing between lines)
+# Vertical centering of N lines
 block_h = N * pyxel.FONT_HEIGHT + (N - 1) * spacing
 y = (pyxel.height - block_h) // 2
 
-# Text shadow for readability over any background
-pyxel.text(x + 1, y + 1, s, 1)  # shadow (dark)
-pyxel.text(x, y, s, 7)          # foreground (bright)
+# Text shadow for readability
+pyxel.text(x + 1, y + 1, s, 1)  # shadow
+pyxel.text(x, y, s, 7)          # foreground
 ```
 
 ## Title Screen Design
@@ -1052,18 +883,6 @@ pyxel.sounds[2].set(
 )
 ```
 
-### Explosion
-
-```python
-pyxel.sounds[3].set(
-    notes="c4d4e3f3g3a3b2c2d2e1f1g1",
-    tones="n",
-    volumes="776655443210",
-    effects="nnnnnnnnnnnn",
-    speed=5,
-)
-```
-
 ### Game Over
 
 ```python
@@ -1073,47 +892,7 @@ pyxel.sounds[4].set(
 )
 ```
 
-### Level Clear
-
-```python
-pyxel.sounds[5].set(
-    notes="c2e2g2c3e3g3c4", tones="s",
-    volumes="7777777", effects="nnnnnnn", speed=8,
-)
-```
-
-### Menu Select / Cursor
-
-```python
-pyxel.sounds[6].set(
-    notes="e3", tones="s", volumes="5", effects="f", speed=10,
-)
-```
-
-### Power-Up
-
-```python
-pyxel.sounds[7].set(
-    notes="c1c2c3c4", tones="s",
-    volumes="5567", effects="nnnn", speed=6,
-)
-```
-
-### Landing
-
-```python
-pyxel.sounds[8].set(
-    notes="c1", tones="n", volumes="5", effects="f", speed=3,
-)
-```
-
-### Shoot / Laser
-
-```python
-pyxel.sounds[9].set(
-    notes="a3a2c1a1", tones="p", volumes="7", effects="s", speed=5,
-)
-```
+Design other SE (explosion, menu, power-up, landing, shoot) using the rules above.
 
 ## Game Patterns
 
@@ -1307,40 +1086,6 @@ if jump_buffer > 0:
         jump_buffer = 0
 ```
 
-### Knockback and Invincibility
-
-```python
-KNOCKBACK_VX = 2.0         # horizontal push
-KNOCKBACK_VY = -2.0        # upward bounce
-KNOCKBACK_DUR = 6          # frames
-INVINCIBLE_FRAMES = 60     # 2 seconds at 30fps
-I_BLINK_RATE = 3           # toggle visibility every 3 frames
-HIT_PAUSE = 2              # freeze frames on impact
-```
-
-### Shooter Constants
-
-```python
-PLAYER_SPEED = 2.0
-BULLET_SPEED = 4.0
-ENEMY_BULLET_SPEED = 2.0
-FIRE_RATE = 5              # frames between shots
-MAX_PLAYER_BULLETS = 8
-ENEMY_SPEED = 1.0
-SPAWN_INTERVAL = 30        # frames between spawns
-```
-
-### Puzzle / Tetris Constants
-
-```python
-DROP_FRAMES = [30, 27, 24, 21, 18, 15, 12, 10, 8, 6, 5, 4, 3, 2, 1]
-SOFT_DROP_MULT = 5
-LOCK_DELAY = 20            # frames after landing before lock
-DAS_INITIAL = 8            # frames before auto-repeat starts
-DAS_REPEAT = 3             # frames between repeats
-LINE_CLEAR_ANIM = 15       # frames for clear animation
-```
-
 ### Hitbox Design
 
 - **Hazards**: hitbox **smaller** than sprite (forgiving)
@@ -1348,27 +1093,12 @@ LINE_CLEAR_ANIM = 15       # frames for clear animation
 - Player: use 60-75% of sprite size as hitbox (e.g., 6x6 for 8x8 sprite)
 - `abs(a.x - b.x) < HIT_W and abs(a.y - b.y) < HIT_H`
 
-### Timing Constants
-
-```python
-GET_READY_DURATION = 60      # 2s at 30fps
-GAME_OVER_DURATION = 90      # 3s
-STAGE_CLEAR_DURATION = 90    # 3s
-TITLE_BLINK_RATE = 40        # frame_count % 40 < 28 for blink
-```
-
 ### Camera (Side-Scroller)
 
 ```python
 # Smooth follow (lerp)
 camera_x += (player_x - camera_x - pyxel.width // 2) * 0.1
 # 0.1 = smooth, 0.2 = responsive, 0.05 = cinematic
-
-# Look-ahead: offset camera in movement direction
-if facing_right:
-    target = player_x - pyxel.width // 3
-else:
-    target = player_x - pyxel.width * 2 // 3
 ```
 
 ## Animation Timing
@@ -1447,6 +1177,8 @@ Quick-reference of common mistakes. See linked sections for details.
 
 | Category | Don't | Do |
 |----------|-------|----|
+| Layout | Pick screen size first, then fit content | Derive screen size from content + margins |
+| Layout | Ignore inspect_layout warnings | Fix all ⚠ warnings before proceeding |
 | Code | Hardcode pixel positions | Calculate from `width`/`height` |
 | Code | Forget `cls()` in `draw()` | Always call `pyxel.cls(col)` first |
 | Code | Use radians with `sin()`/`cos()` | Pyxel trig uses degrees |
@@ -2260,37 +1992,99 @@ async def play_and_capture(
 def _format_layout_report(data):
     """Format layout analysis JSON into a readable report."""
     screen = data["screen"]
+    sw, sh = screen["w"], screen["h"]
     bg = data["bg_color"]
+    warnings = []
     lines = [
-        f"Screen: {screen['w']}x{screen['h']}  bg_color: {bg}"
+        f"Screen: {sw}x{sh}  bg_color: {bg}"
         f" ({_PALETTE_NAMES.get(bg, '?')})",
     ]
 
     bbox = data.get("content_bbox")
     if bbox:
         cx = bbox["x"] + bbox["w"] / 2
-        screen_cx = screen["w"] / 2
-        offset = cx - screen_cx
+        cy = bbox["y"] + bbox["h"] / 2
+        off_x = cx - sw / 2
+        off_y = cy - sh / 2
         lines.append(
             f"Content bbox: ({bbox['x']},{bbox['y']})"
             f" {bbox['w']}x{bbox['h']}"
-            f"  center_x={cx:.0f} (offset {offset:+.0f}px from screen center)"
+            f"  center=({cx:.0f},{cy:.0f})"
+            f" offset=({off_x:+.0f},{off_y:+.0f})px"
         )
 
-    fg = data["fg_pixels"]
-    bal = data["h_balance"]
-    lines.append(
-        f"H-balance: {bal:.1%}"
-        f"  (left:{fg['left']}px right:{fg['right']}px)"
-    )
-    if bal < 0.7:
-        lines.append("  Note: significant left/right imbalance")
+    # Margins
+    margins = data.get("margins")
+    if margins:
+        t, b = margins["top"], margins["bottom"]
+        l, r = margins["left"], margins["right"]
+        lines.append(
+            f"Margins: top={t} bottom={b} left={l} right={r}"
+        )
+        # Flag asymmetric margins
+        if max(t, b) > 0 and min(t, b) >= 0:
+            v_ratio = max(t, b) / max(min(t, b), 1)
+            if v_ratio > 2.0 and abs(t - b) > 4:
+                warnings.append(
+                    f"Vertical margin imbalance: top={t} vs bottom={b}"
+                    f" — content not vertically centered"
+                )
+        if max(l, r) > 0 and min(l, r) >= 0:
+            h_ratio = max(l, r) / max(min(l, r), 1)
+            if h_ratio > 2.0 and abs(l - r) > 4:
+                warnings.append(
+                    f"Horizontal margin imbalance: left={l} vs right={r}"
+                    f" — content not horizontally centered"
+                )
 
+    # Balance
+    fg = data["fg_pixels"]
+    h_bal = data["h_balance"]
+    v_bal = data.get("v_balance", 0)
+    lines.append(
+        f"H-balance: {h_bal:.1%}  (left:{fg['left']}px right:{fg['right']}px)"
+    )
+    lines.append(
+        f"V-balance: {v_bal:.1%}  (top:{fg.get('top', 0)}px"
+        f" bottom:{fg.get('bottom', 0)}px)"
+    )
+    if h_bal < 0.7:
+        warnings.append("Significant left/right imbalance")
+    if v_bal < 0.7:
+        warnings.append("Significant top/bottom imbalance")
+
+    # Center of mass
+    com = data.get("center_of_mass")
+    if com:
+        com_off_x = com["x"] - sw / 2
+        com_off_y = com["y"] - sh / 2
+        lines.append(
+            f"Center of mass: ({com['x']},{com['y']})"
+            f"  offset=({com_off_x:+.1f},{com_off_y:+.1f})px from screen center"
+        )
+
+    # Quadrants
+    quads = data.get("quadrants")
+    if quads and fg["total"] > 0:
+        total = fg["total"]
+        q_pct = {k: v / total * 100 for k, v in quads.items()}
+        lines.append(
+            f"Quadrants: TL={q_pct['tl']:.0f}% TR={q_pct['tr']:.0f}%"
+            f" BL={q_pct['bl']:.0f}% BR={q_pct['br']:.0f}%"
+        )
+        # Detect empty or sparse quadrants
+        max_q = max(q_pct.values())
+        for name, pct in q_pct.items():
+            if pct < 5 and max_q > 30:
+                label = {"tl": "top-left", "tr": "top-right",
+                         "bl": "bottom-left", "br": "bottom-right"}[name]
+                warnings.append(f"Near-empty quadrant: {label} ({pct:.0f}%)")
+
+    # Text lines
     text_lines = data.get("text_lines", [])
     if text_lines:
         lines.append("")
         lines.append(f"Text lines detected: {len(text_lines)}")
-        screen_cx = screen["w"] / 2
         for tl in text_lines:
             color_name = _PALETTE_NAMES.get(tl["color"], "?")
             off = tl["offset_from_center"]
@@ -2300,16 +2094,19 @@ def _format_layout_report(data):
                 f"  color={tl['color']:x}({color_name})"
                 f"  {align}"
             )
-
-        # Check if texts are consistently aligned
         offsets = [tl["offset_from_center"] for tl in text_lines]
         if offsets:
             spread = max(offsets) - min(offsets)
             if spread > 20:
-                lines.append(
-                    f"  Note: text alignment varies by {spread:.0f}px"
-                    f" across lines"
+                warnings.append(
+                    f"Text alignment varies by {spread:.0f}px across lines"
                 )
+
+    # Warnings
+    if warnings:
+        lines.append("")
+        for w in warnings:
+            lines.append(f"  ⚠ {w}")
 
     return "\n".join(lines)
 
