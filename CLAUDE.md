@@ -48,10 +48,13 @@ rm -rf dist/ && .venv/bin/python -m build
 git push origin main
 ```
 
-Publish to MCP Registry (token may need re-login):
+Publish to MCP Registry (token expires frequently):
 
+Token login requires user interaction — always ask the user to run this first:
+`/tmp/mcp-publisher login github`
+
+Then publish:
 ```
-/tmp/mcp-publisher login github
 /tmp/mcp-publisher publish server.json
 ```
 
