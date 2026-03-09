@@ -6,46 +6,46 @@
 
 ## 0.7.1
 
-- Enhanced inspect_layout with vertical balance, margins, quadrants, and center of mass
-- Added ⚠ warnings for margin asymmetry, imbalance, and empty quadrants
-- Changed layout guidance to derive screen size from content, not fixed dimensions
-- Added layout entries to quality checklist
-- Removed sprite templates to encourage original designs per game
 - Trimmed SE cookbook, genre palettes, and redundant constant tables
+- Removed sprite templates to encourage original designs per game
+- Added layout entries to quality checklist
+- Changed layout guidance to derive screen size from content, not fixed dimensions
+- Added ⚠ warnings for margin asymmetry, imbalance, and empty quadrants
+- Enhanced inspect_layout with vertical balance, margins, quadrants, and center of mass
 
 ## 0.7.0
 
-- Switched all harnesses from turbo mode to native headless mode
-- Added music rendering support to render_audio
-- Added headless init to audio and sprite harnesses
 - Bumped minimum Pyxel version to 2.7.11
+- Added headless init to audio and sprite harnesses
+- Added music rendering support to render_audio
+- Switched all harnesses from turbo mode to native headless mode
 
 ## 0.6.0
 
-- Added validate_script tool for pre-run syntax and anti-pattern checks
-- Added inspect_screen tool for compact color grid capture
-- Added compare_frames tool for visual regression testing
-- Added inspect_palette tool for color usage analysis
-- Added inspect_tilemap tool for tilemap data inspection
-- Added inspect_bank tool for image bank visualization
-- Added multi-frame timeline support to inspect_state
-- Added stdout capture (print output) to text-based tools
-- Documented tilemap (0,0) default trap and imgsrc property
-- Added sprite design process with min animation frame requirements
-- Added MML composition guide with genre mood table
-- Added guidance to mix gen_bgm with hand-written MML
-- Added level design principles (zone structure, pacing, enemy placement)
-- Added enemy design patterns (patrol, chase, sine float, swoop)
-- Added genre background recipes (castle, forest, space)
-- Added decorative element patterns (torch flames, dripping water)
 - Strengthened quality checklist with sprite/level/audio items
+- Added decorative element patterns (torch flames, dripping water)
+- Added genre background recipes (castle, forest, space)
+- Added enemy design patterns (patrol, chase, sine float, swoop)
+- Added level design principles (zone structure, pacing, enemy placement)
+- Added guidance to mix gen_bgm with hand-written MML
+- Added MML composition guide with genre mood table
+- Added sprite design process with min animation frame requirements
+- Documented tilemap (0,0) default trap and imgsrc property
+- Added stdout capture (print output) to text-based tools
+- Added multi-frame timeline support to inspect_state
+- Added inspect_bank tool for image bank visualization
+- Added inspect_tilemap tool for tilemap data inspection
+- Added inspect_palette tool for color usage analysis
+- Added compare_frames tool for visual regression testing
+- Added inspect_screen tool for compact color grid capture
+- Added validate_script tool for pre-run syntax and anti-pattern checks
 
 ## 0.5.0
 
-- Added play_and_capture tool for input simulation testing
-- Added inspect_state tool for game state debugging
-- Added error hints for common Pyxel mistakes
 - Fixed turbo-mode draw skipping in capture harnesses
+- Added error hints for common Pyxel mistakes
+- Added inspect_state tool for game state debugging
+- Added play_and_capture tool for input simulation testing
 
 ## 0.4.2
 
@@ -53,49 +53,49 @@
 
 ## 0.4.1
 
-- Added state-based Animator class pattern for multi-state character animation
-- Added scene-specific gen_bgm pattern with per-scene preset/seed switching
 - Strengthened Tilemap.collide() guidance over hand-rolled collision loops
+- Added scene-specific gen_bgm pattern with per-scene preset/seed switching
+- Added state-based Animator class pattern for multi-state character animation
 
 ## 0.4.0
 
-- Restructured instructions: deduplicated content, reorganized 24→23 sections with logical grouping
-- Merged Color Palette + Color Hierarchy + Genre Palettes → Color Palette & Hierarchy
-- Merged Screen Layout + Text Layout → Screen & Text Layout
-- Merged Common Mistakes + Game Polish Checklist → Quality Checklist (reference-based)
-- Moved Screen Shake + Hitstop → Visual Feedback section
-- Moved Parallax Scrolling → Background Design section
-- Split Visual Design Guide into Background Design / Title Screen Design / Visual Feedback
-- Added pixel art rules (3-color-per-material, outlines, size guidelines, anti-patterns)
-- Added 8 ready-to-use 8x8 sprite templates (ship, character, slime, coin, heart, skull, shield, sword)
-- Added sound effects cookbook with 10 copy-paste SE definitions
-- Added game feel constants (platformer physics, variable jump, coyote time, knockback, shooter, puzzle, hitbox, camera)
-- Added genre color palettes (space, forest, dungeon, castle, underwater, Game Boy)
-- Fixed tilemap bltm example size mismatch (128x128 → 32x24)
 - Fixed GRAVITY inconsistency between Game Patterns and Game Feel Constants
+- Fixed tilemap bltm example size mismatch (128x128 → 32x24)
+- Added genre color palettes (space, forest, dungeon, castle, underwater, Game Boy)
+- Added game feel constants (platformer physics, variable jump, coyote time, knockback, shooter, puzzle, hitbox, camera)
+- Added sound effects cookbook with 10 copy-paste SE definitions
+- Added 8 ready-to-use 8x8 sprite templates (ship, character, slime, coin, heart, skull, shield, sword)
+- Added pixel art rules (3-color-per-material, outlines, size guidelines, anti-patterns)
+- Split Visual Design Guide into Background Design / Title Screen Design / Visual Feedback
+- Moved Parallax Scrolling → Background Design section
+- Moved Screen Shake + Hitstop → Visual Feedback section
+- Merged Common Mistakes + Game Polish Checklist → Quality Checklist (reference-based)
+- Merged Screen Layout + Text Layout → Screen & Text Layout
+- Merged Color Palette + Color Hierarchy + Genre Palettes → Color Palette & Hierarchy
+- Restructured instructions: deduplicated content, reorganized 24→23 sections with logical grouping
 
 ## 0.3.1
 
-- Added visual design guide to instructions (background tiers, color hierarchy, title screen design, visual feedback patterns)
-- Enhanced common mistakes table with visual design anti-patterns
-- Improved game polish checklist with background art, color hierarchy, and HUD guidance
 - Based on analysis of 142 Pyxel user examples
+- Improved game polish checklist with background art, color hierarchy, and HUD guidance
+- Enhanced common mistakes table with visual design anti-patterns
+- Added visual design guide to instructions (background tiers, color hierarchy, title screen design, visual feedback patterns)
 
 ## 0.3.0
 
-- Added common mistakes table to instructions
-- Added animation timing guide with frame count recommendations
-- Added game patterns (platformer, shooter, scene management)
-- Added error recovery guidance for each tool
-- Added tool output interpretation guide
-- Added coordinate system documentation
-- Added screen layout guidelines (center main play area, vertical/horizontal centering)
-- Added game polish checklist (BGM, SE, title screen, game over, controls)
-- Added SE design guidance (use square wave, volume 5-7, cover all core actions)
-- Added venv execution guidance for letting users play games
-- Added turbo mode to harnesses (FPS override + draw skip for non-target frames)
-- Added uv.lock to .gitignore
 - Removed unused variable in frames_harness.py
+- Added uv.lock to .gitignore
+- Added turbo mode to harnesses (FPS override + draw skip for non-target frames)
+- Added venv execution guidance for letting users play games
+- Added SE design guidance (use square wave, volume 5-7, cover all core actions)
+- Added game polish checklist (BGM, SE, title screen, game over, controls)
+- Added screen layout guidelines (center main play area, vertical/horizontal centering)
+- Added coordinate system documentation
+- Added tool output interpretation guide
+- Added error recovery guidance for each tool
+- Added game patterns (platformer, shooter, scene management)
+- Added animation timing guide with frame count recommendations
+- Added common mistakes table to instructions
 
 ## 0.2.1
 
@@ -103,8 +103,8 @@
 
 ## 0.2.0
 
-- Overhauled MCP server instructions with comprehensive Pyxel API guide
 - Fixed error messages to suggest pyxel-mcp instead of pyxel
+- Overhauled MCP server instructions with comprehensive Pyxel API guide
 
 ## 0.1.11
 
@@ -116,10 +116,10 @@
 
 ## 0.1.9
 
-- Moved development guide from CLAUDE.md into MCP server instructions
-- Removed CLAUDE.md (no longer needed as a separate file)
-- Updated README with MCP Registry as the primary setup path
 - Enhanced tilemap documentation with multi-row examples
+- Updated README with MCP Registry as the primary setup path
+- Removed CLAUDE.md (no longer needed as a separate file)
+- Moved development guide from CLAUDE.md into MCP server instructions
 
 ## 0.1.8
 
@@ -127,10 +127,10 @@
 
 ## 0.1.7
 
-- Fixed screenshot timing to capture after draw instead of update
-- Added error handling for WAV analysis in render_audio
-- Added fallback for sound.total_sec() in audio harness
 - Added missing parameters to CLAUDE.md tool signatures
+- Added fallback for sound.total_sec() in audio harness
+- Added error handling for WAV analysis in render_audio
+- Fixed screenshot timing to capture after draw instead of update
 
 ## 0.1.6
 
@@ -138,24 +138,24 @@
 
 ## 0.1.5
 
-- Added inspect_sprite tool for reading sprite pixel data
-- Added inspect_layout tool for analyzing text positioning
-- Added capture_frames tool for multi-frame screenshots
 - Enhanced render_audio with musical analysis
+- Added capture_frames tool for multi-frame screenshots
+- Added inspect_layout tool for analyzing text positioning
+- Added inspect_sprite tool for reading sprite pixel data
 
 ## 0.1.4
 
-- Prevented zombie processes on subprocess timeout
-- Avoided importing Pyxel in the server process
-- Added parameter validation for all tool inputs
-- Added safe stderr decoding and truncation
-- Moved WAV analysis to a background thread
 - Unified description text across project files
+- Moved WAV analysis to a background thread
+- Added safe stderr decoding and truncation
+- Added parameter validation for all tool inputs
+- Avoided importing Pyxel in the server process
+- Prevented zombie processes on subprocess timeout
 
 ## 0.1.3
 
-- Added Pyxel installation check to run_and_capture and render_audio
 - Pinned mcp dependency to <2.0.0
+- Added Pyxel installation check to run_and_capture and render_audio
 
 ## 0.1.2
 
