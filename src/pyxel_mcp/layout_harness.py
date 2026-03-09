@@ -281,6 +281,7 @@ def _analyze_and_quit():
     print(json.dumps(result))
     sys.stdout.flush()
     pyxel.quit()
+    os._exit(0)
 
 
 # Patch pyxel.run: analyze in update after target frame

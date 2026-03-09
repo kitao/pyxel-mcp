@@ -100,6 +100,7 @@ def _dump_tilemap():
     print(json.dumps(result))
     sys.stdout.flush()
     pyxel.quit()
+    os._exit(0)
 
 
 # Patch pyxel.run

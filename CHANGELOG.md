@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.7.3
+
+- Bumped minimum Pyxel version to 2.8.0
+- Added blt3d/bltm3d (Mode-7 perspective) to instructions
+- Fixed harness hang caused by quit() no longer force-exiting in 2.8.0
+
 ## 0.7.2
 
 - Added gen_bgm preset and instrumentation details to instructions

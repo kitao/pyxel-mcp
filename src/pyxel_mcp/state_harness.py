@@ -115,6 +115,7 @@ def _flush_and_quit():
         print(json.dumps(_results, default=str))
     sys.stdout.flush()
     pyxel.quit()
+    os._exit(0)
 
 
 def _try_capture(fc):

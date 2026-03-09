@@ -301,6 +301,8 @@ fill(x, y, col)                     flood fill
 text(x, y, s, col)                  draw text (font: 4px wide, 6px tall)
 blt(x, y, img, u, v, w, h, [colkey], [rotate], [scale])   sprite
 bltm(x, y, tm, u, v, w, h, [colkey], [rotate], [scale])   tilemap
+blt3d(x, y, w, h, img, pos, rot, [fov], [colkey])         3D sprite
+bltm3d(x, y, w, h, tm, pos, rot, [fov], [colkey])         3D tilemap
 ```
 
 ### Sprite Drawing (blt)
@@ -309,6 +311,24 @@ bltm(x, y, tm, u, v, w, h, [colkey], [rotate], [scale])   tilemap
 - Negative `w` flips horizontally, negative `h` flips vertically
 - `rotate`: rotation in degrees, `scale`: scaling factor
 - Animation: `u = pyxel.frame_count // 4 % 2 * 8`
+
+### 3D Perspective Drawing (blt3d / bltm3d)
+
+Mode-7-style pseudo-3D rendering. Draws an image or tilemap with perspective projection.
+
+- `x, y, w, h`: destination rectangle on screen
+- `pos`: `(x, y, z)` camera position in the source image/tilemap
+- `rot`: `(rx, ry, rz)` rotation in degrees
+- `fov`: field of view in degrees (default: 60)
+- `colkey`: transparent color index
+
+```python
+# Ground plane (Mode-7 racing style)
+pyxel.bltm3d(0, 60, 160, 60, 0, (80, 200, 40), (60, 0, pyxel.frame_count), fov=90, colkey=0)
+
+# Rotating sprite billboard
+pyxel.blt3d(40, 20, 80, 80, 0, (64, 64, 50), (0, pyxel.frame_count, 0), colkey=0)
+```
 
 ## Input
 

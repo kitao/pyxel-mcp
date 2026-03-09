@@ -57,6 +57,7 @@ def _try_capture(fc, draw):
         _capture_idx += 1
         if _capture_idx >= len(frame_list):
             pyxel.quit()
+            os._exit(0)
 
 
 # Patch pyxel.run: capture in update after target frame
@@ -84,6 +85,7 @@ def _patched_show():
     except Exception as e:
         print(f"Capture error: {e}", file=sys.stderr)
     pyxel.quit()
+    os._exit(0)
 
 
 pyxel.show = _patched_show
@@ -108,6 +110,7 @@ def _patched_flip():
         _flip_capture_idx += 1
         if _flip_capture_idx >= len(frame_list):
             pyxel.quit()
+            os._exit(0)
 
 
 pyxel.flip = _patched_flip

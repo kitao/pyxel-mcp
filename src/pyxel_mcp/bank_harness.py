@@ -58,6 +58,7 @@ def _capture_bank():
     except Exception as e:
         print(f"Capture error: {e}", file=sys.stderr)
     pyxel.quit()
+    os._exit(0)
 
 
 # Patch pyxel.run: capture at frame 1
