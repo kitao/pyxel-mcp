@@ -245,8 +245,8 @@ Users may not have Pyxel installed globally.
 
 ## Pyxel Reference
 
-- API reference: https://kitao.github.io/pyxel/wasm/api-reference/api-reference.json
-- MML commands: https://kitao.github.io/pyxel/wasm/mml-studio/mml-commands.json
+- API reference: https://kitao.github.io/pyxel/web/api-reference/api-reference.json
+- MML commands: https://kitao.github.io/pyxel/web/mml-studio/mml-commands.json
 - Local stubs and examples: call `pyxel_info`.
 
 For API details, read the type stubs or fetch the API reference JSON.

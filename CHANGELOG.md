@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.7.4
+
+- Updated reference URLs from wasm/ to web/ path
+
 ## 0.7.3
 
 - Bumped minimum Pyxel version to 2.8.0
