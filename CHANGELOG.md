@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.7.5
+
+- Replaced inline API docs with references to official Pyxel docs
+- Switched reference URLs from kitao.github.io JSON to GitHub docs/ markdown
+- Added user guide URL to Pyxel Reference section
+
 ## 0.7.4
 
 - Updated reference URLs from wasm/ to web/ path

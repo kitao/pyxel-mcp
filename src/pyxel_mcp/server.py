@@ -245,162 +245,37 @@ Users may not have Pyxel installed globally.
 
 ## Pyxel Reference
 
-- API reference: https://kitao.github.io/pyxel/web/api-reference/api-reference.json
-- MML commands: https://kitao.github.io/pyxel/web/mml-studio/mml-commands.json
+Official docs (fetch for API details, usage guides, and syntax):
+- API reference: https://raw.githubusercontent.com/kitao/pyxel/main/docs/api-reference.md
+- User guide: https://raw.githubusercontent.com/kitao/pyxel/main/docs/user-guide.md
+- MML commands: https://raw.githubusercontent.com/kitao/pyxel/main/docs/mml-commands.md
 - Local stubs and examples: call `pyxel_info`.
+- User-created games: https://github.com/kitao/pyxel/wiki/Pyxel-User-Examples
 
-For API details, read the type stubs or fetch the API reference JSON.
-For MML syntax, fetch the MML commands JSON.
-User-created games for reference: https://github.com/kitao/pyxel/wiki/Pyxel-User-Examples
+## Essential Tips
 
-## App Structure
-
-```python
-# Class-based game (most common)
-class App:
-    def __init__(self):
-        pyxel.init(160, 120, title="My Game")
-        pyxel.load("my_resource.pyxres")  # optional: load .pyxres file
-        pyxel.run(self.update, self.draw)
-    def update(self):
-        if pyxel.btnp(pyxel.KEY_Q):
-            pyxel.quit()
-    def draw(self):
-        pyxel.cls(0)
-App()
-
-# Static image (no game loop)
-pyxel.init(160, 120)
-pyxel.cls(1)
-pyxel.circ(80, 60, 20, 8)
-pyxel.show()
-```
-
-System variables: `pyxel.width`, `pyxel.height`, `pyxel.frame_count`.
-
-## Coordinate System
-
-Origin `(0, 0)` is the **top-left** corner. X increases rightward, Y increases downward.
-Screen bounds: `0 <= x < pyxel.width`, `0 <= y < pyxel.height`.
-
-## Drawing API
-
-```
-cls(col)                            clear screen
-pset(x, y, col)                     draw pixel
-line(x1, y1, x2, y2, col)          draw line
-rect(x, y, w, h, col)              filled rectangle
-rectb(x, y, w, h, col)             rectangle border
-circ(x, y, r, col)                 filled circle
-circb(x, y, r, col)                circle border
-elli(x, y, w, h, col)              filled ellipse
-ellib(x, y, w, h, col)             ellipse border
-tri(x1, y1, x2, y2, x3, y3, col)  filled triangle
-trib(x1, y1, x2, y2, x3, y3, col) triangle border
-fill(x, y, col)                     flood fill
-text(x, y, s, col)                  draw text (font: 4px wide, 6px tall)
-blt(x, y, img, u, v, w, h, [colkey], [rotate], [scale])   sprite
-bltm(x, y, tm, u, v, w, h, [colkey], [rotate], [scale])   tilemap
-blt3d(x, y, w, h, img, pos, rot, [fov], [colkey])         3D sprite
-bltm3d(x, y, w, h, tm, pos, rot, [fov], [colkey])         3D tilemap
-```
-
-### Sprite Drawing (blt)
+Common gotchas not obvious from the API reference:
 
 - `colkey`: transparent color index (e.g., `colkey=0` treats black as transparent)
-- Negative `w` flips horizontally, negative `h` flips vertically
-- `rotate`: rotation in degrees, `scale`: scaling factor
-- Animation: `u = pyxel.frame_count // 4 % 2 * 8`
+- Negative `w` flips horizontally, negative `h` flips vertically in `blt()`
+- Animation: `u = pyxel.frame_count // 4 % frame_count * SPRITE_W`
+- `sin()`/`cos()` use **degrees**, not radians
+- Font size: `FONT_WIDTH=4`, `FONT_HEIGHT=6`
+- Use `btnp()` for one-shot actions, `btn()` for continuous hold
+- Always call `pyxel.cls(col)` at the start of `draw()`
+- Iterate over a copy when removing: `for e in list(enemies):`
 
-### 3D Perspective Drawing (blt3d / bltm3d)
+### Audio Channel Management
 
-Mode-7-style pseudo-3D rendering. Draws an image or tilemap with perspective projection.
-
-- `x, y, w, h`: destination rectangle on screen
-- `pos`: `(x, y, z)` camera position in the source image/tilemap
-- `rot`: `(rx, ry, rz)` rotation in degrees
-- `fov`: field of view in degrees (default: 60)
-- `colkey`: transparent color index
-
-```python
-# Ground plane (Mode-7 racing style)
-pyxel.bltm3d(0, 60, 160, 60, 0, (80, 200, 40), (60, 0, pyxel.frame_count), fov=90, colkey=0)
-
-# Rotating sprite billboard
-pyxel.blt3d(40, 20, 80, 80, 0, (64, 64, 50), (0, pyxel.frame_count, 0), colkey=0)
-```
-
-## Input
-
-```
-btn(key)                    True while key is held
-btnp(key, [hold], [repeat]) True on press (with optional auto-repeat)
-btnr(key)                   True on release
-mouse_x, mouse_y            mouse position
-```
-
-Common keys: `KEY_LEFT/RIGHT/UP/DOWN`, `KEY_SPACE`, `KEY_RETURN`, \
-`KEY_A`..`KEY_Z`, `MOUSE_BUTTON_LEFT`
-
-## Audio Playback
-
-```python
-pyxel.play(ch, snd, loop=False)   # play sound on channel 0-3
-pyxel.play(ch, snd, resume=True)  # play without stopping current sound on channel
-pyxel.playm(msc, loop=False)      # play music
-pyxel.stop(ch)                    # stop channel (omit ch to stop all)
-```
-
-### Channel Management
-
-Pyxel has 4 audio channels (0-3). `playm()` assigns music tracks to channels
-starting from ch0. `play(ch, snd)` on the same channel **interrupts** the music
+Pyxel has 4 audio channels (0-3). `playm()` assigns music tracks to channels \
+starting from ch0. `play(ch, snd)` on the same channel **interrupts** the music \
 on that channel. Plan channel allocation to avoid BGM/SE conflicts:
 
 - **BGM on ch0-2, SE on ch3**: Use 3-channel music so SE never interrupts BGM.
 - **Title/menu screens**: Can safely use all 4 channels for BGM (no frequent SE).
 - Use `resume=True` for non-critical SE to avoid cutting off other sounds.
 
-## Math
-
-`sin(deg)`, `cos(deg)` use **degrees** (not radians). `atan2(y, x)` returns degrees.
-`rndi(a, b)` random int, `rndf(a, b)` random float.
-`ceil(x)`, `floor(x)`, `sgn(x)`, `sqrt(x)`.
-
-## Camera & Effects
-
-```python
-pyxel.camera(x, y)       # shift drawing origin (for scrolling)
-pyxel.camera()            # reset origin
-pyxel.clip(x, y, w, h)   # restrict drawing area
-pyxel.clip()              # reset clip
-pyxel.pal(col1, col2)    # swap palette color (e.g., damage flash)
-pyxel.pal()               # reset palette
-pyxel.dither(alpha)       # dithering (0.0-1.0), affects subsequent draws
-```
-
-## Resource Creation
-
-Pyxel resources (sprites, tilemaps, sounds) can be created programmatically.
-Write code, `run_and_capture` to verify, then iterate.
-
-### Image Banks (sprites/tiles)
-
-```python
-# Set pixels with hex color strings (each char = palette index 0-f)
-pyxel.images[0].set(0, 0, [
-    "00011000",  # 8px wide sprite, row by row
-    "00111100",
-    "01111110",
-    "11011011",
-])
-```
-
-### Tilemaps
-
-Tilemaps compose maps from 8x8 tile regions in an image bank. Each tile is referenced \
-by its (x, y) position in the image bank in tile units (0-based, where tile (1, 0) = \
-pixels (8, 0)).
+### Tilemap Gotchas
 
 **Important**: All tilemap cells default to tile (0, 0). Keep position (0, 0) in the \
 image bank empty (transparent) — if you place a visible tile there, it fills the \
@@ -411,59 +286,6 @@ If tiles are in a different image bank than sprites, set `imgsrc`:
 ```python
 pyxel.tilemaps[0].imgsrc = 1  # draw tiles from image bank 1
 ```
-
-```python
-# Tilemap data format: each tile = 4 hex chars "XXYY" (x, y in tile units)
-# Example: "0000" = tile(0,0), "0100" = tile(1,0), "0001" = tile(0,1)
-
-# Create tilemap: Tilemap(width, height, imgsrc)
-# Default tilemaps (pyxel.tilemaps[0-7]) are also available
-
-# Define a 4x3 tile map (32x24 pixels)
-pyxel.tilemaps[0].set(0, 0, [
-    "0000010002000300",  # row 0: tiles (0,0) (1,0) (2,0) (3,0)
-    "0001010102000300",  # row 1: tiles (0,1) (1,1) (2,0) (3,0)
-    "0002010202000300",  # row 2: tiles (0,2) (1,2) (2,0) (3,0)
-])
-
-# Draw tilemap (colkey for transparent color)
-pyxel.bltm(0, 0, 0, 0, 0, 32, 24, colkey=0)
-# bltm(x, y, tm, u, v, w, h, colkey) — u,v,w,h in pixels
-
-# Read/write individual tiles
-tile = pyxel.tilemaps[0].pget(tx, ty)  # returns (tile_x, tile_y)
-pyxel.tilemaps[0].pset(tx, ty, (tile_x, tile_y))
-```
-
-Typical workflow: define tiles in an image bank with `images[N].set()`, then arrange \
-them into a map with `tilemaps[N].set()`.
-
-### Sounds
-
-```python
-pyxel.sounds[0].set(
-    notes="c2e2g2c3",    # notes: [cdefgab][0-4], r=rest
-    tones="ssss",         # t=triangle s=square p=pulse n=noise
-    volumes="7654",       # 0-7
-    effects="nnnn",       # n=none s=slide v=vibrato f=fadeout h=half_fadeout q=quarter_fadeout
-    speed=20,
-)
-```
-
-### MML (Music Macro Language)
-
-`Sound.mml()` provides flexible music composition beyond `Sound.set()`. \
-Learn MML to craft distinctive BGM — don't rely solely on `gen_bgm`.
-
-```python
-pyxel.sounds[0].mml("T120 @1 V100 L8 O4 CDEFGAB>C")
-```
-
-Key commands: `T`=tempo, `@`=tone(0:tri 1:sq 2:pulse 3:noise), `V`=volume(0-127), \
-`O`=octave, `>`/`<`=octave up/down, `L`=default length, `R`=rest, `#`/`-`=sharp/flat, \
-`.`=dotted, `&`=tie, `[`..`]N`=repeat N times.
-Advanced: `@ENV`=envelope, `@VIB`=vibrato, `@GLI`=glide.
-Full syntax: fetch the MML commands JSON.
 
 ### MML Composition Guide
 
@@ -498,13 +320,8 @@ pyxel.musics[0].set([10], [11], [12])
 share a similar flavor. Combine with hand-written MML for variety.
 
 ```python
-mml_list = pyxel.gen_bgm(preset, instr, seed=None)
-# preset (0-7): 0-1 title/departure (mid tempo), 2-3 town/peaceful (slow),
-#               4-5 field/adventure (mid tempo), 6-7 battle/crisis (fast)
-# instr (0-3):  0 melody+reverb+bass (3ch), 1 melody+bass+drums (3ch),
-#               2 melody+sub+bass (3ch), 3 melody+sub+bass+drums (4ch)
-# Returns: list of 4 MML strings (one per channel)
-# Always returns 4 channels — drop extras if you need to reserve channels for SE
+# See API reference for gen_bgm preset/instr details
+# Returns 4 MML strings — drop ch3 if you need it for SE
 
 # Example: 3-channel BGM (reserve ch3 for SE)
 mml = pyxel.gen_bgm(7, 1, seed=42)
@@ -529,41 +346,6 @@ def play_bgm(self, scene):
         pyxel.sounds[60 + i].mml(mml[i])
     pyxel.musics[0].set([60], [61], [62])
     pyxel.playm(0, loop=True)
-```
-
-### Music
-
-```python
-# Combine sounds into multi-channel music
-pyxel.musics[0].set([0, 1], [2, 3], [4])  # ch0: snd 0,1  ch1: snd 2,3  ch2: snd 4
-pyxel.playm(0, loop=True)
-```
-
-## Advanced
-
-```python
-# Tilemap collision — ALWAYS prefer this over hand-rolled Python loops.
-# It is C-optimized and handles edge cases (wall penetration, corner clips).
-WALL_TILES = [(1, 0), (2, 0), (3, 0)]  # tile coords treated as solid
-dx, dy = pyxel.tilemaps[0].collide(x, y, w, h, dx, dy, WALL_TILES)
-# Returns adjusted (dx, dy) that stops at walls. Apply: x += dx; y += dy
-
-# Custom font (TTF)
-font = pyxel.Font("font.ttf", 12)
-pyxel.text(x, y, "Hello", col, font)
-w = font.text_width("Hello")
-
-# Load external images
-pyxel.images[0].load(0, 0, "sprite.png")
-
-# Load Tiled map
-tm = pyxel.Tilemap.from_tmx("map.tmx", layer=0)
-
-# Custom tone (wavetable)
-pyxel.tones[0].wavetable[:] = [0, 4, 8, 12, 15, 12, 8, 4] * 4  # 32 samples, 0-15
-
-# PCM audio
-pyxel.sounds[0].pcm("sound.wav")
 ```
 
 ## Color Palette & Hierarchy
