@@ -7,7 +7,6 @@ Usage:
 """
 
 import os
-import runpy
 import sys
 
 if len(sys.argv) < 5:
@@ -26,17 +25,9 @@ sys.argv = [script_path]
 
 import pyxel
 
-# Headless mode: no window, max speed
-_original_init = pyxel.init
+from pyxel_mcp._headless import patch_headless_init, run_script
 
-
-def _headless_init(*args, **kwargs):
-    kwargs["headless"] = True
-    _original_init(*args, **kwargs)
-    os.chdir(os.path.dirname(script_path) or ".")
-
-
-pyxel.init = _headless_init
+patch_headless_init(script_path)
 
 _capture_idx = 0  # index into frame_list (sorted)
 
@@ -116,8 +107,4 @@ def _patched_flip():
 pyxel.flip = _patched_flip
 
 # Execute the user script
-sys.path.insert(0, os.path.dirname(script_path))
-try:
-    runpy.run_path(script_path, run_name="__main__")
-except SystemExit:
-    pass
+run_script(script_path)

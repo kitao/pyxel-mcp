@@ -8,7 +8,6 @@ Usage:
 """
 
 import os
-import runpy
 import sys
 
 if len(sys.argv) < 3:
@@ -27,18 +26,10 @@ sys.argv = [script_path]
 
 import pyxel
 
-# Force 256x256 screen, headless mode
-_original_init = pyxel.init
+from pyxel_mcp._headless import patch_headless_init, run_script
 
-
-def _headless_init(*args, **kwargs):
-    kwargs["headless"] = True
-    new_args = (256, 256) + args[2:]
-    _original_init(*new_args, **kwargs)
-    os.chdir(os.path.dirname(script_path) or ".")
-
-
-pyxel.init = _headless_init
+# Force 256x256 screen for full bank capture
+patch_headless_init(script_path, transform_args=lambda args: (256, 256) + args[2:])
 
 _captured = False
 
@@ -91,8 +82,4 @@ def _patched_flip():
 pyxel.flip = _patched_flip
 
 # Execute
-sys.path.insert(0, os.path.dirname(script_path))
-try:
-    runpy.run_path(script_path, run_name="__main__")
-except SystemExit:
-    pass
+run_script(script_path)

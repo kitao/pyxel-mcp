@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.7.6
+
+- Added SDL_AUDIODRIVER=dummy to suppress audio during headless execution
+- Extracted common headless init and script execution into _headless.py
+
 ## 0.7.5
 
 - Replaced inline API docs with references to official Pyxel docs

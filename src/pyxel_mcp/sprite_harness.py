@@ -9,7 +9,6 @@ Usage:
 
 import json
 import os
-import runpy
 import sys
 
 if len(sys.argv) < 7:
@@ -30,17 +29,9 @@ sys.argv = [script_path]
 
 import pyxel
 
-# Headless mode: no window
-_original_init = pyxel.init
+from pyxel_mcp._headless import patch_headless_init, run_script
 
-
-def _headless_init(*args, **kwargs):
-    kwargs["headless"] = True
-    _original_init(*args, **kwargs)
-    os.chdir(os.path.dirname(script_path) or ".")
-
-
-pyxel.init = _headless_init
+patch_headless_init(script_path)
 
 # Patch game loop functions to no-ops (we only need resource setup)
 pyxel.run = lambda update, draw: None
@@ -48,11 +39,7 @@ pyxel.show = lambda: None
 pyxel.flip = lambda: None
 
 # Execute the script to set up sprites/images
-sys.path.insert(0, os.path.dirname(script_path))
-try:
-    runpy.run_path(script_path, run_name="__main__")
-except SystemExit:
-    pass
+run_script(script_path)
 
 # Read pixel data from the image bank
 img = pyxel.images[image_idx]
