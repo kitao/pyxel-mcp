@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.7.7
+
+- Add pyxres-format.md to Pyxel Reference URLs
+
 ## 0.7.6
 
 - Added SDL_AUDIODRIVER=dummy to suppress audio during headless execution

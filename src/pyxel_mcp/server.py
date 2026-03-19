@@ -249,6 +249,7 @@ Official docs (fetch for API details, usage guides, and syntax):
 - API reference: https://raw.githubusercontent.com/kitao/pyxel/main/docs/api-reference.md
 - User guide: https://raw.githubusercontent.com/kitao/pyxel/main/docs/user-guide.md
 - MML commands: https://raw.githubusercontent.com/kitao/pyxel/main/docs/mml-commands.md
+- Resource format: https://raw.githubusercontent.com/kitao/pyxel/main/docs/pyxres-format.md
 - Local stubs and examples: call `pyxel_info`.
 - User-created games: https://github.com/kitao/pyxel/wiki/Pyxel-User-Examples
 
