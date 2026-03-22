@@ -77,3 +77,4 @@ else:
     }
 
 print(json.dumps(meta))
+sys.stdout.flush()

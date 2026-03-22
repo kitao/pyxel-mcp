@@ -23,6 +23,11 @@ def patch_headless_init(script_path, transform_args=None):
     def _headless_init(*args, **kwargs):
         os.environ["SDL_AUDIODRIVER"] = "dummy"
         kwargs["headless"] = True
+        # Override fps for fast headless execution (bypass SDL_Delay throttle)
+        if len(args) > 3:
+            args = args[:3] + (1_000_000,) + args[4:]
+        else:
+            kwargs["fps"] = 1_000_000
         if transform_args:
             args = transform_args(args)
         _original_init(*args, **kwargs)

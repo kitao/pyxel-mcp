@@ -44,7 +44,7 @@ def _analyze_and_quit():
     for y in range(h):
         row = []
         for x in range(w):
-            row.append(pyxel.screen.pget(x, y))
+            row.append(pyxel.pget(x, y))
         pixels.append(row)
 
     # Determine background color (most frequent)

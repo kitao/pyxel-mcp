@@ -42,7 +42,7 @@ def _try_capture(fc, draw):
         draw()
         path = os.path.join(output_dir, f"frame_{target:04d}.png")
         try:
-            pyxel.screen.save(path, capture_scale)
+            pyxel.screenshot(path, scale=capture_scale)
         except Exception as e:
             print(f"Capture error at frame {target}: {e}", file=sys.stderr)
         _capture_idx += 1
@@ -72,7 +72,7 @@ _original_show = pyxel.show
 def _patched_show():
     path = os.path.join(output_dir, "frame_show.png")
     try:
-        pyxel.screen.save(path, capture_scale)
+        pyxel.screenshot(path, scale=capture_scale)
     except Exception as e:
         print(f"Capture error: {e}", file=sys.stderr)
     pyxel.quit()
@@ -95,7 +95,7 @@ def _patched_flip():
         target = frame_list[_flip_capture_idx]
         path = os.path.join(output_dir, f"frame_{target:04d}.png")
         try:
-            pyxel.screen.save(path, capture_scale)
+            pyxel.screenshot(path, scale=capture_scale)
         except Exception as e:
             print(f"Capture error at flip {target}: {e}", file=sys.stderr)
         _flip_capture_idx += 1

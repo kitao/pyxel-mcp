@@ -20,7 +20,7 @@ if len(sys.argv) < 3:
 script_path = os.path.abspath(sys.argv[1])
 output_path = os.path.abspath(sys.argv[2])
 bank_index = int(sys.argv[3]) if len(sys.argv) > 3 else 0
-capture_scale = int(sys.argv[4]) if len(sys.argv) > 4 else 2
+capture_scale = int(sys.argv[4]) if len(sys.argv) > 4 else 1
 
 sys.argv = [script_path]
 
@@ -45,7 +45,7 @@ def _capture_bank():
     pyxel.blt(0, 0, bank_index, 0, 0, 256, 256)
 
     try:
-        pyxel.screen.save(output_path, capture_scale)
+        pyxel.screenshot(output_path, scale=capture_scale)
     except Exception as e:
         print(f"Capture error: {e}", file=sys.stderr)
     pyxel.quit()

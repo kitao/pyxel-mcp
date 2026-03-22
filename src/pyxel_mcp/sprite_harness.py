@@ -99,3 +99,4 @@ result = {
     "color_count": color_count,
 }
 print(json.dumps(result))
+sys.stdout.flush()

@@ -42,7 +42,7 @@ def _capture_and_quit():
         return
     _captured = True
     try:
-        pyxel.screen.save(output_path, capture_scale)
+        pyxel.screenshot(output_path, scale=capture_scale)
     except Exception as e:
         print(f"Capture error: {e}", file=sys.stderr)
     pyxel.quit()

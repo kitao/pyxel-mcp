@@ -1,5 +1,15 @@
 # Change Log
 
+## 0.8.0
+
+- Optimize headless execution with fps override for near-instant captures
+- Switch screenshot capture from pyxel.screen.save() to pyxel.screenshot()
+- Change default scale from 2 to 1 to reduce image token usage
+- Unify screen pixel reads to pyxel.pget() public API
+- Add missing sys.stdout.flush() to audio and sprite harnesses
+- Align README tool descriptions with server.py docstrings
+- Upgrade Pyxel compatibility to 2.8.7
+
 ## 0.7.7
 
 - Add pyxres-format.md to Pyxel Reference URLs

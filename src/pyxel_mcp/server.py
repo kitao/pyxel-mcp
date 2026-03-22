@@ -1018,7 +1018,7 @@ mcp = FastMCP("pyxel-mcp", instructions=_INSTRUCTIONS)
 async def run_and_capture(
     script_path: str,
     frames: int = 60,
-    scale: int = 2,
+    scale: int = 1,
     timeout: int = 10,
 ) -> list:
     """Run a Pyxel script and capture a screenshot after N frames.
@@ -1026,7 +1026,7 @@ async def run_and_capture(
     Args:
         script_path: Absolute path to the .py script to run.
         frames: Number of frames to render before capturing (default: 60).
-        scale: Screenshot scale multiplier (default: 2).
+        scale: Screenshot scale multiplier (default: 1).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
     if not _pyxel_dir():
@@ -1597,7 +1597,7 @@ async def inspect_sprite(
 async def capture_frames(
     script_path: str,
     frames: str = "1,15,30,60",
-    scale: int = 2,
+    scale: int = 1,
     timeout: int = 30,
 ) -> list:
     """Capture screenshots at multiple frame points for animation verification.
@@ -1608,7 +1608,7 @@ async def capture_frames(
     Args:
         script_path: Absolute path to the .py script to run.
         frames: Comma-separated frame numbers to capture (default: "1,15,30,60").
-        scale: Screenshot scale multiplier (default: 2).
+        scale: Screenshot scale multiplier (default: 1).
         timeout: Maximum seconds to wait for the script (default: 30).
     """
     if not _pyxel_dir():
@@ -1688,7 +1688,7 @@ async def play_and_capture(
     script_path: str,
     inputs: str,
     frames: str = "1,30,60",
-    scale: int = 2,
+    scale: int = 1,
     timeout: int = 30,
 ) -> list:
     """Play a game by sending simulated input and capture screenshots.
@@ -1704,7 +1704,7 @@ async def play_and_capture(
             Keys are held from their frame until a later entry changes them.
             Default state: no keys pressed, mouse at (0,0).
         frames: Comma-separated frame numbers to capture screenshots (default: "1,30,60").
-        scale: Screenshot scale multiplier (default: 2).
+        scale: Screenshot scale multiplier (default: 1).
         timeout: Maximum seconds to wait for the script (default: 30).
     """
     if not _pyxel_dir():
@@ -2644,7 +2644,7 @@ async def inspect_tilemap(
 async def inspect_bank(
     script_path: str,
     bank: int = 0,
-    scale: int = 2,
+    scale: int = 1,
     timeout: int = 10,
 ) -> list:
     """Visualize an entire Pyxel image bank as a single screenshot.
@@ -2656,7 +2656,7 @@ async def inspect_bank(
     Args:
         script_path: Absolute path to the .py script to run.
         bank: Image bank index 0-2 (default: 0).
-        scale: Screenshot scale multiplier (default: 2).
+        scale: Screenshot scale multiplier (default: 1).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
     if not _pyxel_dir():
