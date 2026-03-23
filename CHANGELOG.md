@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.8.2
+
+- Fix Pyxel minimum version: require >=2.8.7 for screenshot(filename) API
+
 ## 0.8.1
 
 - Add Beyond Defaults section documenting extensible resources
