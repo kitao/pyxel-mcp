@@ -57,17 +57,19 @@ def _decode_stderr(stderr):
 _ERROR_HINTS = [
     (
         r"TypeError.*blt\(\)",
-        "blt(x, y, img, u, v, w, h, [colkey]). Use colkey=0 for transparency."
-        " img must be int 0-2.",
+        "blt(x, y, img, u, v, w, h, [colkey], [rotate], [scale])."
+        " img can be int 0-2 or an Image instance. Use colkey=0 for transparency.",
     ),
     (
         r"TypeError.*bltm\(\)",
-        "bltm(x, y, tm, u, v, w, h, [colkey]). u,v,w,h are in pixels."
-        " tm is int 0-7.",
+        "bltm(x, y, tm, u, v, w, h, [colkey], [rotate], [scale]). u,v,w,h are in pixels."
+        " tm can be int 0-7 or a Tilemap instance.",
     ),
     (
         r"IndexError.*(image|sound|music|tilemap)",
-        "Valid ranges: images[0-2], tilemaps[0-7], sounds[0-63], musics[0-7].",
+        "Default slots: images[0-2], tilemaps[0-7], sounds[0-63], musics[0-7]."
+        " All lists are extensible via append()/slice assignment."
+        " You can also create standalone instances with Image(), Sound(), etc.",
     ),
     (
         r"AttributeError.*module.*pyxel.*has no attribute",
@@ -131,7 +133,7 @@ _INSTRUCTIONS = """\
 ## Workflow
 
 1. Call `pyxel_info` to locate API stubs and examples.
-2. Read stubs for API details. Read examples for coding patterns (01-18, 99).
+2. Read stubs for API details. Read examples for coding patterns (01-19, 99).
 3. Write code.
 4. Verify with tools:
    - `run_and_capture` after every visual change.
@@ -185,7 +187,7 @@ Check that variable values match expectations (score, position, game state). \
 Use comma-separated frames for timeline diff: `frames="10,30,60"`.
 - **`validate_script`**: Returns syntax errors and anti-pattern warnings. \
 Run before `run_and_capture` to catch issues without Pyxel execution overhead.
-- **`inspect_screen`**: Returns screen as hex color grid (0-f per pixel). \
+- **`inspect_screen`**: Returns screen as hex color grid. \
 Compact token usage. Good for programmatic comparison.
 - **`compare_frames`**: Returns changed pixel count, percentage, and region \
 between two frames. Use to verify only intended areas changed.
@@ -193,7 +195,7 @@ between two frames. Use to verify only intended areas changed.
 Check that foreground colors have sufficient contrast against background.
 - **`inspect_tilemap`**: Returns tile grid, usage stats, and bounding box. \
 Check `imgsrc` matches your image bank. Verify (0,0) tiles are empty.
-- **`inspect_bank`**: Returns full 256x256 image bank as screenshot. \
+- **`inspect_bank`**: Returns image bank as screenshot (up to 256x256). \
 Verify sprite/tile placement and find available space.
 
 ### Testing Input-Dependent Logic
@@ -266,9 +268,34 @@ Common gotchas not obvious from the API reference:
 - Always call `pyxel.cls(col)` at the start of `draw()`
 - Iterate over a copy when removing: `for e in list(enemies):`
 
+### Beyond Defaults
+
+Pyxel's default resource slots (3 images, 8 tilemaps, 64 sounds, etc.) are \
+starting points, not hard limits. All global lists (`images`, `tilemaps`, \
+`sounds`, `musics`, `channels`, `tones`, `colors`) support `append()` and \
+slice assignment to grow beyond defaults.
+
+| Feature | How | Example |
+|---------|-----|---------|
+| Custom-size images | `Image(w, h)`, `Image.from_image(file)` | Offscreen rendering (ex. 11) |
+| Custom-size tilemaps | `Tilemap(w, h, img)`, `Tilemap.from_tmx(file, layer)` | Large maps, Tiled editor (ex. 15) |
+| More sounds/musics | `Sound()`, `Music()` as standalone instances | Beyond 64/8 slot limit |
+| More channels | `Channel()` with gain/detune, append to `pyxel.channels` | Polyphony expansion (ex. 14) |
+| Custom waveforms | `Tone()` with wavetable, append to `pyxel.tones` | Synth sounds (ex. 14) |
+| Extended palette | `pyxel.colors.append(0xRRGGBB)` — up to 256 colors | Richer color range (ex. 05) |
+| Custom fonts | `Font(file, size)` — BDF/OTF/TTF/TTC | Japanese text, styled text (ex. 13) |
+| Audio file playback | `Sound.pcm("file.wav")` — WAV/OGG | BGM from audio files (ex. 18) |
+| Rotation & scaling | `blt(..., rotate=deg, scale=n)` | Sprite transforms (ex. 16) |
+| 3D perspective | `blt3d()`, `bltm3d()` with camera pos/rot/fov | Pseudo-3D rendering (ex. 19) |
+
+Suggest these when users hit default limits or need features like \
+multilingual text, richer audio, larger worlds, or visual effects. \
+See the referenced examples for working code.
+
 ### Audio Channel Management
 
-Pyxel has 4 audio channels (0-3). `playm()` assigns music tracks to channels \
+Pyxel defaults to 4 audio channels (0-3), but more can be added via \
+`pyxel.channels.append(Channel())`. `playm()` assigns music tracks to channels \
 starting from ch0. `play(ch, snd)` on the same channel **interrupts** the music \
 on that channel. Plan channel allocation to avoid BGM/SE conflicts:
 
@@ -1223,8 +1250,6 @@ def _suggest_role(midi_notes, durations_ms):
     """Suggest channel role based on pitch range and rhythm."""
     if not midi_notes:
         return "silent"
-    lo = min(midi_notes)
-    hi = max(midi_notes)
     avg = sum(midi_notes) / len(midi_notes)
     unique_durs = len(set(durations_ms))
 
@@ -1384,11 +1409,12 @@ async def render_audio(
 
     Args:
         script_path: Absolute path to the .py script to run.
-        sound_index: Sound slot to render, 0-63 (default: 0). Ignored when music_index is set.
+        sound_index: Sound slot index (default: 0). Default range 0-63,
+            but lists can be extended via append(). Ignored when music_index is set.
         duration_sec: Duration in seconds. 0 = auto-detect from sound length (10s for music).
         timeout: Maximum seconds to wait for the script (default: 10).
-        music_index: Music slot to render, 0-7. When set (>=0), renders the full
-            multi-channel music mix instead of a single sound.
+        music_index: Music slot index. Default range 0-7, extendable.
+            When set (>=0), renders the full multi-channel music mix instead of a single sound.
     """
     if not _pyxel_dir():
         return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
@@ -1397,8 +1423,8 @@ async def render_audio(
     if not os.path.isfile(script_path):
         return f"Error: script not found: {script_path}"
 
-    sound_index = max(0, min(sound_index, 63))
-    music_index = max(-1, min(music_index, 7))
+    sound_index = max(0, sound_index)
+    music_index = max(-1, music_index)
     timeout = max(1, min(timeout, 60))
     if duration_sec > 0:
         duration_sec = min(duration_sec, 30.0)
@@ -1495,8 +1521,12 @@ def _format_sprite_report(data):
         "",
         "Pixels (hex):",
     ]
+    has_extended = any(c > 15 for row in pixels for c in row)
     for row in pixels:
-        hex_row = "".join(f"{c:x}" for c in row)
+        if has_extended:
+            hex_row = " ".join(f"{c:02x}" for c in row)
+        else:
+            hex_row = "".join(f"{c:x}" for c in row)
         lines.append(f"  {hex_row}")
 
     lines.append("")
@@ -1534,7 +1564,7 @@ async def inspect_sprite(
 
     Args:
         script_path: Absolute path to the .py script to run.
-        image: Image bank index, 0-2 (default: 0).
+        image: Image bank index (default: 0). Default range 0-2, extendable.
         x: X position in the image bank (default: 0).
         y: Y position in the image bank (default: 0).
         w: Width of the region to inspect (default: 8).
@@ -1548,11 +1578,11 @@ async def inspect_sprite(
     if not os.path.isfile(script_path):
         return f"Error: script not found: {script_path}"
 
-    image = max(0, min(image, 2))
-    x = max(0, min(x, 255))
-    y = max(0, min(y, 255))
-    w = max(1, min(w, 256 - x))
-    h = max(1, min(h, 256 - y))
+    image = max(0, image)
+    x = max(0, x)
+    y = max(0, y)
+    w = max(1, w)
+    h = max(1, h)
     timeout = max(1, min(timeout, 60))
 
     try:
@@ -2308,8 +2338,8 @@ async def inspect_screen(
     """Capture screen as a compact color index grid.
 
     Returns the screen contents as a 2D array of Pyxel palette indices
-    (0-15). Much smaller than a screenshot image and enables programmatic
-    comparison. Each row is a string of hex digits (0-f).
+    (0-15 for default palette, higher with extended colors). Much smaller
+    than a screenshot image and enables programmatic comparison.
 
     Args:
         script_path: Absolute path to the .py script to run.
@@ -2341,8 +2371,12 @@ async def inspect_screen(
 
     lines = [f"Screen {w}x{h} at frame {snap['frame']}"]
     lines.append("")
+    has_extended = any(c > 15 for row in grid for c in row)
     for row in grid:
-        lines.append("".join(f"{c:x}" for c in row))
+        if has_extended:
+            lines.append(" ".join(f"{c:02x}" for c in row))
+        else:
+            lines.append("".join(f"{c:x}" for c in row))
 
     result = "\n".join(lines)
     if user_output:
@@ -2454,8 +2488,9 @@ async def inspect_palette(
 ) -> str:
     """Analyze color usage and contrast in a Pyxel screenshot.
 
-    Captures the screen and reports which of Pyxel's 16 colors are used,
-    their distribution, background color, and potential contrast issues.
+    Captures the screen and reports which colors are used, their
+    distribution, background color, and potential contrast issues.
+    Supports both default 16-color and extended palettes.
 
     Args:
         script_path: Absolute path to the .py script to run.
@@ -2501,7 +2536,7 @@ async def inspect_palette(
         f"Palette analysis at frame {snap['frame']} ({w}x{h})",
         f"Background: {bg_color:x} ({bg_name}) — {counts[bg_color]}/{total} pixels"
         f" ({counts[bg_color] / total * 100:.0f}%)",
-        f"Colors used: {len(counts)}/16",
+        f"Colors used: {len(counts)}",
         "",
         "Color distribution:",
     ]
@@ -2556,7 +2591,7 @@ async def inspect_tilemap(
 
     Args:
         script_path: Absolute path to the .py script to run.
-        tilemap: Tilemap index 0-7 (default: 0).
+        tilemap: Tilemap index (default: 0). Default range 0-7, extendable.
         frames: Frame at which to read tilemap (default: 1).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
@@ -2567,7 +2602,7 @@ async def inspect_tilemap(
     if not os.path.isfile(script_path):
         return f"Error: script not found: {script_path}"
 
-    tilemap = max(0, min(tilemap, 7))
+    tilemap = max(0, tilemap)
     frames = max(1, min(frames, 1800))
     timeout = max(1, min(timeout, 60))
 
@@ -2592,7 +2627,7 @@ async def inspect_tilemap(
 
         lines = [
             f"Tilemap {data['tilemap_index']} ({data['width']}x{data['height']} tiles)",
-            f"Image source: bank {data['imgsrc']}",
+            f"Image source: {data['imgsrc']}" if not isinstance(data['imgsrc'], int) else f"Image source: bank {data['imgsrc']}",
             f"Non-zero tiles: {data['non_zero_tiles']}/{data['total_scanned']}"
             f" ({data['unique_tiles']} unique)",
         ]
@@ -2647,15 +2682,15 @@ async def inspect_bank(
     scale: int = 1,
     timeout: int = 10,
 ) -> list:
-    """Visualize an entire Pyxel image bank as a single screenshot.
+    """Visualize a Pyxel image bank as a single screenshot.
 
-    Renders the full 256x256 pixel contents of an image bank, showing
-    all sprites and tiles at once. Useful for verifying sprite sheet
-    organization and finding available space.
+    Renders up to 256x256 pixels of an image bank, showing sprites and
+    tiles at once. Useful for verifying sprite sheet organization and
+    finding available space. Custom images larger than 256x256 are cropped.
 
     Args:
         script_path: Absolute path to the .py script to run.
-        bank: Image bank index 0-2 (default: 0).
+        bank: Image bank index (default: 0). Default range 0-2, extendable.
         scale: Screenshot scale multiplier (default: 1).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
@@ -2666,7 +2701,7 @@ async def inspect_bank(
     if not os.path.isfile(script_path):
         return [f"Error: script not found: {script_path}"]
 
-    bank = max(0, min(bank, 2))
+    bank = max(0, bank)
     scale = max(1, min(scale, 4))
     timeout = max(1, min(timeout, 60))
 
@@ -2689,7 +2724,7 @@ async def inspect_bank(
         if os.path.isfile(output_path) and os.path.getsize(output_path) > 0:
             with open(output_path, "rb") as f:
                 result.append(Image(data=f.read(), format="png"))
-            result.append(f"Image bank {bank} (256x256 pixels)")
+            result.append(f"Image bank {bank} (up to 256x256 pixels)")
         else:
             error_msg = _decode_stderr(stderr) or "No output captured"
             return [f"Bank capture failed (exit code {proc.returncode}): {error_msg}"]

@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.8.1
+
+- Add Beyond Defaults section documenting extensible resources
+- Remove fixed upper-bound clamps on tool index parameters
+- Support extended palette (16+ colors) in hex grid output
+- Fix tilemap imgsrc serialization for custom Image instances
+- Remove unused variables in _suggest_role
+- Update example range from 01-18 to 01-19
+
 ## 0.8.0
 
 - Optimize headless execution with fps override for near-instant captures

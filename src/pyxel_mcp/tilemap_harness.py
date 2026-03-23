@@ -79,7 +79,7 @@ def _dump_tilemap():
         "tilemap_index": tilemap_index,
         "width": w,
         "height": h,
-        "imgsrc": tm.imgsrc,
+        "imgsrc": tm.imgsrc if isinstance(tm.imgsrc, int) else f"Image({tm.imgsrc.width}x{tm.imgsrc.height})",
         "bbox": bbox,
         "tiles": tiles,
         "tile_usage": dict(sorted(usage.items(), key=lambda x: -x[1])[:30]),
