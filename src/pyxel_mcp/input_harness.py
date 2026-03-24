@@ -69,6 +69,7 @@ def _update_input_state():
         _schedule_idx += 1
 
     _curr_keys = _last_keys.copy()
+    # Shadow pyxel.mouse_x/y directly; warp_mouse() is a no-op in headless mode
     pyxel.mouse_x = _last_mouse_x
     pyxel.mouse_y = _last_mouse_y
 

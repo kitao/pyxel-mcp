@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.8.3
+
+- Bump Pyxel minimum version to 2.8.8 (Tilemap u16 type change)
+- Document headless mouse simulation as shadow attributes
+
 ## 0.8.2
 
 - Fix Pyxel minimum version: require >=2.8.7 for screenshot(filename) API
