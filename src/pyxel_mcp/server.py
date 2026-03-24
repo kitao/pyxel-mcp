@@ -17,6 +17,7 @@ from importlib.util import find_spec
 from mcp.server.fastmcp import FastMCP, Image
 
 from pyxel_mcp._errors import decode_stderr, extract_stdout
+from pyxel_mcp._palette import color_name, color_contrast
 
 HARNESS_PATH = os.path.join(os.path.dirname(__file__), "harness.py")
 AUDIO_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "audio_harness.py")
@@ -1418,14 +1419,6 @@ async def render_audio(
 
 # --- Sprite analysis ---
 
-_PALETTE_NAMES = {
-    0: "black", 1: "navy", 2: "purple", 3: "green",
-    4: "brown", 5: "dark_blue", 6: "light_blue", 7: "white",
-    8: "red", 9: "orange", 10: "yellow", 11: "lime",
-    12: "cyan", 13: "gray", 14: "pink", 15: "peach",
-}
-
-
 def _format_sprite_report(data):
     """Format sprite inspection JSON into a readable report."""
     pixels = data["pixels"]
@@ -1457,7 +1450,7 @@ def _format_sprite_report(data):
     color_count = data["color_count"]
     for c_str, count in sorted(color_count.items(), key=lambda x: -x[1]):
         c = int(c_str) if isinstance(c_str, str) else c_str
-        name = _PALETTE_NAMES.get(c, "?")
+        name = color_name(c)
         lines.append(f"  {c:x}({name}): {count}px")
 
     return "\n".join(lines)
@@ -1749,7 +1742,7 @@ def _format_layout_report(data):
     warnings = []
     lines = [
         f"Screen: {sw}x{sh}  bg_color: {bg}"
-        f" ({_PALETTE_NAMES.get(bg, '?')})",
+        f" ({color_name(bg)})",
     ]
 
     bbox = data.get("content_bbox")
@@ -1838,12 +1831,12 @@ def _format_layout_report(data):
         lines.append("")
         lines.append(f"Text lines detected: {len(text_lines)}")
         for tl in text_lines:
-            color_name = _PALETTE_NAMES.get(tl["color"], "?")
+            cname = color_name(tl["color"])
             off = tl["offset_from_center"]
             align = "centered" if abs(off) <= 2 else f"offset {off:+.0f}px"
             lines.append(
                 f"  y={tl['y']:3d}  x={tl['x']:3d}  w={tl['w']:3d}px"
-                f"  color={tl['color']:x}({color_name})"
+                f"  color={tl['color']:x}({cname})"
                 f"  {align}"
             )
         offsets = [tl["offset_from_center"] for tl in text_lines]
@@ -2204,25 +2197,6 @@ async def validate_script(script_path: str) -> str:
 # --- Screen analysis ---
 
 
-_PALETTE_RGB = {
-    0: (0, 0, 0), 1: (43, 51, 95), 2: (126, 32, 114), 3: (25, 149, 56),
-    4: (139, 72, 82), 5: (57, 92, 152), 6: (169, 193, 255), 7: (238, 238, 238),
-    8: (212, 24, 108), 9: (211, 132, 65), 10: (233, 195, 91), 11: (112, 198, 169),
-    12: (118, 150, 222), 13: (163, 163, 163), 14: (255, 151, 152), 15: (237, 199, 176),
-}
-
-
-def _color_contrast(c1, c2):
-    """Simple luminance contrast ratio between two palette indices."""
-    r1, g1, b1 = _PALETTE_RGB.get(c1, (0, 0, 0))
-    r2, g2, b2 = _PALETTE_RGB.get(c2, (0, 0, 0))
-    lum1 = 0.299 * r1 + 0.587 * g1 + 0.114 * b1
-    lum2 = 0.299 * r2 + 0.587 * g2 + 0.114 * b2
-    lighter = max(lum1, lum2) + 0.05
-    darker = min(lum1, lum2) + 0.05
-    return lighter / darker
-
-
 async def _run_screen_harness(script_path, frame_csv, timeout=10):
     """Run screen_harness and return parsed JSON + user output."""
     proc = await asyncio.create_subprocess_exec(
@@ -2445,7 +2419,7 @@ async def inspect_palette(
 
     # Detect background (most common color)
     bg_color = max(counts, key=counts.get)
-    bg_name = _PALETTE_NAMES.get(bg_color, "?")
+    bg_name = color_name(bg_color)
     fg_colors = {c for c in counts if c != bg_color}
 
     lines = [
@@ -2458,7 +2432,7 @@ async def inspect_palette(
     ]
 
     for c in sorted(counts, key=counts.get, reverse=True):
-        name = _PALETTE_NAMES.get(c, "?")
+        name = color_name(c)
         pct = counts[c] / total * 100
         bar = "#" * max(1, int(pct / 2))
         lines.append(f"  {c:x} ({name:10s}): {counts[c]:6d}px ({pct:5.1f}%) {bar}")
@@ -2466,9 +2440,9 @@ async def inspect_palette(
     # Contrast warnings
     warnings = []
     for c in fg_colors:
-        ratio = _color_contrast(c, bg_color)
+        ratio = color_contrast(c, bg_color)
         if ratio < 1.5:
-            name = _PALETTE_NAMES.get(c, "?")
+            name = color_name(c)
             warnings.append(
                 f"  Low contrast: {c:x}({name}) on {bg_color:x}({bg_name})"
                 f" — ratio {ratio:.1f}:1"
