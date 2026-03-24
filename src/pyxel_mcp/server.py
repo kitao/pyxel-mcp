@@ -4,18 +4,16 @@ import ast
 import asyncio
 import glob
 import json
-import math
 import os
 import re
 import shutil
-import struct
 import sys
 import tempfile
-import wave
 from importlib.util import find_spec
 
 from mcp.server.fastmcp import FastMCP, Image
 
+from pyxel_mcp._audio import analyze_wav
 from pyxel_mcp._errors import decode_stderr, extract_stdout
 from pyxel_mcp._palette import color_name, color_contrast
 
@@ -1045,271 +1043,6 @@ def pyxel_info() -> str:
     return "\n".join(lines)
 
 
-# --- Audio analysis ---
-
-NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-
-# Major and minor scale templates (pitch class sets)
-_SCALE_TEMPLATES = {
-    "major": {0, 2, 4, 5, 7, 9, 11},
-    "minor": {0, 2, 3, 5, 7, 8, 10},
-    "penta": {0, 2, 4, 7, 9},
-}
-
-
-def _freq_to_note(freq):
-    """Convert frequency (Hz) to note name like C5, A4."""
-    if freq < 20:
-        return "~"
-    midi = 69 + 12 * math.log2(freq / 440.0)
-    idx = round(midi) % 12
-    octave = (round(midi) // 12) - 1
-    return f"{NOTE_NAMES[idx]}{octave}"
-
-
-def _freq_to_midi(freq):
-    """Convert frequency to MIDI note number."""
-    if freq < 20:
-        return -1
-    return round(69 + 12 * math.log2(freq / 440.0))
-
-
-def _estimate_freq(samples, sample_rate):
-    """Estimate fundamental frequency using autocorrelation.
-
-    Uses a "first peak after dip" approach: the autocorrelation naturally
-    starts high at small lags (adjacent samples are correlated) and decays.
-    The true fundamental shows up as the first significant peak *after* this
-    initial decay, not as the global maximum (which is often at min_lag for
-    smooth waveforms like triangle waves, causing ~2000 Hz artifacts).
-    """
-    n = len(samples)
-    min_lag = max(1, sample_rate // 2000)  # up to 2000 Hz
-    max_lag = min(sample_rate // 50, n // 2)  # down to 50 Hz
-    if max_lag <= min_lag:
-        return 0
-
-    # Remove DC offset
-    mean = sum(samples) / n
-    centered = [s - mean for s in samples]
-
-    energy = sum(s * s for s in centered)
-    if energy == 0:
-        return 0
-
-    # Compute normalized autocorrelation for the lag range
-    num_lags = max_lag - min_lag
-    corrs = [0.0] * num_lags
-    for idx in range(num_lags):
-        lag = min_lag + idx
-        corrs[idx] = sum(centered[i] * centered[i + lag] for i in range(n - lag)) / energy
-
-    # Find where correlation first drops below threshold (end of initial decay)
-    dip_idx = None
-    for i in range(num_lags):
-        if corrs[i] < 0.2:
-            dip_idx = i
-            break
-
-    if dip_idx is None:
-        # Correlation never dipped — either genuinely high frequency or noise.
-        # Fall back to global max with a strict threshold.
-        best_i = max(range(num_lags), key=lambda i: corrs[i])
-        return sample_rate / (min_lag + best_i) if corrs[best_i] > 0.6 else 0
-
-    # Find first peak after the dip (the true fundamental period)
-    for i in range(max(1, dip_idx), num_lags - 1):
-        if corrs[i] > 0.3 and corrs[i] >= corrs[i - 1] and corrs[i] >= corrs[i + 1]:
-            return sample_rate / (min_lag + i)
-
-    return 0
-
-
-def _detect_key(midi_notes):
-    """Detect musical key from a list of MIDI note numbers."""
-    if not midi_notes:
-        return "unknown"
-    # Build pitch class histogram
-    pc_hist = [0] * 12
-    for m in midi_notes:
-        pc_hist[m % 12] += 1
-
-    best_score = -1
-    best_key = "C major"
-    for root in range(12):
-        for scale_name, template in _SCALE_TEMPLATES.items():
-            score = sum(pc_hist[(root + pc) % 12] for pc in template)
-            if score > best_score:
-                best_score = score
-                best_key = f"{NOTE_NAMES[root]} {scale_name}"
-    return best_key
-
-
-def _analyze_intervals(midi_notes):
-    """Classify intervals between consecutive notes."""
-    if len(midi_notes) < 2:
-        return {}
-    counts = {"step (1-2)": 0, "skip (3-4)": 0, "leap (5-7)": 0, "jump (8+)": 0}
-    for i in range(1, len(midi_notes)):
-        diff = abs(midi_notes[i] - midi_notes[i - 1])
-        if diff <= 2:
-            counts["step (1-2)"] += 1
-        elif diff <= 4:
-            counts["skip (3-4)"] += 1
-        elif diff <= 7:
-            counts["leap (5-7)"] += 1
-        else:
-            counts["jump (8+)"] += 1
-    return counts
-
-
-def _suggest_role(midi_notes, durations_ms):
-    """Suggest channel role based on pitch range and rhythm."""
-    if not midi_notes:
-        return "silent"
-    avg = sum(midi_notes) / len(midi_notes)
-    unique_durs = len(set(durations_ms))
-
-    if avg < 48:  # below C3
-        return "bass"
-    if avg < 60:  # C3-B3
-        if unique_durs <= 2:
-            return "bass"
-        return "bass/accompaniment"
-    if avg < 72:  # C4-B4
-        if unique_durs >= 3:
-            return "melody"
-        return "accompaniment"
-    return "melody (high)"
-
-
-def _analyze_wav(wav_path):
-    """Analyze WAV file and return frequency/amplitude report with musical analysis."""
-    with wave.open(wav_path, "r") as wf:
-        n_channels = wf.getnchannels()
-        sample_rate = wf.getframerate()
-        n_frames = wf.getnframes()
-        raw = wf.readframes(n_frames)
-
-    if n_frames == 0:
-        return "Empty audio (0 samples)"
-
-    samples = list(struct.unpack(f"<{n_frames * n_channels}h", raw))
-    if n_channels > 1:
-        samples = [
-            sum(samples[i : i + n_channels]) // n_channels
-            for i in range(0, len(samples), n_channels)
-        ]
-
-    duration = n_frames / sample_rate
-    peak = max(abs(s) for s in samples)
-    rms = math.sqrt(sum(s * s for s in samples) / len(samples))
-
-    # Time-windowed analysis (100ms windows)
-    window_size = sample_rate // 10
-    segments = []
-    for start in range(0, len(samples), window_size):
-        w = samples[start : start + window_size]
-        if len(w) < 50:
-            break
-        w_rms = math.sqrt(sum(s * s for s in w) / len(w))
-        if w_rms < 50:
-            segments.append(("~", 0, w_rms))
-            continue
-        freq = _estimate_freq(w, sample_rate)
-        note = _freq_to_note(freq) if freq > 0 else "~"
-        segments.append((note, freq, w_rms))
-
-    # Group consecutive identical notes
-    grouped = []
-    for note, freq, w_rms in segments:
-        if grouped and grouped[-1][0] == note:
-            grouped[-1] = (
-                note,
-                freq,
-                max(grouped[-1][2], w_rms),
-                grouped[-1][3] + 100,
-            )
-        else:
-            grouped.append((note, freq, w_rms, 100))
-
-    lines = [
-        f"Duration: {duration:.2f}s | Peak: {peak / 327.67:.0f}%"
-        f" | RMS: {rms / 327.67:.0f}%",
-        "",
-        "Note sequence:",
-    ]
-    time_ms = 0
-    for note, freq, w_rms, dur_ms in grouped:
-        if note == "~":
-            lines.append(f"  {time_ms / 1000:.1f}s [{dur_ms}ms] rest")
-        else:
-            lines.append(
-                f"  {time_ms / 1000:.1f}s [{dur_ms}ms] {note}"
-                f" (~{freq:.0f}Hz) vol={w_rms / 327.67:.0f}%"
-            )
-        time_ms += dur_ms
-
-    # --- Musical analysis ---
-    played = [(n, f, r, d) for n, f, r, d in grouped if n != "~"]
-    if played:
-        midi_notes = [_freq_to_midi(f) for _, f, _, _ in played if f > 0]
-        durations = [d for _, _, _, d in played]
-
-        if midi_notes:
-            lo_note = _freq_to_note(min(f for _, f, _, _ in played if f > 0))
-            hi_note = _freq_to_note(max(f for _, f, _, _ in played if f > 0))
-            semitone_range = max(midi_notes) - min(midi_notes)
-
-            lines.append("")
-            lines.append("Musical analysis:")
-            lines.append(
-                f"  Pitch range: {lo_note} - {hi_note}"
-                f" ({semitone_range} semitones)"
-            )
-
-            # Note frequency (most common)
-            note_counts = {}
-            for n, _, _, _ in played:
-                note_counts[n] = note_counts.get(n, 0) + 1
-            top_notes = sorted(note_counts.items(), key=lambda x: -x[1])[:6]
-            lines.append(
-                "  Top notes: "
-                + " ".join(f"{n}({c}x)" for n, c in top_notes)
-            )
-
-            # Key detection
-            key = _detect_key(midi_notes)
-            lines.append(f"  Key estimate: {key}")
-
-            # Interval analysis
-            intervals = _analyze_intervals(midi_notes)
-            if intervals:
-                total = sum(intervals.values())
-                parts = []
-                for label, count in intervals.items():
-                    if count > 0:
-                        pct = count * 100 // total
-                        parts.append(f"{label}:{pct}%")
-                lines.append(f"  Intervals: {' '.join(parts)}")
-
-            # Rhythm pattern
-            dur_counts = {}
-            for d in durations:
-                dur_counts[d] = dur_counts.get(d, 0) + 1
-            top_durs = sorted(dur_counts.items(), key=lambda x: -x[1])[:4]
-            lines.append(
-                "  Rhythm: "
-                + " ".join(f"{d}ms({c}x)" for d, c in top_durs)
-            )
-
-            # Role suggestion
-            role = _suggest_role(midi_notes, durations)
-            lines.append(f"  Suggested role: {role}")
-
-    return "\n".join(lines)
-
-
 @mcp.tool()
 async def render_audio(
     script_path: str,
@@ -1385,7 +1118,7 @@ async def render_audio(
                 pass
 
         try:
-            analysis = await asyncio.to_thread(_analyze_wav, output_path)
+            analysis = await asyncio.to_thread(analyze_wav, output_path)
         except Exception as e:
             analysis = f"WAV analysis failed: {e}"
 
