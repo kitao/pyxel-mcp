@@ -1,11 +1,9 @@
 """MCP server for Pyxel, a retro game engine for Python."""
 
-import ast
 import asyncio
 import glob
 import json
 import os
-import re
 import shutil
 import sys
 import tempfile
@@ -16,6 +14,7 @@ from mcp.server.fastmcp import FastMCP, Image
 from pyxel_mcp._audio import analyze_wav
 from pyxel_mcp._errors import decode_stderr, extract_stdout
 from pyxel_mcp._palette import color_name, color_contrast
+from pyxel_mcp._validate import validate_source
 
 HARNESS_PATH = os.path.join(os.path.dirname(__file__), "harness.py")
 AUDIO_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "audio_harness.py")
@@ -1812,35 +1811,6 @@ async def inspect_state(
 # --- Script validation ---
 
 
-_PYXEL_ANTIPATTERNS = [
-    (
-        r"pyxel\.run\s*\(",
-        "draw",
-        "pyxel.run() called inside draw(). Move it to __init__.",
-    ),
-    (
-        r"pyxel\.init\s*\(",
-        "update",
-        "pyxel.init() called inside update(). Move it to __init__.",
-    ),
-    (
-        r"pyxel\.init\s*\(",
-        "draw",
-        "pyxel.init() called inside draw(). Move it to __init__.",
-    ),
-    (
-        r"math\.sin\b|math\.cos\b",
-        None,
-        "Using math.sin/cos (radians). Pyxel's pyxel.sin/cos use degrees.",
-    ),
-    (
-        r"random\.randint\b",
-        None,
-        "Using random.randint. Prefer pyxel.rndi(a, b) for Pyxel games.",
-    ),
-]
-
-
 @mcp.tool()
 async def validate_script(script_path: str) -> str:
     """Validate a Pyxel script without running it.
@@ -1862,69 +1832,7 @@ async def validate_script(script_path: str) -> str:
     except Exception as e:
         return f"Error reading file: {e}"
 
-    # Syntax check
-    issues = []
-    try:
-        tree = ast.parse(source, filename=script_path)
-    except SyntaxError as e:
-        return f"Syntax error at line {e.lineno}: {e.msg}"
-
-    # Collect function/method bodies for context-aware checks
-    method_bodies = {}
-    for node in ast.walk(tree):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            start = node.lineno
-            end = node.end_lineno or start
-            body_lines = source.split("\n")[start - 1:end]
-            body_text = "\n".join(body_lines)
-            method_bodies[node.name] = body_text
-
-    # Anti-pattern checks
-    for pattern, context, message in _PYXEL_ANTIPATTERNS:
-        if context:
-            text = method_bodies.get(context, "")
-        else:
-            text = source
-        if re.search(pattern, text):
-            issues.append(message)
-
-    # Check for missing pyxel import
-    has_pyxel_import = bool(re.search(r"import\s+pyxel|from\s+pyxel", source))
-    if not has_pyxel_import:
-        issues.append("No 'import pyxel' found.")
-
-    # Check for missing pyxel.init
-    if not re.search(r"pyxel\.init\s*\(", source):
-        issues.append("No pyxel.init() call found.")
-
-    # Check for game loop
-    has_run = bool(re.search(r"pyxel\.run\s*\(", source))
-    has_show = bool(re.search(r"pyxel\.show\s*\(", source))
-    has_flip = bool(re.search(r"pyxel\.flip\s*\(", source))
-    if not (has_run or has_show or has_flip):
-        issues.append("No pyxel.run(), show(), or flip() call found.")
-
-    # Check for cls in draw
-    if "draw" in method_bodies:
-        if not re.search(r"pyxel\.cls\s*\(|cls\s*\(", method_bodies["draw"]):
-            issues.append("draw() may be missing pyxel.cls(). Screen won't clear.")
-
-    # Basic stats
-    n_classes = sum(1 for n in ast.walk(tree) if isinstance(n, ast.ClassDef))
-    n_functions = sum(1 for n in ast.walk(tree) if isinstance(n, ast.FunctionDef))
-    n_lines = len(source.split("\n"))
-
-    report = f"Script: {os.path.basename(script_path)}"
-    report += f"  ({n_lines} lines, {n_classes} classes, {n_functions} functions)"
-
-    if issues:
-        report += f"\n\nWarnings ({len(issues)}):"
-        for issue in issues:
-            report += f"\n  - {issue}"
-    else:
-        report += "\n\nNo issues found."
-
-    return report
+    return validate_source(source, os.path.basename(script_path))
 
 
 # --- Screen analysis ---
