@@ -28,7 +28,10 @@ classifiers = [
     "Topic :: Games/Entertainment",
     "Topic :: Software Development :: Libraries",
 ]
-dependencies = ["mcp>=1.0.0,<2.0.0", "pyxel>=2.8.8"]
+dependencies = ["mcp>=1.0.0,<2.0.0", "pyxel>=2.8.8", "numpy"]
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-asyncio"]
 
 [project.urls]
 Homepage = "https://github.com/kitao/pyxel-mcp"
@@ -41,6 +44,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pyxel_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [project.scripts]
 pyxel-mcp = "pyxel_mcp.server:main"
