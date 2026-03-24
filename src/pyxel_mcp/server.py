@@ -16,6 +16,8 @@ from importlib.util import find_spec
 
 from mcp.server.fastmcp import FastMCP, Image
 
+from pyxel_mcp._errors import decode_stderr, extract_stdout
+
 HARNESS_PATH = os.path.join(os.path.dirname(__file__), "harness.py")
 AUDIO_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "audio_harness.py")
 SPRITE_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "sprite_harness.py")
@@ -26,9 +28,6 @@ STATE_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "state_harness.py")
 SCREEN_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "screen_harness.py")
 TILEMAP_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "tilemap_harness.py")
 BANK_HARNESS_PATH = os.path.join(os.path.dirname(__file__), "bank_harness.py")
-
-_MAX_STDERR = 4000
-
 
 def _pyxel_dir():
     """Find installed Pyxel package directory (without importing Pyxel)."""
@@ -42,89 +41,6 @@ def _pyxel_dir():
     except (ModuleNotFoundError, ValueError):
         pass
     return None
-
-
-def _decode_stderr(stderr):
-    """Decode subprocess stderr, truncating if too long."""
-    if not stderr:
-        return ""
-    text = stderr.decode(errors="replace").strip()
-    if len(text) > _MAX_STDERR:
-        text = text[:_MAX_STDERR] + "\n... (truncated)"
-    return _enrich_error(text)
-
-
-_ERROR_HINTS = [
-    (
-        r"TypeError.*blt\(\)",
-        "blt(x, y, img, u, v, w, h, [colkey], [rotate], [scale])."
-        " img can be int 0-2 or an Image instance. Use colkey=0 for transparency.",
-    ),
-    (
-        r"TypeError.*bltm\(\)",
-        "bltm(x, y, tm, u, v, w, h, [colkey], [rotate], [scale]). u,v,w,h are in pixels."
-        " tm can be int 0-7 or a Tilemap instance.",
-    ),
-    (
-        r"IndexError.*(image|sound|music|tilemap)",
-        "Default slots: images[0-2], tilemaps[0-7], sounds[0-63], musics[0-7]."
-        " All lists are extensible via append()/slice assignment."
-        " You can also create standalone instances with Image(), Sound(), etc.",
-    ),
-    (
-        r"AttributeError.*module.*pyxel.*has no attribute",
-        "Check API spelling. Common: btnp (not button_pressed),"
-        " rndi (not randint), cls (not clear). Run pyxel_info for stubs.",
-    ),
-    (
-        r"NameError.*name '(\w+)' is not defined",
-        "If using a Pyxel constant like KEY_SPACE, use pyxel.KEY_SPACE.",
-    ),
-    (
-        r"TypeError.*'int' object is not callable",
-        "pyxel.mouse_x and pyxel.mouse_y are variables, not functions."
-        " Use them without ().",
-    ),
-    (
-        r"RecursionError",
-        "Check that update()/draw() don't call pyxel.run() again."
-        " Ensure __init__ doesn't create recursive instances.",
-    ),
-]
-
-
-def _enrich_error(text):
-    """Append fix suggestions to common Pyxel error messages."""
-    if not text:
-        return text
-    hints = []
-    for pattern, suggestion in _ERROR_HINTS:
-        if re.search(pattern, text, re.IGNORECASE | re.DOTALL):
-            hints.append(suggestion)
-    if not hints:
-        return text
-    return text + "\n\nHint: " + " ".join(hints)
-
-
-def _extract_stdout(raw_stdout):
-    """Separate user print output from harness JSON in stdout.
-
-    Returns (json_str, user_output). The harness always prints JSON as
-    the last non-empty line. Everything before it is user print output.
-    """
-    text = raw_stdout.decode(errors="replace").strip()
-    if not text:
-        return "", ""
-    lines = text.split("\n")
-    # Find the last line that looks like JSON
-    for i in range(len(lines) - 1, -1, -1):
-        stripped = lines[i].strip()
-        if stripped.startswith(("{", "[")):
-            json_str = stripped
-            user_lines = lines[:i]
-            user_output = "\n".join(user_lines).strip()
-            return json_str, user_output
-    return text, ""
 
 
 _INSTRUCTIONS = """\
@@ -1083,14 +999,14 @@ async def run_and_capture(
         )
 
         if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
-            error_msg = _decode_stderr(stderr) or "Unknown error"
+            error_msg = decode_stderr(stderr) or "Unknown error"
             return [f"Capture failed (exit code {proc.returncode}): {error_msg}"]
 
         with open(output_path, "rb") as f:
             image_data = f.read()
         result = [Image(data=image_data, format="png")]
         info = f"Captured at frame {frames}, scale {scale}x"
-        stderr_text = _decode_stderr(stderr)
+        stderr_text = decode_stderr(stderr)
         if stderr_text:
             info += f"\nstderr: {stderr_text}"
         result.append(info)
@@ -1455,14 +1371,14 @@ async def render_audio(
         )
 
         if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
-            error_msg = _decode_stderr(stderr) or "Unknown error"
+            error_msg = decode_stderr(stderr) or "Unknown error"
             return f"Render failed (exit code {proc.returncode}): {error_msg}"
 
         meta = {}
         user_output = ""
         if stdout:
             try:
-                json_str, user_output = _extract_stdout(stdout)
+                json_str, user_output = extract_stdout(stdout)
                 meta = json.loads(json_str) if json_str else {}
             except (json.JSONDecodeError, ValueError):
                 pass
@@ -1486,7 +1402,7 @@ async def render_audio(
             )
         if user_output:
             result = f"Script output:\n{user_output}\n\n{result}"
-        stderr_text = _decode_stderr(stderr)
+        stderr_text = decode_stderr(stderr)
         if stderr_text:
             result += f"\n\nstderr: {stderr_text}"
         return result
@@ -1598,16 +1514,16 @@ async def inspect_sprite(
         )
 
         if proc.returncode != 0:
-            error_msg = _decode_stderr(stderr) or "Unknown error"
+            error_msg = decode_stderr(stderr) or "Unknown error"
             return f"Inspect failed (exit code {proc.returncode}): {error_msg}"
 
-        json_str, user_output = _extract_stdout(stdout)
+        json_str, user_output = extract_stdout(stdout)
         data = json.loads(json_str)
         report = _format_sprite_report(data)
 
         if user_output:
             report = f"Script output:\n{user_output}\n\n{report}"
-        stderr_text = _decode_stderr(stderr)
+        stderr_text = decode_stderr(stderr)
         if stderr_text:
             report += f"\n\nstderr: {stderr_text}"
         return report
@@ -1692,10 +1608,10 @@ async def capture_frames(
                 result.append("Captured via pyxel.show()")
 
         if not result:
-            error_msg = _decode_stderr(stderr) or "No frames captured"
+            error_msg = decode_stderr(stderr) or "No frames captured"
             return [f"Capture failed (exit code {proc.returncode}): {error_msg}"]
 
-        stderr_text = _decode_stderr(stderr)
+        stderr_text = decode_stderr(stderr)
         info = f"Captured {len([r for r in result if isinstance(r, Image)])} frames"
         if stderr_text:
             info += f"\nstderr: {stderr_text}"
@@ -1800,10 +1716,10 @@ async def play_and_capture(
                 result.append("Captured via pyxel.show()")
 
         if not result:
-            error_msg = _decode_stderr(stderr) or "No frames captured"
+            error_msg = decode_stderr(stderr) or "No frames captured"
             return [f"Capture failed (exit code {proc.returncode}): {error_msg}"]
 
-        stderr_text = _decode_stderr(stderr)
+        stderr_text = decode_stderr(stderr)
         info = f"Captured {len([r for r in result if isinstance(r, Image)])} frames"
         n_inputs = len(input_data)
         info += f" with {n_inputs} input event{'s' if n_inputs != 1 else ''}"
@@ -1986,16 +1902,16 @@ async def inspect_layout(
         )
 
         if proc.returncode != 0:
-            error_msg = _decode_stderr(stderr) or "Unknown error"
+            error_msg = decode_stderr(stderr) or "Unknown error"
             return f"Layout analysis failed (exit code {proc.returncode}): {error_msg}"
 
-        json_str, user_output = _extract_stdout(stdout)
+        json_str, user_output = extract_stdout(stdout)
         data = json.loads(json_str)
         report = _format_layout_report(data)
 
         if user_output:
             report = f"Script output:\n{user_output}\n\n{report}"
-        stderr_text = _decode_stderr(stderr)
+        stderr_text = decode_stderr(stderr)
         if stderr_text:
             report += f"\n\nstderr: {stderr_text}"
         return report
@@ -2140,10 +2056,10 @@ async def inspect_state(
         )
 
         if proc.returncode != 0:
-            error_msg = _decode_stderr(stderr) or "Unknown error"
+            error_msg = decode_stderr(stderr) or "Unknown error"
             return f"State inspection failed (exit code {proc.returncode}): {error_msg}"
 
-        json_str, user_output = _extract_stdout(stdout)
+        json_str, user_output = extract_stdout(stdout)
         data = json.loads(json_str)
 
         if isinstance(data, list):
@@ -2154,7 +2070,7 @@ async def inspect_state(
         if user_output:
             report = f"Script output:\n{user_output}\n\n{report}"
 
-        stderr_text = _decode_stderr(stderr)
+        stderr_text = decode_stderr(stderr)
         if stderr_text:
             report += f"\n\nstderr: {stderr_text}"
         return report
@@ -2320,13 +2236,13 @@ async def _run_screen_harness(script_path, frame_csv, timeout=10):
         proc.communicate(), timeout=timeout
     )
     if proc.returncode != 0:
-        error_msg = _decode_stderr(stderr) or "Unknown error"
+        error_msg = decode_stderr(stderr) or "Unknown error"
         raise RuntimeError(
             f"Screen capture failed (exit code {proc.returncode}): {error_msg}"
         )
-    json_str, user_output = _extract_stdout(stdout)
+    json_str, user_output = extract_stdout(stdout)
     data = json.loads(json_str)
-    return data, user_output, _decode_stderr(stderr)
+    return data, user_output, decode_stderr(stderr)
 
 
 @mcp.tool()
@@ -2619,10 +2535,10 @@ async def inspect_tilemap(
         )
 
         if proc.returncode != 0:
-            error_msg = _decode_stderr(stderr) or "Unknown error"
+            error_msg = decode_stderr(stderr) or "Unknown error"
             return f"Tilemap inspection failed (exit code {proc.returncode}): {error_msg}"
 
-        json_str, user_output = _extract_stdout(stdout)
+        json_str, user_output = extract_stdout(stdout)
         data = json.loads(json_str)
 
         lines = [
@@ -2659,7 +2575,7 @@ async def inspect_tilemap(
         result = "\n".join(lines)
         if user_output:
             result = f"Script output:\n{user_output}\n\n{result}"
-        stderr_text = _decode_stderr(stderr)
+        stderr_text = decode_stderr(stderr)
         if stderr_text:
             result += f"\n\nstderr: {stderr_text}"
         return result
@@ -2726,10 +2642,10 @@ async def inspect_bank(
                 result.append(Image(data=f.read(), format="png"))
             result.append(f"Image bank {bank} (up to 256x256 pixels)")
         else:
-            error_msg = _decode_stderr(stderr) or "No output captured"
+            error_msg = decode_stderr(stderr) or "No output captured"
             return [f"Bank capture failed (exit code {proc.returncode}): {error_msg}"]
 
-        stderr_text = _decode_stderr(stderr)
+        stderr_text = decode_stderr(stderr)
         if stderr_text:
             result.append(f"stderr: {stderr_text}")
         return result
