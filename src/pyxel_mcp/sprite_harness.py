@@ -4,7 +4,10 @@ Runs a Pyxel script with game loop patched to no-ops, then reads pixel
 data from the specified image bank region and outputs analysis as JSON.
 
 Usage:
-    python sprite_harness.py <script> <image> <x> <y> <w> <h>
+    python sprite_harness.py <script> <image> <x> <y> <w> <h> [frame_count]
+
+When frame_count > 1, reads frame_count adjacent horizontal regions
+starting at (x, y) and includes a "frames" array in the JSON output.
 """
 
 import json
@@ -13,7 +16,7 @@ import sys
 
 if len(sys.argv) < 7:
     print(
-        "Usage: sprite_harness <script> <image> <x> <y> <w> <h>",
+        "Usage: sprite_harness <script> <image> <x> <y> <w> <h> [frame_count]",
         file=sys.stderr,
     )
     sys.exit(1)
@@ -24,6 +27,7 @@ sx = int(sys.argv[3])
 sy = int(sys.argv[4])
 sw = int(sys.argv[5])
 sh = int(sys.argv[6])
+frame_count = int(sys.argv[7]) if len(sys.argv) > 7 else 1
 
 import pyxel
 
@@ -137,5 +141,32 @@ result = {
     "edge_colors": edge_colors[:50],
     "center_colors": center_colors[:50],
 }
+
+# Multi-frame support: read adjacent horizontal regions
+if frame_count > 1:
+    img = pyxel.images[image_idx]
+    all_frames = []
+    for fi in range(frame_count):
+        fx = sx + fi * sw
+        frame_pixels = []
+        for fy in range(sy, sy + sh):
+            row = []
+            for fxp in range(fx, fx + sw):
+                row.append(img.pget(fxp, fy))
+            frame_pixels.append(row)
+
+        fc_colors = {}
+        for row in frame_pixels:
+            for c in row:
+                fc_colors[c] = fc_colors.get(c, 0) + 1
+
+        all_frames.append({
+            "offset_x": fx,
+            "pixels": frame_pixels,
+            "color_count": fc_colors,
+        })
+
+    result["frames"] = all_frames
+
 print(json.dumps(result))
 sys.stdout.flush()

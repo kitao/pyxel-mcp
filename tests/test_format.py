@@ -5,6 +5,7 @@ from pyxel_mcp._format import (
     format_layout_report,
     format_state_report,
     format_state_timeline,
+    format_animation_report,
 )
 
 
@@ -485,3 +486,106 @@ def test_timeline_skips_type_key():
     b = {"frame": 2, "app_type": "App", "attributes": {"__type__": "App", "x": 1}, "pyxel": {}}
     out = format_state_timeline([a, b])
     assert "__type__" not in out
+
+
+# --- format_animation_report ---
+
+def _make_frame(pixels):
+    """Build a frame dict from a 2D pixel list."""
+    color_count = {}
+    for row in pixels:
+        for c in row:
+            color_count[c] = color_count.get(c, 0) + 1
+    return {"offset_x": 0, "pixels": pixels, "color_count": color_count}
+
+
+_ANIM_FRAME_A = _make_frame([[0, 1, 1, 0], [0, 2, 2, 0], [0, 1, 1, 0], [0, 0, 0, 0]])
+_ANIM_FRAME_B = _make_frame([[0, 1, 1, 0], [0, 2, 2, 0], [0, 0, 0, 0], [0, 1, 1, 0]])
+_ANIM_FRAME_C = _make_frame([[0, 3, 3, 0], [0, 3, 3, 0], [0, 1, 1, 0], [0, 0, 0, 0]])
+
+_ANIM_DATA = {
+    "image": 0,
+    "region": {"x": 0, "y": 0, "w": 4, "h": 4},
+    "frames": [_ANIM_FRAME_A, _ANIM_FRAME_B],
+}
+
+
+def test_animation_report_header():
+    out = format_animation_report(_ANIM_DATA)
+    assert "Animation: image[0]" in out
+    assert "4x4" in out
+    assert "x2 frames" in out
+
+
+def test_animation_report_color_summary():
+    out = format_animation_report(_ANIM_DATA)
+    assert "Colors:" in out
+    assert "shared across all frames" in out
+
+
+def test_animation_report_per_frame_info():
+    out = format_animation_report(_ANIM_DATA)
+    assert "Frame 0:" in out
+    assert "Frame 1:" in out
+    assert "filled pixels" in out
+
+
+def test_animation_report_frame_differences():
+    out = format_animation_report(_ANIM_DATA)
+    assert "Frame differences:" in out
+    assert "Frame 0→1:" in out
+
+
+def test_animation_report_no_frames():
+    data = {"image": 0, "region": {"x": 0, "y": 0, "w": 8, "h": 8}, "frames": []}
+    out = format_animation_report(data)
+    assert "No animation frames found." in out
+
+
+def test_animation_report_palette_drift_suggestion():
+    """Frames with unique colors should trigger palette drift suggestion."""
+    data = {
+        "image": 0,
+        "region": {"x": 0, "y": 0, "w": 4, "h": 4},
+        "frames": [_ANIM_FRAME_A, _ANIM_FRAME_C],
+    }
+    out = format_animation_report(data)
+    assert "Suggestions" in out
+    assert "unique colors" in out
+
+
+def test_animation_report_no_suggestions_when_consistent():
+    """Identical frames should produce no suggestions."""
+    data = {
+        "image": 0,
+        "region": {"x": 0, "y": 0, "w": 4, "h": 4},
+        "frames": [_ANIM_FRAME_A, _ANIM_FRAME_A],
+    }
+    out = format_animation_report(data)
+    assert "Suggestions" not in out
+
+
+def test_animation_report_silhouette_size_suggestion():
+    """Frames with very different fill counts should warn about silhouette size."""
+    big = _make_frame([[1, 1, 1, 1]] * 4)   # 16 non-zero pixels
+    tiny = _make_frame([[0, 0, 0, 0]] * 3 + [[0, 1, 0, 0]])  # 1 non-zero pixel
+    data = {
+        "image": 0,
+        "region": {"x": 0, "y": 0, "w": 4, "h": 4},
+        "frames": [big, tiny],
+    }
+    out = format_animation_report(data)
+    assert "Suggestions" in out
+    assert "size differs significantly" in out
+
+
+def test_animation_report_three_frames():
+    """Three-frame animation should show two difference lines."""
+    data = {
+        "image": 0,
+        "region": {"x": 0, "y": 0, "w": 4, "h": 4},
+        "frames": [_ANIM_FRAME_A, _ANIM_FRAME_B, _ANIM_FRAME_A],
+    }
+    out = format_animation_report(data)
+    assert "Frame 0→1:" in out
+    assert "Frame 1→2:" in out

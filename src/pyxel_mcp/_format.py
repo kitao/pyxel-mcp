@@ -456,6 +456,75 @@ def format_palette_report(snap, user_output=None, stderr_text=None):
     return result
 
 
+def format_animation_report(data):
+    """Format animation consistency report."""
+    frames = data.get("frames", [])
+    if not frames:
+        return "No animation frames found."
+
+    region = data["region"]
+    lines = [
+        f"Animation: image[{data['image']}] ({region['x']},{region['y']}) "
+        f"{region['w']}x{region['h']} x{len(frames)} frames",
+        "",
+    ]
+
+    # Palette consistency: same colors used across frames
+    all_palettes = [set(f["color_count"].keys()) for f in frames]
+    common = set.intersection(*all_palettes) if all_palettes else set()
+    union = set.union(*all_palettes) if all_palettes else set()
+
+    lines.append(f"Colors: {len(union)} total, {len(common)} shared across all frames")
+
+    # Per-frame pixel count (silhouette size)
+    nonzero_counts = []
+    for i, f in enumerate(frames):
+        nz = sum(1 for row in f["pixels"] for c in row if c != 0)
+        nonzero_counts.append(nz)
+        lines.append(f"  Frame {i}: {nz} filled pixels, {len(f['color_count'])} colors")
+
+    # Pixel change between consecutive frames
+    lines.append("")
+    lines.append("Frame differences:")
+    for i in range(1, len(frames)):
+        prev = frames[i - 1]["pixels"]
+        curr = frames[i]["pixels"]
+        changed = sum(
+            1 for y in range(len(prev)) for x in range(len(prev[0]))
+            if prev[y][x] != curr[y][x]
+        )
+        total = len(prev) * len(prev[0])
+        pct = changed / total * 100 if total > 0 else 0
+        lines.append(f"  Frame {i-1}→{i}: {changed}/{total} pixels ({pct:.0f}%)")
+
+    # Suggestions
+    suggestions = []
+
+    # Silhouette consistency
+    if nonzero_counts:
+        avg = sum(nonzero_counts) / len(nonzero_counts)
+        for i, nz in enumerate(nonzero_counts):
+            if avg > 0 and abs(nz - avg) > avg * 0.3:
+                suggestions.append(
+                    f"Frame {i} size differs significantly ({nz} vs avg {avg:.0f})"
+                )
+
+    # Palette drift
+    for i, palette in enumerate(all_palettes):
+        extra = palette - common
+        if extra:
+            extra_names = ", ".join(str(c) for c in sorted(extra))
+            suggestions.append(f"Frame {i} uses unique colors: {extra_names}")
+
+    if suggestions:
+        lines.append("")
+        lines.append("=== Suggestions ===")
+        for s in suggestions:
+            lines.append(f"  - {s}")
+
+    return "\n".join(lines)
+
+
 def format_state_timeline(snapshots):
     """Format multi-frame state snapshots into a timeline diff report."""
     if not snapshots:

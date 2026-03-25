@@ -20,6 +20,7 @@ from pyxel_mcp._format import (
     format_palette_report,
     format_state_report,
     format_state_timeline,
+    format_animation_report,
 )
 from pyxel_mcp._palette import color_name, color_contrast
 from pyxel_mcp._validate import validate_source
@@ -305,6 +306,71 @@ async def inspect_sprite(
         return f"Timeout: script did not finish within {timeout}s"
     except json.JSONDecodeError as e:
         return f"Failed to parse sprite data: {e}"
+
+
+@mcp.tool()
+async def inspect_animation(
+    script_path: str,
+    image: int = 0,
+    x: int = 0,
+    y: int = 0,
+    w: int = 8,
+    h: int = 8,
+    frame_count: int = 2,
+    timeout: int = 10,
+) -> str:
+    """Check animation frame consistency in a sprite sheet.
+
+    Reads multiple adjacent horizontal frames and compares palette,
+    silhouette size, and pixel differences between frames.
+
+    Args:
+        script_path: Absolute path to the .py script to run.
+        image: Image bank index (default: 0).
+        x: X position of the first frame (default: 0).
+        y: Y position (default: 0).
+        w: Width of each frame (default: 8).
+        h: Height of each frame (default: 8).
+        frame_count: Number of animation frames to check (default: 2).
+        timeout: Maximum seconds to wait (default: 10).
+    """
+    if not _pyxel_dir():
+        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
+
+    script_path = os.path.abspath(script_path)
+    if not os.path.isfile(script_path):
+        return f"Error: script not found: {script_path}"
+
+    image = max(0, image)
+    x = max(0, x)
+    y = max(0, y)
+    w = max(1, w)
+    h = max(1, h)
+    frame_count = max(2, frame_count)
+    timeout = max(1, min(timeout, 60))
+
+    try:
+        data, user_output, stderr_text = await run_harness(
+            "sprite",
+            [script_path, str(image), str(x), str(y), str(w), str(h),
+             str(frame_count)],
+            cwd=os.path.dirname(script_path),
+            timeout=timeout,
+        )
+        report = format_animation_report(data)
+
+        if user_output:
+            report = f"Script output:\n{user_output}\n\n{report}"
+        if stderr_text:
+            report += f"\n\nstderr: {stderr_text}"
+        return report
+
+    except RuntimeError as e:
+        return str(e)
+    except asyncio.TimeoutError:
+        return f"Timeout: script did not finish within {timeout}s"
+    except json.JSONDecodeError as e:
+        return f"Failed to parse animation data: {e}"
 
 
 # --- Multi-frame capture ---
