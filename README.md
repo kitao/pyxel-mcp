@@ -24,6 +24,7 @@ MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for 
 - **`inspect_palette`** — Analyze color usage and contrast in a Pyxel screenshot
 - **`inspect_bank`** — Visualize an entire Pyxel image bank as a single screenshot
 - **`inspect_tilemap`** — Inspect tilemap content, tile usage, and layout
+- **`inspect_animation`** — Check sprite sheet consistency across animation frames
 
 ### Audio
 
