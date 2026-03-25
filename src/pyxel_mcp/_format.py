@@ -132,6 +132,7 @@ def format_layout_report(data):
     sw, sh = screen["w"], screen["h"]
     bg = data["bg_color"]
     warnings = []
+    suggestions = []
     lines = [
         f"Screen: {sw}x{sh}  bg_color: {bg}"
         f" ({color_name(bg)})",
@@ -150,6 +151,11 @@ def format_layout_report(data):
             f" offset=({off_x:+.0f},{off_y:+.0f})px"
         )
 
+    # Font height
+    font_height = data.get("font_height")
+    if font_height is not None:
+        lines.append(f"Detected font height: {font_height}px")
+
     # Margins
     margins = data.get("margins")
     if margins:
@@ -166,12 +172,20 @@ def format_layout_report(data):
                     f"Vertical margin imbalance: top={t} vs bottom={b}"
                     f" — content not vertically centered"
                 )
+                suggestions.append(
+                    f"Center content vertically: top={t} vs bottom={b}"
+                    f" — adjust y position or screen height"
+                )
         if max(l, r) > 0 and min(l, r) >= 0:
             h_ratio = max(l, r) / max(min(l, r), 1)
             if h_ratio > 2.0 and abs(l - r) > 4:
                 warnings.append(
                     f"Horizontal margin imbalance: left={l} vs right={r}"
                     f" — content not horizontally centered"
+                )
+                suggestions.append(
+                    f"Center content horizontally: left={l} vs right={r}"
+                    f" — adjust x position or screen width"
                 )
 
     # Balance
@@ -187,8 +201,16 @@ def format_layout_report(data):
     )
     if h_bal < 0.7:
         warnings.append("Significant left/right imbalance")
+        suggestions.append(
+            "Redistribute content horizontally — left/right pixel"
+            " ratio is below 70%"
+        )
     if v_bal < 0.7:
         warnings.append("Significant top/bottom imbalance")
+        suggestions.append(
+            "Redistribute content vertically — top/bottom pixel"
+            " ratio is below 70%"
+        )
 
     # Center of mass
     com = data.get("center_of_mass")
@@ -217,6 +239,30 @@ def format_layout_report(data):
                          "bl": "bottom-left", "br": "bottom-right"}[name]
                 warnings.append(f"Near-empty quadrant: {label} ({pct:.0f}%)")
 
+    # Grid alignment
+    grid_align = data.get("grid_alignment")
+    if grid_align:
+        parts = []
+        for grid in [8, 16]:
+            info = grid_align.get(grid) or grid_align.get(str(grid))
+            if info:
+                score = info["score"]
+                parts.append(f"{grid}px:{score}/4")
+        if parts:
+            lines.append(f"Grid alignment: {', '.join(parts)}")
+        # Suggest grid alignment if both scores are low
+        for grid in [8, 16]:
+            info = grid_align.get(grid) or grid_align.get(str(grid))
+            if info and info["score"] < 2:
+                misaligned = []
+                for axis in ["x", "y", "w", "h"]:
+                    if not info[axis]:
+                        misaligned.append(axis)
+                suggestions.append(
+                    f"Align content to {grid}px grid:"
+                    f" {', '.join(misaligned)} not on {grid}px boundary"
+                )
+
     # Text lines
     text_lines = data.get("text_lines", [])
     if text_lines:
@@ -244,6 +290,13 @@ def format_layout_report(data):
         lines.append("")
         for w in warnings:
             lines.append(f"  ⚠ {w}")
+
+    # Suggestions
+    if suggestions:
+        lines.append("")
+        lines.append("=== Suggestions ===")
+        for s in suggestions:
+            lines.append(f"  - {s}")
 
     return "\n".join(lines)
 

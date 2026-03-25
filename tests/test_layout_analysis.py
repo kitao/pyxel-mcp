@@ -71,6 +71,8 @@ detect_text = _lh.detect_text
 merge_text_spans = _lh.merge_text_spans
 dedup_text_by_y = _lh.dedup_text_by_y
 analyze_text_alignment = _lh.analyze_text_alignment
+estimate_font_height = _lh.estimate_font_height
+check_grid_alignment = _lh.check_grid_alignment
 
 
 # --- find_bg_color ---
@@ -266,3 +268,71 @@ def test_analyze_text_alignment_offset():
 def test_analyze_text_alignment_empty():
     result = analyze_text_alignment([], screen_w=100)
     assert result == []
+
+
+# --- estimate_font_height ---
+
+def test_estimate_font_height_default():
+    """Empty grid (all background) returns default of 6."""
+    pixels = [[0] * 16 for _ in range(16)]
+    assert estimate_font_height(pixels, bg=0) == 6
+
+
+def test_estimate_font_height_empty_pixels():
+    """Empty pixel list returns default of 6."""
+    assert estimate_font_height([], bg=0) == 6
+
+
+def test_estimate_font_height_detects_span():
+    """Grid with an 8-row content band should estimate height ~8."""
+    # Build a 20x20 grid: rows 4-11 have some non-bg pixels (sparse enough)
+    pixels = [[0] * 20 for _ in range(20)]
+    for y in range(4, 12):
+        # Set a few pixels per row — bg_in_row should be >= 50%
+        pixels[y][5] = 7
+        pixels[y][6] = 7
+        pixels[y][8] = 7
+    result = estimate_font_height(pixels, bg=0)
+    # Should return 8 (the height of the span)
+    assert result == 8
+
+
+# --- check_grid_alignment ---
+
+def test_check_grid_alignment_8px():
+    """Content at 8px-aligned position and size returns high 8px score."""
+    bbox = {"x": 8, "y": 16, "w": 16, "h": 24}
+    result = check_grid_alignment(bbox, [])
+    assert result is not None
+    assert result[8]["score"] == 4
+    assert result[8]["x"] is True
+    assert result[8]["y"] is True
+    assert result[8]["w"] is True
+    assert result[8]["h"] is True
+
+
+def test_check_grid_alignment_16px():
+    """Content at 16px-aligned position and size returns high 16px score."""
+    bbox = {"x": 16, "y": 32, "w": 48, "h": 64}
+    result = check_grid_alignment(bbox, [])
+    assert result is not None
+    assert result[16]["score"] == 4
+    assert result[8]["score"] == 4  # 16px-aligned is also 8px-aligned
+
+
+def test_check_grid_alignment_none():
+    """No bbox returns None."""
+    result = check_grid_alignment(None, [])
+    assert result is None
+
+
+def test_check_grid_alignment_partial():
+    """Partially aligned content returns intermediate scores."""
+    bbox = {"x": 8, "y": 5, "w": 16, "h": 10}  # x,w aligned to 8; y,h not
+    result = check_grid_alignment(bbox, [])
+    assert result is not None
+    assert result[8]["score"] == 2
+    assert result[8]["x"] is True
+    assert result[8]["y"] is False
+    assert result[8]["w"] is True
+    assert result[8]["h"] is False

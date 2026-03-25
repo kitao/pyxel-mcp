@@ -130,6 +130,71 @@ def calc_margins(bbox, w, h):
     }
 
 
+def estimate_font_height(pixels, bg):
+    """Estimate font height from vertical pixel continuity.
+
+    Scans for rows where non-bg pixels form consistent vertical spans.
+    Returns estimated font height (default 6 if undetermined).
+    """
+    h = len(pixels)
+    if h == 0:
+        return 6
+    w = len(pixels[0])
+
+    # Find rows with sparse non-bg content (likely text rows)
+    span_heights = []
+    y = 0
+    while y < h:
+        bg_in_row = sum(1 for x in range(w) if pixels[y][x] == bg)
+        if bg_in_row < w * 0.5:
+            y += 1
+            continue
+        # Check if this row starts a text span
+        has_content = any(pixels[y][x] != bg for x in range(w))
+        if not has_content:
+            y += 1
+            continue
+        # Measure vertical extent of content at this row
+        span_h = 1
+        while y + span_h < h:
+            next_has = any(pixels[y + span_h][x] != bg for x in range(w))
+            next_bg = sum(1 for x in range(w) if pixels[y + span_h][x] == bg)
+            if not next_has or next_bg < w * 0.5:
+                break
+            span_h += 1
+        if 4 <= span_h <= 16:  # reasonable font height range
+            span_heights.append(span_h)
+        y += span_h + 1
+
+    if not span_heights:
+        return 6
+    # Most common height
+    from collections import Counter
+    return Counter(span_heights).most_common(1)[0][0]
+
+
+def check_grid_alignment(bbox, text_lines):
+    """Check if content aligns to 8px or 16px grid.
+
+    Returns alignment info dict, or None if no bbox.
+    """
+    if not bbox:
+        return None
+
+    checks = {}
+    for grid in [8, 16]:
+        x_aligned = bbox["x"] % grid == 0
+        y_aligned = bbox["y"] % grid == 0
+        w_aligned = bbox["w"] % grid == 0
+        h_aligned = bbox["h"] % grid == 0
+        checks[grid] = {
+            "x": x_aligned, "y": y_aligned,
+            "w": w_aligned, "h": h_aligned,
+            "score": sum([x_aligned, y_aligned, w_aligned, h_aligned]),
+        }
+    return checks
+
+
 def detect_text(pixels, bg):
     """Detect text-like horizontal spans in the pixel grid.
 
@@ -138,7 +203,7 @@ def detect_text(pixels, bg):
     """
     h = len(pixels)
     w = len(pixels[0]) if h > 0 else 0
-    FONT_H = 6
+    FONT_H = estimate_font_height(pixels, bg)
     MIN_TEXT_W = 10  # minimum ~3 characters
     text_spans = []
 
@@ -295,6 +360,7 @@ def _analyze_and_quit():
     balance = calc_balance(pixels, bg_color)
     margins = calc_margins(bbox, w, h) if bbox else None
 
+    font_h = estimate_font_height(pixels, bg_color)
     spans = detect_text(pixels, bg_color)
     merged = merge_text_spans(spans)
     text_lines = dedup_text_by_y(merged)
@@ -311,6 +377,8 @@ def _analyze_and_quit():
         "quadrants": balance["quadrants"],
         "center_of_mass": balance["center_of_mass"],
         "text_lines": text_alignment,
+        "font_height": font_h,
+        "grid_alignment": check_grid_alignment(bbox, text_alignment),
     }
     print(json.dumps(result))
     sys.stdout.flush()

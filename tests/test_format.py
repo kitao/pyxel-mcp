@@ -255,6 +255,11 @@ _LAYOUT_DATA = {
     "text_lines": [
         {"y": 10, "x": 60, "w": 40, "color": 7, "offset_from_center": 0},
     ],
+    "font_height": 6,
+    "grid_alignment": {
+        8: {"x": True, "y": False, "w": True, "h": False, "score": 2},
+        16: {"x": False, "y": False, "w": False, "h": False, "score": 0},
+    },
 }
 
 
@@ -326,6 +331,44 @@ def test_layout_report_text_alignment_warning():
     ]
     out = format_layout_report(data)
     assert "Text alignment varies" in out
+
+
+def test_layout_report_font_height():
+    """Font height should appear in report when present."""
+    out = format_layout_report(_LAYOUT_DATA)
+    assert "Detected font height: 6px" in out
+
+
+def test_layout_report_font_height_absent():
+    """Report should not error when font_height key is missing."""
+    data = dict(_LAYOUT_DATA)
+    data.pop("font_height", None)
+    out = format_layout_report(data)
+    assert "font height" not in out
+
+
+def test_layout_report_grid_alignment_shown():
+    """Grid alignment scores should appear in report."""
+    out = format_layout_report(_LAYOUT_DATA)
+    assert "Grid alignment:" in out
+    assert "8px:" in out
+    assert "16px:" in out
+
+
+def test_layout_report_grid_alignment_suggestion():
+    """Low grid alignment score should generate a suggestion."""
+    out = format_layout_report(_LAYOUT_DATA)
+    # 16px score is 0 — should suggest alignment
+    assert "=== Suggestions ===" in out
+    assert "16px grid" in out
+
+
+def test_layout_report_no_grid_alignment_absent():
+    """Report should not error when grid_alignment key is missing."""
+    data = dict(_LAYOUT_DATA)
+    data.pop("grid_alignment", None)
+    out = format_layout_report(data)
+    assert "Grid alignment" not in out
 
 
 # --- format_state_report ---
