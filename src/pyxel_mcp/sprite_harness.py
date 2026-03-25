@@ -82,6 +82,45 @@ for row in pixels:
     for c in row:
         color_count[c] = color_count.get(c, 0) + 1
 
+# Border (outline) analysis: count non-zero pixels on the sprite boundary
+border_nonzero = 0
+border_total = 0
+if sh > 0 and sw > 0:
+    for x_idx in range(sw):
+        border_total += 2
+        if pixels[0][x_idx] != 0:
+            border_nonzero += 1
+        if pixels[sh - 1][x_idx] != 0:
+            border_nonzero += 1
+    for y_idx in range(1, sh - 1):
+        border_total += 2
+        if pixels[y_idx][0] != 0:
+            border_nonzero += 1
+        if pixels[y_idx][sw - 1] != 0:
+            border_nonzero += 1
+
+# Fill ratio: non-zero pixels / total pixels
+total_pixels = sw * sh
+nonzero = sum(1 for row in pixels for c in row if c != 0)
+fill_ratio = round(nonzero / total_pixels, 3) if total_pixels > 0 else 0.0
+
+# Edge vs center color distribution (for pillow shading detection)
+# Classify each non-zero pixel by Manhattan distance from center
+cx, cy = sw / 2.0, sh / 2.0
+max_dist = cx + cy
+edge_colors = []
+center_colors = []
+for y_idx in range(sh):
+    for x_idx in range(sw):
+        c = pixels[y_idx][x_idx]
+        if c == 0:
+            continue
+        dist = abs(x_idx - cx) + abs(y_idx - cy)
+        if max_dist > 0 and dist > max_dist * 0.6:
+            edge_colors.append(c)
+        else:
+            center_colors.append(c)
+
 result = {
     "image": image_idx,
     "region": {"x": sx, "y": sy, "w": sw, "h": sh},
@@ -91,6 +130,12 @@ result = {
     "symmetric_v": v_symmetric,
     "v_issues": v_issues[:10],
     "color_count": color_count,
+    "border_nonzero": border_nonzero,
+    "border_total": border_total,
+    "fill_ratio": fill_ratio,
+    "nonzero_pixels": nonzero,
+    "edge_colors": edge_colors[:50],
+    "center_colors": center_colors[:50],
 }
 print(json.dumps(result))
 sys.stdout.flush()

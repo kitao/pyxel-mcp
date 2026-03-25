@@ -2,7 +2,23 @@
 
 import json
 
-from pyxel_mcp._palette import color_name
+from pyxel_mcp._palette import color_name, luminance
+
+# Material detection: sets of palette indices that indicate a material
+_MATERIAL_SETS = [
+    (frozenset([4, 15, 7]), "skin"),
+    (frozenset([3, 11, 10]), "green"),
+    (frozenset([1, 6, 12]), "blue"),
+    (frozenset([2, 8, 9]), "red"),
+    (frozenset([5, 13, 7]), "metal"),
+    (frozenset([4, 9, 15]), "wood"),
+]
+
+
+def _detect_materials(nonzero_color_indices):
+    """Return list of material names whose colors are all present."""
+    present = set(nonzero_color_indices)
+    return [mat for keys, mat in _MATERIAL_SETS if keys.issubset(present)]
 
 
 def format_sprite_report(data):
@@ -38,6 +54,68 @@ def format_sprite_report(data):
         c = int(c_str) if isinstance(c_str, str) else c_str
         name = color_name(c)
         lines.append(f"  {c:x}({name}): {count}px")
+
+    # --- Suggestions ---
+    suggestions = []
+
+    # Outline check: non-zero pixels on sprite boundary
+    border_nonzero = data.get("border_nonzero")
+    border_total = data.get("border_total")
+    if border_nonzero is not None and border_total and border_nonzero > 0:
+        suggestions.append(
+            f"Add black outline: {border_nonzero}/{border_total} border"
+            f" pixels are non-zero (color 0 not used as outline)"
+        )
+
+    # Color count validation
+    nonzero_colors = set()
+    for c_str in color_count:
+        c = int(c_str) if isinstance(c_str, str) else c_str
+        if c != 0:
+            nonzero_colors.add(c)
+    n_colors = len(nonzero_colors)
+    if w <= 8 and h <= 8 and n_colors > 4:
+        suggestions.append(
+            f"Too many colors for {w}x{h}: {n_colors} non-zero colors"
+            f" (max 4 recommended for 8x8)"
+        )
+    elif (w <= 16 and h <= 16) and n_colors > 6:
+        suggestions.append(
+            f"Too many colors for {w}x{h}: {n_colors} non-zero colors"
+            f" (max 6 recommended for 16x16)"
+        )
+
+    # Pillow shading detection: center brighter than edges on average
+    edge_colors = data.get("edge_colors", [])
+    center_colors = data.get("center_colors", [])
+    if edge_colors and center_colors:
+        avg_edge_lum = sum(luminance(c) for c in edge_colors) / len(edge_colors)
+        avg_center_lum = sum(luminance(c) for c in center_colors) / len(center_colors)
+        if avg_center_lum > avg_edge_lum + 20:
+            suggestions.append(
+                "Possible pillow shading: center is brighter than edges"
+                " — shadows should be on bottom/right, highlights on top/left"
+            )
+
+    # Material hints
+    materials = _detect_materials(nonzero_colors)
+    if materials:
+        mat_str = ", ".join(materials)
+        suggestions.append(f"Material hint: {mat_str}")
+
+    # Empty space check
+    fill_ratio = data.get("fill_ratio")
+    if fill_ratio is not None and fill_ratio < 0.2:
+        suggestions.append(
+            f"Sprite is mostly empty (fill ratio {fill_ratio:.1%})"
+            f" — consider a smaller region or denser pixel art"
+        )
+
+    if suggestions:
+        lines.append("")
+        lines.append("=== Suggestions ===")
+        for s in suggestions:
+            lines.append(f"  - {s}")
 
     return "\n".join(lines)
 

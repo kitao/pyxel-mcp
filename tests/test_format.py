@@ -17,6 +17,12 @@ _SPRITE_DATA = {
     "symmetric_h": True,
     "symmetric_v": False,
     "color_count": {"0": 1, "1": 1, "2": 1, "3": 1, "4": 1, "5": 1, "6": 1, "7": 1},
+    "border_nonzero": 0,
+    "border_total": 8,
+    "fill_ratio": 0.875,
+    "nonzero_pixels": 7,
+    "edge_colors": [1, 3, 4, 7],
+    "center_colors": [2, 5, 6],
 }
 
 
@@ -59,6 +65,179 @@ def test_sprite_report_extended_colors():
     out = format_sprite_report(data)
     # Extended colors use 2-digit hex with spaces
     assert "10 ff" in out
+
+
+def test_sprite_report_no_suggestions_when_clean():
+    """A sprite with no issues should have no suggestions section."""
+    # 4x2 sprite with border all zero — clean outline, few colors
+    data = {
+        "image": 0,
+        "region": {"x": 0, "y": 0, "w": 4, "h": 2},
+        "pixels": [[0, 0, 0, 0], [0, 7, 7, 0]],
+        "symmetric_h": True,
+        "symmetric_v": False,
+        "color_count": {"0": 6, "7": 2},
+        "border_nonzero": 0,
+        "border_total": 8,
+        "fill_ratio": 0.25,
+        "nonzero_pixels": 2,
+        "edge_colors": [],
+        "center_colors": [7, 7],
+    }
+    out = format_sprite_report(data)
+    assert "Suggestions" not in out
+
+
+def test_sprite_report_outline_suggestion():
+    """Sprites with non-zero border pixels should get outline suggestion."""
+    data = {
+        "image": 0,
+        "region": {"x": 0, "y": 0, "w": 4, "h": 2},
+        "pixels": [[1, 2, 3, 4], [5, 6, 7, 8]],
+        "symmetric_h": False,
+        "symmetric_v": False,
+        "color_count": {"1": 1, "2": 1, "3": 1, "4": 1,
+                        "5": 1, "6": 1, "7": 1, "8": 1},
+        "border_nonzero": 8,
+        "border_total": 8,
+        "fill_ratio": 1.0,
+        "nonzero_pixels": 8,
+        "edge_colors": [1, 4, 5, 8],
+        "center_colors": [2, 3, 6, 7],
+    }
+    out = format_sprite_report(data)
+    assert "Suggestions" in out
+    assert "black outline" in out
+    assert "border" in out
+
+
+def test_sprite_report_too_many_colors_8x8():
+    """8x8 sprite with > 4 non-zero colors should warn."""
+    # 8x8 all filled with 5 different non-zero colors
+    row = [1, 2, 3, 4, 5, 1, 2, 3]
+    pixels = [row[:] for _ in range(8)]
+    data = {
+        "image": 0,
+        "region": {"x": 0, "y": 0, "w": 8, "h": 8},
+        "pixels": pixels,
+        "symmetric_h": False,
+        "symmetric_v": False,
+        "color_count": {"1": 16, "2": 16, "3": 16, "4": 8, "5": 8},
+        "border_nonzero": 28,
+        "border_total": 28,
+        "fill_ratio": 1.0,
+        "nonzero_pixels": 64,
+        "edge_colors": [1, 2, 3],
+        "center_colors": [1, 2, 5],
+    }
+    out = format_sprite_report(data)
+    assert "Suggestions" in out
+    assert "Too many colors" in out
+    assert "8x8" in out
+
+
+def test_sprite_report_pillow_shading_warning():
+    """Center much brighter than edges triggers pillow shading warning."""
+    # color 7 (white, very bright) in center, color 1 (navy, dark) at edges
+    data = {
+        "image": 0,
+        "region": {"x": 0, "y": 0, "w": 8, "h": 8},
+        "pixels": [[1] * 8 for _ in range(8)],
+        "symmetric_h": True,
+        "symmetric_v": True,
+        "color_count": {"1": 40, "7": 24},
+        "border_nonzero": 28,
+        "border_total": 28,
+        "fill_ratio": 1.0,
+        "nonzero_pixels": 64,
+        "edge_colors": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],  # navy (dark)
+        "center_colors": [7, 7, 7, 7, 7, 7, 7, 7, 7, 7],  # white (bright)
+    }
+    out = format_sprite_report(data)
+    assert "Suggestions" in out
+    assert "pillow shading" in out
+
+
+def test_sprite_report_no_pillow_shading_when_correct():
+    """Edges brighter than center should not trigger pillow shading warning."""
+    data = {
+        "image": 0,
+        "region": {"x": 0, "y": 0, "w": 8, "h": 8},
+        "pixels": [[1] * 8 for _ in range(8)],
+        "symmetric_h": True,
+        "symmetric_v": True,
+        "color_count": {"1": 40, "7": 24},
+        "border_nonzero": 0,
+        "border_total": 28,
+        "fill_ratio": 1.0,
+        "nonzero_pixels": 64,
+        "edge_colors": [7, 7, 7, 7, 7, 7, 7, 7, 7, 7],  # white (bright)
+        "center_colors": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],  # navy (dark)
+    }
+    out = format_sprite_report(data)
+    assert "pillow shading" not in out
+
+
+def test_sprite_report_material_hint_skin():
+    """Skin material colors (brown/peach/white) should be detected."""
+    data = {
+        "image": 0,
+        "region": {"x": 0, "y": 0, "w": 8, "h": 8},
+        "pixels": [[4, 15, 7, 0, 0, 7, 15, 4]] * 8,
+        "symmetric_h": True,
+        "symmetric_v": True,
+        "color_count": {"0": 16, "4": 16, "7": 16, "15": 16},
+        "border_nonzero": 0,
+        "border_total": 28,
+        "fill_ratio": 0.75,
+        "nonzero_pixels": 48,
+        "edge_colors": [4, 4, 4],
+        "center_colors": [7, 15, 7],
+    }
+    out = format_sprite_report(data)
+    assert "Suggestions" in out
+    assert "skin" in out
+
+
+def test_sprite_report_material_hint_metal():
+    """Metal material colors (dark_blue/gray/white) should be detected."""
+    data = {
+        "image": 0,
+        "region": {"x": 0, "y": 0, "w": 8, "h": 8},
+        "pixels": [[5, 13, 7, 5, 5, 7, 13, 5]] * 8,
+        "symmetric_h": True,
+        "symmetric_v": True,
+        "color_count": {"5": 24, "13": 16, "7": 24},
+        "border_nonzero": 28,
+        "border_total": 28,
+        "fill_ratio": 1.0,
+        "nonzero_pixels": 64,
+        "edge_colors": [5, 5, 5],
+        "center_colors": [13, 7, 13],
+    }
+    out = format_sprite_report(data)
+    assert "metal" in out
+
+
+def test_sprite_report_mostly_empty():
+    """Sprites with fill_ratio < 0.2 should warn about empty space."""
+    data = {
+        "image": 0,
+        "region": {"x": 0, "y": 0, "w": 16, "h": 16},
+        "pixels": [[0] * 16 for _ in range(15)] + [[0, 7, 0] + [0] * 13],
+        "symmetric_h": False,
+        "symmetric_v": False,
+        "color_count": {"0": 254, "7": 2},
+        "border_nonzero": 0,
+        "border_total": 60,
+        "fill_ratio": 0.008,
+        "nonzero_pixels": 2,
+        "edge_colors": [],
+        "center_colors": [],
+    }
+    out = format_sprite_report(data)
+    assert "Suggestions" in out
+    assert "mostly empty" in out
 
 
 # --- format_layout_report ---
