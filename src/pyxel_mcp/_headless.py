@@ -45,3 +45,66 @@ def run_script(script_path):
         runpy.run_path(script_path, run_name="__main__")
     except SystemExit:
         pass
+
+
+def setup_harness(script_path, transform_args=None):
+    """Reset sys.argv and patch pyxel for headless mode.
+
+    Call after parsing your own args but before run_script.
+
+    Args:
+        script_path: Absolute path to the user script.
+        transform_args: Optional callable passed to patch_headless_init.
+    """
+    sys.argv = [script_path]
+    patch_headless_init(script_path, transform_args)
+
+
+def patch_game_loop(on_frame, on_show=None):
+    """Patch pyxel.run/show/flip with unified frame-based capture.
+
+    Args:
+        on_frame: Called each frame as on_frame(frame_count, draw).
+            Return True to exit via os._exit(0).
+        on_show: Called when pyxel.show() is invoked. If None,
+            calls on_frame(0, lambda: None) instead.
+    """
+    _original_run = pyxel.run
+    _original_show = pyxel.show
+    _original_flip = pyxel.flip
+
+    def _patched_run(update, draw):
+        def _wrapped_update():
+            update()
+            if on_frame(pyxel.frame_count, draw):
+                pyxel.quit()
+                os._exit(0)
+        _original_run(_wrapped_update, draw)
+
+    def _patched_show():
+        if on_show:
+            on_show()
+        else:
+            on_frame(0, lambda: None)
+        pyxel.quit()
+        os._exit(0)
+
+    _flip_counter = [0]
+
+    def _patched_flip():
+        _original_flip()
+        _flip_counter[0] += 1
+        if on_frame(_flip_counter[0], lambda: None):
+            pyxel.quit()
+            os._exit(0)
+
+    pyxel.run = _patched_run
+    pyxel.show = _patched_show
+    pyxel.flip = _patched_flip
+
+
+def noop_game_loop():
+    """Patch run/show/flip to no-ops. For resource-only harnesses."""
+    pyxel.run = lambda update, draw: None
+    pyxel.show = lambda: None
+    pyxel.flip = lambda: None
