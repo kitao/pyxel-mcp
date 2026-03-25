@@ -34,8 +34,24 @@ def _pyxel_dir():
                 return os.path.dirname(spec.origin)
             if spec.submodule_search_locations:
                 return list(spec.submodule_search_locations)[0]
-    except (ModuleNotFoundError, ValueError):
+    except ModuleNotFoundError:
         pass
+    except ValueError:
+        # sys.modules["pyxel"] may be a stub without __spec__ set
+        # (e.g. from test mocks). Try again after temporarily removing it.
+        saved = sys.modules.pop("pyxel", None)
+        try:
+            spec = find_spec("pyxel")
+            if spec:
+                if spec.origin:
+                    return os.path.dirname(spec.origin)
+                if spec.submodule_search_locations:
+                    return list(spec.submodule_search_locations)[0]
+        except (ModuleNotFoundError, ValueError):
+            pass
+        finally:
+            if saved is not None:
+                sys.modules["pyxel"] = saved
     return None
 
 
