@@ -26,13 +26,11 @@ filter_attrs = None
 if len(sys.argv) > 3:
     filter_attrs = json.loads(sys.argv[3])
 
-sys.argv = [script_path]
-
 import pyxel
 
-from pyxel_mcp._headless import patch_headless_init, run_script
+from pyxel_mcp._headless import run_script, setup_harness
 
-patch_headless_init(script_path)
+setup_harness(script_path)
 
 _app_instance = None
 _results = []
@@ -120,7 +118,7 @@ def _try_capture(fc):
             _flush_and_quit()
 
 
-# Patch pyxel.run: capture self from bound methods, dump at target frames
+# Custom run patch to extract App instance from bound methods
 _original_run = pyxel.run
 
 

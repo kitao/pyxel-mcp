@@ -22,22 +22,20 @@ output_path = os.path.abspath(sys.argv[2])
 bank_index = int(sys.argv[3]) if len(sys.argv) > 3 else 0
 capture_scale = int(sys.argv[4]) if len(sys.argv) > 4 else 1
 
-sys.argv = [script_path]
-
 import pyxel
 
-from pyxel_mcp._headless import patch_headless_init, run_script
+from pyxel_mcp._headless import patch_game_loop, run_script, setup_harness
 
 # Force 256x256 screen for full bank capture
-patch_headless_init(script_path, transform_args=lambda args: (256, 256) + args[2:])
+setup_harness(script_path, transform_args=lambda args: (256, 256) + args[2:])
 
 _captured = False
 
 
-def _capture_bank():
+def _capture_bank(fc, draw):
     global _captured
     if _captured:
-        return
+        return False
     _captured = True
 
     # Draw the image bank to screen
@@ -48,38 +46,8 @@ def _capture_bank():
         pyxel.screenshot(output_path, scale=capture_scale)
     except Exception as e:
         print(f"Capture error: {e}", file=sys.stderr)
-    pyxel.quit()
-    os._exit(0)
+    return True
 
 
-# Patch pyxel.run: capture at frame 1
-_original_run = pyxel.run
-
-
-def _patched_run(update, draw):
-    def wrapped_update():
-        update()
-        _capture_bank()
-
-    _original_run(wrapped_update, draw)
-
-
-pyxel.run = _patched_run
-
-# Patch pyxel.show
-_original_show = pyxel.show
-pyxel.show = lambda: _capture_bank()
-
-# Patch pyxel.flip
-_original_flip = pyxel.flip
-
-
-def _patched_flip():
-    _original_flip()
-    _capture_bank()
-
-
-pyxel.flip = _patched_flip
-
-# Execute
+patch_game_loop(_capture_bank, on_show=lambda: _capture_bank(0, lambda: None))
 run_script(script_path)
