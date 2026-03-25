@@ -1,5 +1,21 @@
 # Change Log
 
+## 0.9.0
+
+- Split server.py into focused modules (_errors, _palette, _audio, _format, _validate, _subprocess)
+- Extract instructions to external Markdown file loaded at startup
+- Accelerate WAV frequency analysis ~50-100x with numpy FFT autocorrelation
+- Add numpy as direct dependency
+- Add inspect_animation tool for sprite sheet consistency checking
+- Enhance inspect_sprite with outline detection, pillow shading, material hints
+- Enhance inspect_palette with WCAG 2.0 contrast and 3-layer color hierarchy analysis
+- Enhance inspect_layout with font height auto-estimation and grid alignment check
+- Expand validate_script anti-patterns: blt without colkey, list mutation, run outside init
+- Add unified output format with Analysis/Suggestions sections across all inspection tools
+- Unify harness boilerplate via _headless.py helpers (setup_harness, patch_game_loop)
+- Decompose layout_harness analysis into testable functions
+- Add comprehensive test suite (174 tests covering all modules)
+
 ## 0.8.3
 
 - Bump Pyxel minimum version to 2.8.8 (Tilemap u16 type change)
