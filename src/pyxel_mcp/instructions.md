@@ -45,6 +45,13 @@
 - **`inspect_tilemap`**: Returns tile grid, usage stats, and bounding box. Check `imgsrc` matches your image bank. Verify (0,0) tiles are empty.
 - **`inspect_bank`**: Returns image bank as screenshot (up to 256x256). Verify sprite/tile placement and find available space.
 
+### Output Format
+
+Analysis tools (`inspect_sprite`, `inspect_layout`, `inspect_palette`,
+`inspect_animation`, `validate_script`) output two sections:
+- **=== Analysis ===**: Objective data and measurements
+- **=== Suggestions ===**: Actionable improvements (`Fix:` for critical issues, `Tip:` for recommendations)
+
 ### Testing Input-Dependent Logic
 
 Use `play_and_capture` to test input-dependent logic by simulating key presses:
