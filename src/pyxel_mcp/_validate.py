@@ -61,6 +61,18 @@ def validate_source(source, filename="script.py"):
         if re.search(pattern, text, re.DOTALL):
             issues.append(message)
 
+    # Check blt() calls without colkey argument
+    blt_calls = re.findall(r"pyxel\.blt\s*\([^)]*\)", source)
+    for call in blt_calls:
+        if "colkey" not in call:
+            issues.append("Tip: blt() call without colkey. Add colkey=0 for transparency.")
+            break  # one warning is enough
+
+    # Check pyxel.run() called in functions other than __init__
+    for name, body in method_bodies.items():
+        if name not in ("__init__",) and re.search(r"pyxel\.run\s*\(", body):
+            issues.append(f"pyxel.run() found in {name}(). Move to __init__().")
+
     # Check for missing pyxel import
     if not re.search(r"import\s+pyxel|from\s+pyxel", source):
         issues.append("No 'import pyxel' found.")
