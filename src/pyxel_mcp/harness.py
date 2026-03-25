@@ -22,72 +22,27 @@ output_path = os.path.abspath(sys.argv[2])
 target_frames = int(sys.argv[3])
 capture_scale = int(sys.argv[4])
 
-# Reset argv so the user script sees itself as __main__
-sys.argv = [script_path]
-
 import pyxel
 
-from pyxel_mcp._headless import patch_headless_init, run_script
+from pyxel_mcp._headless import patch_game_loop, run_script, setup_harness
 
-patch_headless_init(script_path)
+setup_harness(script_path)
 
-_frame_counter = 0
 _captured = False
 
 
-def _capture_and_quit():
-    """Save the current screen and exit."""
+def _on_frame(fc, draw):
     global _captured
-    if _captured:
-        return
+    if _captured or fc < target_frames:
+        return False
     _captured = True
+    draw()
     try:
         pyxel.screenshot(output_path, scale=capture_scale)
     except Exception as e:
         print(f"Capture error: {e}", file=sys.stderr)
-    pyxel.quit()
-    os._exit(0)
+    return True
 
 
-# Patch pyxel.run: capture in update after target frame
-_original_run = pyxel.run
-
-
-def _patched_run(update, draw):
-    def wrapped_update():
-        update()
-        if pyxel.frame_count >= target_frames:
-            draw()
-            _capture_and_quit()
-
-    _original_run(wrapped_update, draw)
-
-
-pyxel.run = _patched_run
-
-# Patch pyxel.show: capture immediately when show() is called
-_original_show = pyxel.show
-
-
-def _patched_show():
-    _capture_and_quit()
-
-
-pyxel.show = _patched_show
-
-# Patch pyxel.flip: count flip calls and auto-capture
-_original_flip = pyxel.flip
-
-
-def _patched_flip():
-    global _frame_counter
-    _original_flip()
-    _frame_counter += 1
-    if _frame_counter >= target_frames:
-        _capture_and_quit()
-
-
-pyxel.flip = _patched_flip
-
-# Execute the user script
+patch_game_loop(_on_frame)
 run_script(script_path)

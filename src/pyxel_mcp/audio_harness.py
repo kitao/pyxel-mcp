@@ -25,18 +25,12 @@ sound_index = int(sys.argv[3])
 duration_sec = float(sys.argv[4]) if len(sys.argv) > 4 else 0
 music_index = int(sys.argv[5]) if len(sys.argv) > 5 else -1
 
-sys.argv = [script_path]
-
 import pyxel
 
-from pyxel_mcp._headless import patch_headless_init, run_script
+from pyxel_mcp._headless import noop_game_loop, run_script, setup_harness
 
-patch_headless_init(script_path)
-
-# Patch game loop functions to no-ops (we only need sound setup)
-pyxel.run = lambda update, draw: None
-pyxel.show = lambda: None
-pyxel.flip = lambda: None
+setup_harness(script_path)
+noop_game_loop()
 
 # Execute the script to set up sounds
 run_script(script_path)

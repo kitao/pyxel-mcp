@@ -21,90 +21,40 @@ output_dir = os.path.abspath(sys.argv[2])
 frame_list = sorted(int(f) for f in sys.argv[3].split(","))
 capture_scale = int(sys.argv[4])
 
-sys.argv = [script_path]
-
 import pyxel
 
-from pyxel_mcp._headless import patch_headless_init, run_script
+from pyxel_mcp._headless import patch_game_loop, run_script, setup_harness
 
-patch_headless_init(script_path)
+setup_harness(script_path)
 
-_capture_idx = 0  # index into frame_list (sorted)
+_capture_idx = 0
 
 
-def _try_capture(fc, draw):
+def _on_frame(fc, draw):
     """Capture at the current frame if it matches the next target."""
     global _capture_idx
     if _capture_idx >= len(frame_list):
-        return
+        return False
     target = frame_list[_capture_idx]
-    if fc >= target:
-        draw()
-        path = os.path.join(output_dir, f"frame_{target:04d}.png")
-        try:
-            pyxel.screenshot(path, scale=capture_scale)
-        except Exception as e:
-            print(f"Capture error at frame {target}: {e}", file=sys.stderr)
-        _capture_idx += 1
-        if _capture_idx >= len(frame_list):
-            pyxel.quit()
-            os._exit(0)
+    if fc < target:
+        return False
+    draw()
+    path = os.path.join(output_dir, f"frame_{target:04d}.png")
+    try:
+        pyxel.screenshot(path, scale=capture_scale)
+    except Exception as e:
+        print(f"Capture error at frame {target}: {e}", file=sys.stderr)
+    _capture_idx += 1
+    return _capture_idx >= len(frame_list)
 
 
-# Patch pyxel.run: capture in update after target frame
-_original_run = pyxel.run
-
-
-def _patched_run(update, draw):
-    def wrapped_update():
-        update()
-        _try_capture(pyxel.frame_count, draw)
-
-    _original_run(wrapped_update, draw)
-
-
-pyxel.run = _patched_run
-
-# Patch pyxel.show: capture as frame 0
-_original_show = pyxel.show
-
-
-def _patched_show():
+def _on_show():
     path = os.path.join(output_dir, "frame_show.png")
     try:
         pyxel.screenshot(path, scale=capture_scale)
     except Exception as e:
         print(f"Capture error: {e}", file=sys.stderr)
-    pyxel.quit()
-    os._exit(0)
 
 
-pyxel.show = _patched_show
-
-# Patch pyxel.flip: count flips and capture
-_flip_counter = 0
-_flip_capture_idx = 0
-_original_flip = pyxel.flip
-
-
-def _patched_flip():
-    global _flip_counter, _flip_capture_idx
-    _original_flip()
-    _flip_counter += 1
-    if _flip_capture_idx < len(frame_list) and _flip_counter >= frame_list[_flip_capture_idx]:
-        target = frame_list[_flip_capture_idx]
-        path = os.path.join(output_dir, f"frame_{target:04d}.png")
-        try:
-            pyxel.screenshot(path, scale=capture_scale)
-        except Exception as e:
-            print(f"Capture error at flip {target}: {e}", file=sys.stderr)
-        _flip_capture_idx += 1
-        if _flip_capture_idx >= len(frame_list):
-            pyxel.quit()
-            os._exit(0)
-
-
-pyxel.flip = _patched_flip
-
-# Execute the user script
+patch_game_loop(_on_frame, on_show=_on_show)
 run_script(script_path)

@@ -24,8 +24,6 @@ frame_list = sorted(int(f) for f in sys.argv[3].split(","))
 capture_scale = int(sys.argv[4])
 input_file = os.path.abspath(sys.argv[5])
 
-sys.argv = [script_path]
-
 with open(input_file) as f:
     input_schedule = sorted(json.load(f), key=lambda e: e["frame"])
 
@@ -75,8 +73,6 @@ def _update_input_state():
 
 
 # Patch input functions
-
-
 def _sim_btn(key):
     return key in _curr_keys
 
@@ -95,9 +91,9 @@ pyxel.btnr = _sim_btnr
 
 # --- Headless mode: no window, max speed ---
 
-from pyxel_mcp._headless import patch_headless_init, run_script
+from pyxel_mcp._headless import run_script, setup_harness
 
-patch_headless_init(script_path)
+setup_harness(script_path)
 
 # --- Frame capture ---
 
@@ -108,19 +104,18 @@ def _try_capture(fc, draw):
     """Capture at the current frame if it matches the next target."""
     global _capture_idx
     if _capture_idx >= len(frame_list):
-        return
+        return False
     target = frame_list[_capture_idx]
-    if fc >= target:
-        draw()
-        path = os.path.join(output_dir, f"frame_{target:04d}.png")
-        try:
-            pyxel.screenshot(path, scale=capture_scale)
-        except Exception as e:
-            print(f"Capture error at frame {target}: {e}", file=sys.stderr)
-        _capture_idx += 1
-        if _capture_idx >= len(frame_list):
-            pyxel.quit()
-            os._exit(0)
+    if fc < target:
+        return False
+    draw()
+    path = os.path.join(output_dir, f"frame_{target:04d}.png")
+    try:
+        pyxel.screenshot(path, scale=capture_scale)
+    except Exception as e:
+        print(f"Capture error at frame {target}: {e}", file=sys.stderr)
+    _capture_idx += 1
+    return _capture_idx >= len(frame_list)
 
 
 # Patch pyxel.run: wrap update for input simulation + capture
@@ -131,7 +126,9 @@ def _patched_run(update, draw):
     def wrapped_update():
         _update_input_state()
         update()
-        _try_capture(pyxel.frame_count, draw)
+        if _try_capture(pyxel.frame_count, draw):
+            pyxel.quit()
+            os._exit(0)
 
     _original_run(wrapped_update, draw)
 

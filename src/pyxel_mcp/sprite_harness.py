@@ -25,18 +25,12 @@ sy = int(sys.argv[4])
 sw = int(sys.argv[5])
 sh = int(sys.argv[6])
 
-sys.argv = [script_path]
-
 import pyxel
 
-from pyxel_mcp._headless import patch_headless_init, run_script
+from pyxel_mcp._headless import noop_game_loop, run_script, setup_harness
 
-patch_headless_init(script_path)
-
-# Patch game loop functions to no-ops (we only need resource setup)
-pyxel.run = lambda update, draw: None
-pyxel.show = lambda: None
-pyxel.flip = lambda: None
+setup_harness(script_path)
+noop_game_loop()
 
 # Execute the script to set up sprites/images
 run_script(script_path)

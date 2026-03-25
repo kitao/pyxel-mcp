@@ -22,13 +22,11 @@ script_path = os.path.abspath(sys.argv[1])
 tilemap_index = int(sys.argv[2]) if len(sys.argv) > 2 else 0
 target_frame = int(sys.argv[3]) if len(sys.argv) > 3 else 1
 
-sys.argv = [script_path]
-
 import pyxel
 
-from pyxel_mcp._headless import patch_headless_init, run_script
+from pyxel_mcp._headless import patch_game_loop, run_script, setup_harness
 
-patch_headless_init(script_path)
+setup_harness(script_path)
 
 _captured = False
 
@@ -36,7 +34,7 @@ _captured = False
 def _dump_tilemap():
     global _captured
     if _captured:
-        return
+        return True
     _captured = True
 
     tm = pyxel.tilemaps[tilemap_index]
@@ -90,43 +88,14 @@ def _dump_tilemap():
 
     print(json.dumps(result))
     sys.stdout.flush()
-    pyxel.quit()
-    os._exit(0)
+    return True
 
 
-# Patch pyxel.run
-_original_run = pyxel.run
+def _on_frame(fc, draw):
+    if fc < target_frame:
+        return False
+    return _dump_tilemap()
 
 
-def _patched_run(update, draw):
-    def wrapped_update():
-        update()
-        if pyxel.frame_count >= target_frame:
-            _dump_tilemap()
-
-    _original_run(wrapped_update, draw)
-
-
-pyxel.run = _patched_run
-
-# Patch pyxel.show
-_original_show = pyxel.show
-pyxel.show = lambda: _dump_tilemap()
-
-# Patch pyxel.flip
-_flip_counter = 0
-_original_flip = pyxel.flip
-
-
-def _patched_flip():
-    global _flip_counter
-    _original_flip()
-    _flip_counter += 1
-    if _flip_counter >= target_frame:
-        _dump_tilemap()
-
-
-pyxel.flip = _patched_flip
-
-# Execute
+patch_game_loop(_on_frame, on_show=lambda: _dump_tilemap())
 run_script(script_path)
