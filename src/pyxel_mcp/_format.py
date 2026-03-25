@@ -2,7 +2,13 @@
 
 import json
 
-from pyxel_mcp._palette import color_name, luminance
+from pyxel_mcp._palette import (
+    analyze_hierarchy,
+    classify_color,
+    color_name,
+    luminance,
+    wcag_contrast,
+)
 
 # Material detection: sets of palette indices that indicate a material
 _MATERIAL_SETS = [
@@ -272,6 +278,129 @@ def format_state_report(data):
             lines.append(f"  {key}: {val}")
 
     return "\n".join(lines)
+
+
+def format_palette_report(snap, user_output=None, stderr_text=None):
+    """Format palette analysis JSON into a readable report with WCAG contrast and hierarchy."""
+    w, h = snap["width"], snap["height"]
+    grid = snap["grid"]
+    total = w * h
+
+    # Count colors
+    counts = {}
+    for row in grid:
+        for c in row:
+            counts[c] = counts.get(c, 0) + 1
+
+    # Detect background (most common color)
+    bg_color = max(counts, key=counts.get)
+    bg_name = color_name(bg_color)
+    fg_colors = {c for c in counts if c != bg_color}
+
+    lines = [
+        f"Palette analysis at frame {snap['frame']} ({w}x{h})",
+        f"Background: {bg_color:x} ({bg_name}) — {counts[bg_color]}/{total} pixels"
+        f" ({counts[bg_color] / total * 100:.0f}%)",
+        f"Colors used: {len(counts)}",
+        "",
+        "Color distribution:",
+    ]
+
+    for c in sorted(counts, key=counts.get, reverse=True):
+        name = color_name(c)
+        pct = counts[c] / total * 100
+        bar = "#" * max(1, int(pct / 2))
+        lines.append(f"  {c:x} ({name:10s}): {counts[c]:6d}px ({pct:5.1f}%) {bar}")
+
+    # Unused colors
+    unused = [c for c in range(16) if c not in counts]
+    if unused:
+        lines.append(f"\nUnused colors: {', '.join(f'{c:x}' for c in unused)}")
+
+    # Color hierarchy analysis
+    hierarchy = analyze_hierarchy(set(counts.keys()), bg_color)
+    layers = hierarchy["layers"]
+    lines.append("")
+    lines.append("Color hierarchy:")
+    lines.append(
+        f"  background={layers['background']}"
+        f"  environment={layers['environment']}"
+        f"  interactive={layers['interactive']}"
+        f"  neutral={layers['neutral']}"
+    )
+    score_label = ["poor", "partial", "good"][hierarchy["score"]]
+    lines.append(f"  Hierarchy score: {hierarchy['score']}/2 ({score_label})")
+
+    # Classify each foreground color
+    if fg_colors:
+        lines.append("")
+        lines.append("Foreground color roles:")
+        for c in sorted(fg_colors):
+            role = classify_color(c)
+            name = color_name(c)
+            lines.append(f"  {c:x} ({name:10s}): {role}")
+
+    # WCAG contrast warnings
+    wcag_warnings = []
+    for c in fg_colors:
+        ratio = wcag_contrast(c, bg_color)
+        if ratio < 3.0:
+            name = color_name(c)
+            wcag_warnings.append(
+                f"  Low contrast: {c:x}({name}) on {bg_color:x}({bg_name})"
+                f" — WCAG ratio {ratio:.1f}:1 (AA requires 3.0+)"
+            )
+
+    if wcag_warnings:
+        lines.append("")
+        lines.append("Contrast warnings (WCAG AA):")
+        lines.extend(wcag_warnings)
+
+    # Suggestions
+    suggestions = []
+
+    # Low-contrast suggestions
+    for c in fg_colors:
+        ratio = wcag_contrast(c, bg_color)
+        if ratio < 3.0:
+            name = color_name(c)
+            suggestions.append(
+                f"Replace {c:x}({name}) or increase contrast"
+                f" against background (ratio {ratio:.1f}:1)"
+            )
+
+    # Missing hierarchy layer suggestions
+    if not hierarchy["has_environment"]:
+        suggestions.append(
+            "No environment colors — consider adding"
+            " green(3), brown(4), or gray(13)"
+        )
+    if not hierarchy["has_interactive"]:
+        suggestions.append(
+            "No interactive colors — consider adding"
+            " red(8), yellow(a), or lime(b) for player/items"
+        )
+
+    # Unused color suggestions
+    if len(counts) < 10:
+        suggestions.append(
+            f"Only {len(counts)} of 16 colors used"
+            " — adding more colors improves visual richness"
+            " (aim for 10-14)"
+        )
+
+    if suggestions:
+        lines.append("")
+        lines.append("=== Suggestions ===")
+        for s in suggestions:
+            lines.append(f"  - {s}")
+
+    result = "\n".join(lines)
+    if user_output:
+        result = f"Script output:\n{user_output}\n\n{result}"
+    if stderr_text:
+        result += f"\n\nstderr: {stderr_text}"
+    return result
 
 
 def format_state_timeline(snapshots):

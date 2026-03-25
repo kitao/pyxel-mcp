@@ -17,6 +17,7 @@ from pyxel_mcp._subprocess import run_harness, HARNESS_PATHS
 from pyxel_mcp._format import (
     format_sprite_report,
     format_layout_report,
+    format_palette_report,
     format_state_report,
     format_state_timeline,
 )
@@ -859,61 +860,7 @@ async def inspect_palette(
         return f"Timeout: script did not finish within {timeout}s"
 
     snap = data[0] if isinstance(data, list) else data
-    w, h = snap["width"], snap["height"]
-    grid = snap["grid"]
-    total = w * h
-
-    # Count colors
-    counts = {}
-    for row in grid:
-        for c in row:
-            counts[c] = counts.get(c, 0) + 1
-
-    # Detect background (most common color)
-    bg_color = max(counts, key=counts.get)
-    bg_name = color_name(bg_color)
-    fg_colors = {c for c in counts if c != bg_color}
-
-    lines = [
-        f"Palette analysis at frame {snap['frame']} ({w}x{h})",
-        f"Background: {bg_color:x} ({bg_name}) — {counts[bg_color]}/{total} pixels"
-        f" ({counts[bg_color] / total * 100:.0f}%)",
-        f"Colors used: {len(counts)}",
-        "",
-        "Color distribution:",
-    ]
-
-    for c in sorted(counts, key=counts.get, reverse=True):
-        name = color_name(c)
-        pct = counts[c] / total * 100
-        bar = "#" * max(1, int(pct / 2))
-        lines.append(f"  {c:x} ({name:10s}): {counts[c]:6d}px ({pct:5.1f}%) {bar}")
-
-    # Contrast warnings
-    warnings = []
-    for c in fg_colors:
-        ratio = color_contrast(c, bg_color)
-        if ratio < 1.5:
-            name = color_name(c)
-            warnings.append(
-                f"  Low contrast: {c:x}({name}) on {bg_color:x}({bg_name})"
-                f" — ratio {ratio:.1f}:1"
-            )
-
-    unused = [c for c in range(16) if c not in counts]
-    if unused:
-        lines.append(f"\nUnused colors: {', '.join(f'{c:x}' for c in unused)}")
-
-    if warnings:
-        lines.append("\nContrast warnings:")
-        lines.extend(warnings)
-
-    result = "\n".join(lines)
-    if user_output:
-        result = f"Script output:\n{user_output}\n\n{result}"
-    if stderr_text:
-        result += f"\n\nstderr: {stderr_text}"
-    return result
+    return format_palette_report(snap, user_output, stderr_text)
 
 
 # --- Tilemap inspection ---
