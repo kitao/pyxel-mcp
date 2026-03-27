@@ -98,14 +98,13 @@ def validate_source(source, filename="script.py"):
     n_functions = sum(1 for n in ast.walk(tree) if isinstance(n, ast.FunctionDef))
     n_lines = len(source.split("\n"))
 
-    report = f"Script: {filename}"
-    report += f"  ({n_lines} lines, {n_classes} classes, {n_functions} functions)"
+    lines = [f"Script: {filename}  ({n_lines} lines, {n_classes} classes, {n_functions} functions)"]
 
     if issues:
-        report += f"\n\nWarnings ({len(issues)}):"
+        lines.append(f"\nWarnings ({len(issues)}):")
         for issue in issues:
-            report += f"\n  - {issue}"
+            lines.append(f"  - {issue}")
     else:
-        report += "\n\nNo issues found."
+        lines.append("\nNo issues found.")
 
-    return report
+    return "\n".join(lines)

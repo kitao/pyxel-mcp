@@ -118,7 +118,8 @@ def _try_capture(fc):
             _flush_and_quit()
 
 
-# Custom run patch to extract App instance from bound methods
+# Custom run/show/flip patches instead of patch_game_loop because we need
+# to extract the App instance from update.__self__ / draw.__self__.
 _original_run = pyxel.run
 
 

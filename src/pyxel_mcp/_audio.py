@@ -52,9 +52,7 @@ def estimate_freq(samples, sample_rate):
         return 0
 
     # FFT-based autocorrelation: R(lag) = IFFT(|FFT(x)|^2)
-    fft_size = 1
-    while fft_size < 2 * n:
-        fft_size *= 2
+    fft_size = 1 << (2 * n - 1).bit_length()
     f = np.fft.rfft(samples, fft_size)
     acf = np.fft.irfft(f * np.conj(f))[:n]
     acf /= acf[0]

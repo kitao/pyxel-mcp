@@ -22,7 +22,7 @@ from pyxel_mcp._format import (
     format_state_timeline,
     format_animation_report,
 )
-from pyxel_mcp._palette import color_name, color_contrast
+from pyxel_mcp._palette import color_name
 from pyxel_mcp._validate import validate_source
 
 def _pyxel_dir():
@@ -55,6 +55,19 @@ def _pyxel_dir():
     return None
 
 
+def _check_script(script_path, need_pyxel=True):
+    """Validate script path (and optionally Pyxel installation).
+
+    Returns (abs_path, None) on success or (None, error_message) on failure.
+    """
+    if need_pyxel and not _pyxel_dir():
+        return None, "Pyxel is not installed. Run: pip install pyxel-mcp"
+    path = os.path.abspath(script_path)
+    if not os.path.isfile(path):
+        return None, f"script not found: {path}"
+    return path, None
+
+
 _INSTRUCTIONS_PATH = os.path.join(os.path.dirname(__file__), "instructions.md")
 try:
     with open(_INSTRUCTIONS_PATH) as f:
@@ -83,12 +96,9 @@ async def run_and_capture(
         scale: Screenshot scale multiplier (default: 1).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    if not _pyxel_dir():
-        return ["Error: Pyxel is not installed. Run: pip install pyxel-mcp"]
-
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return [f"Error: script not found: {script_path}"]
+    script_path, err = _check_script(script_path)
+    if err:
+        return [f"Error: {err}"]
 
     frames = max(1, min(frames, 1800))
     scale = max(1, min(scale, 10))
@@ -178,12 +188,9 @@ async def render_audio(
         music_index: Music slot index. Default range 0-7, extendable.
             When set (>=0), renders the full multi-channel music mix instead of a single sound.
     """
-    if not _pyxel_dir():
-        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
-
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return f"Error: script not found: {script_path}"
+    script_path, err = _check_script(script_path)
+    if err:
+        return f"Error: {err}"
 
     sound_index = max(0, sound_index)
     music_index = max(-1, music_index)
@@ -287,12 +294,9 @@ async def inspect_sprite(
         h: Height of the region to inspect (default: 8).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    if not _pyxel_dir():
-        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
-
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return f"Error: script not found: {script_path}"
+    script_path, err = _check_script(script_path)
+    if err:
+        return f"Error: {err}"
 
     image = max(0, image)
     x = max(0, x)
@@ -350,12 +354,9 @@ async def inspect_animation(
         frame_count: Number of animation frames to check (default: 2).
         timeout: Maximum seconds to wait (default: 10).
     """
-    if not _pyxel_dir():
-        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
-
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return f"Error: script not found: {script_path}"
+    script_path, err = _check_script(script_path)
+    if err:
+        return f"Error: {err}"
 
     image = max(0, image)
     x = max(0, x)
@@ -410,12 +411,9 @@ async def capture_frames(
         scale: Screenshot scale multiplier (default: 1).
         timeout: Maximum seconds to wait for the script (default: 30).
     """
-    if not _pyxel_dir():
-        return ["Error: Pyxel is not installed. Run: pip install pyxel-mcp"]
-
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return [f"Error: script not found: {script_path}"]
+    script_path, err = _check_script(script_path)
+    if err:
+        return [f"Error: {err}"]
 
     try:
         frame_list = [max(1, min(int(f.strip()), 1800)) for f in frames.split(",")]
@@ -506,12 +504,9 @@ async def play_and_capture(
         scale: Screenshot scale multiplier (default: 1).
         timeout: Maximum seconds to wait for the script (default: 30).
     """
-    if not _pyxel_dir():
-        return ["Error: Pyxel is not installed. Run: pip install pyxel-mcp"]
-
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return [f"Error: script not found: {script_path}"]
+    script_path, err = _check_script(script_path)
+    if err:
+        return [f"Error: {err}"]
 
     try:
         input_data = json.loads(inputs)
@@ -610,12 +605,9 @@ async def inspect_layout(
         frames: Frame number to analyze (default: 5).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    if not _pyxel_dir():
-        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
-
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return f"Error: script not found: {script_path}"
+    script_path, err = _check_script(script_path)
+    if err:
+        return f"Error: {err}"
 
     frames = max(1, min(frames, 1800))
     timeout = max(1, min(timeout, 60))
@@ -666,12 +658,9 @@ async def inspect_state(
         attributes: Comma-separated attribute names to inspect (default: all).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    if not _pyxel_dir():
-        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
-
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return f"Error: script not found: {script_path}"
+    script_path, err = _check_script(script_path)
+    if err:
+        return f"Error: {err}"
 
     try:
         frame_list = [max(1, min(int(f.strip()), 1800)) for f in frames.split(",")]
@@ -728,9 +717,9 @@ async def validate_script(script_path: str) -> str:
     Args:
         script_path: Absolute path to the .py script to validate.
     """
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return f"Error: script not found: {script_path}"
+    script_path, err = _check_script(script_path, need_pyxel=False)
+    if err:
+        return f"Error: {err}"
 
     try:
         with open(script_path) as f:
@@ -771,12 +760,9 @@ async def inspect_screen(
         frames: Frame number to capture (default: 5).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    if not _pyxel_dir():
-        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
-
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return f"Error: script not found: {script_path}"
+    script_path, err = _check_script(script_path)
+    if err:
+        return f"Error: {err}"
 
     frames = max(1, min(frames, 1800))
     timeout = max(1, min(timeout, 60))
@@ -830,12 +816,9 @@ async def compare_frames(
         frame_b: Second frame number (default: 30).
         timeout: Maximum seconds to wait for the script (default: 15).
     """
-    if not _pyxel_dir():
-        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
-
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return f"Error: script not found: {script_path}"
+    script_path, err = _check_script(script_path)
+    if err:
+        return f"Error: {err}"
 
     frame_a = max(1, min(frame_a, 1800))
     frame_b = max(1, min(frame_b, 1800))
@@ -922,12 +905,9 @@ async def inspect_palette(
         frames: Frame number to analyze (default: 5).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    if not _pyxel_dir():
-        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
-
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return f"Error: script not found: {script_path}"
+    script_path, err = _check_script(script_path)
+    if err:
+        return f"Error: {err}"
 
     frames = max(1, min(frames, 1800))
     timeout = max(1, min(timeout, 60))
@@ -966,12 +946,9 @@ async def inspect_tilemap(
         frames: Frame at which to read tilemap (default: 1).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    if not _pyxel_dir():
-        return "Error: Pyxel is not installed. Run: pip install pyxel-mcp"
-
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return f"Error: script not found: {script_path}"
+    script_path, err = _check_script(script_path)
+    if err:
+        return f"Error: {err}"
 
     tilemap = max(0, tilemap)
     frames = max(1, min(frames, 1800))
@@ -1053,12 +1030,9 @@ async def inspect_bank(
         scale: Screenshot scale multiplier (default: 1).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    if not _pyxel_dir():
-        return ["Error: Pyxel is not installed. Run: pip install pyxel-mcp"]
-
-    script_path = os.path.abspath(script_path)
-    if not os.path.isfile(script_path):
-        return [f"Error: script not found: {script_path}"]
+    script_path, err = _check_script(script_path)
+    if err:
+        return [f"Error: {err}"]
 
     bank = max(0, bank)
     scale = max(1, min(scale, 4))
