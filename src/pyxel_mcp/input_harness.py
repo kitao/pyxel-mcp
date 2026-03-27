@@ -29,14 +29,15 @@ with open(input_file) as f:
 
 import pyxel
 
+from pyxel_mcp._headless import patch_game_loop, run_script, setup_harness
+
+setup_harness(script_path)
+
 # --- Input simulation state ---
 
-_prev_keys = set()
-_curr_keys = set()
 _schedule_idx = 0
-_last_keys = set()
-_last_mouse_x = 0
-_last_mouse_y = 0
+_active_keys = set()
+_capture_idx = 0
 
 
 def _resolve_key(name):
@@ -47,61 +48,39 @@ def _resolve_key(name):
     return val
 
 
-def _update_input_state():
-    """Advance input state to match current frame_count."""
-    global _prev_keys, _curr_keys, _schedule_idx
-    global _last_keys, _last_mouse_x, _last_mouse_y
+def _apply_input():
+    """Apply scheduled input events up to the current frame."""
+    global _schedule_idx, _active_keys
 
-    _prev_keys = _curr_keys.copy()
     fc = pyxel.frame_count
-
     while _schedule_idx < len(input_schedule):
         entry = input_schedule[_schedule_idx]
         if entry["frame"] > fc:
             break
-        _last_keys = set(_resolve_key(k) for k in entry.get("keys", []))
-        if "mouse_x" in entry:
-            _last_mouse_x = entry["mouse_x"]
-        if "mouse_y" in entry:
-            _last_mouse_y = entry["mouse_y"]
+
+        new_keys = set(_resolve_key(k) for k in entry.get("keys", []))
+
+        # Release keys no longer held
+        for key in _active_keys - new_keys:
+            pyxel.set_btn(key, False)
+
+        # Press newly held keys
+        for key in new_keys - _active_keys:
+            pyxel.set_btn(key, True)
+
+        _active_keys = new_keys
+
+        # Set mouse position if specified
+        if "mouse_x" in entry or "mouse_y" in entry:
+            mx = entry.get("mouse_x", pyxel.mouse_x)
+            my = entry.get("mouse_y", pyxel.mouse_y)
+            pyxel.set_mouse_pos(mx, my)
+
         _schedule_idx += 1
 
-    _curr_keys = _last_keys.copy()
-    # Shadow pyxel.mouse_x/y directly; warp_mouse() is a no-op in headless mode
-    pyxel.mouse_x = _last_mouse_x
-    pyxel.mouse_y = _last_mouse_y
 
-
-# Patch input functions
-def _sim_btn(key):
-    return key in _curr_keys
-
-
-def _sim_btnp(key, hold=None, repeat=None):
-    return key in _curr_keys and key not in _prev_keys
-
-
-def _sim_btnr(key):
-    return key not in _curr_keys and key in _prev_keys
-
-
-pyxel.btn = _sim_btn
-pyxel.btnp = _sim_btnp
-pyxel.btnr = _sim_btnr
-
-# --- Headless mode: no window, max speed ---
-
-from pyxel_mcp._headless import run_script, setup_harness
-
-setup_harness(script_path)
-
-# --- Frame capture ---
-
-_capture_idx = 0
-
-
-def _try_capture(fc, draw):
-    """Capture at the current frame if it matches the next target."""
+def _on_frame(fc, draw):
+    """Capture screenshot at target frames."""
     global _capture_idx
     if _capture_idx >= len(frame_list):
         return False
@@ -118,64 +97,13 @@ def _try_capture(fc, draw):
     return _capture_idx >= len(frame_list)
 
 
-# Patch pyxel.run: wrap update for input simulation + capture
-_original_run = pyxel.run
-
-
-def _patched_run(update, draw):
-    def wrapped_update():
-        _update_input_state()
-        update()
-        if _try_capture(pyxel.frame_count, draw):
-            pyxel.quit()
-            os._exit(0)
-
-    _original_run(wrapped_update, draw)
-
-
-pyxel.run = _patched_run
-
-# Patch pyxel.show: capture as static image
-_original_show = pyxel.show
-
-
-def _patched_show():
+def _on_show():
     path = os.path.join(output_dir, "frame_show.png")
     try:
         pyxel.screenshot(path, scale=capture_scale)
     except Exception as e:
         print(f"Capture error: {e}", file=sys.stderr)
-    pyxel.quit()
-    os._exit(0)
 
 
-pyxel.show = _patched_show
-
-# Patch pyxel.flip: count flips and capture
-_flip_counter = 0
-_flip_capture_idx = 0
-_original_flip = pyxel.flip
-
-
-def _patched_flip():
-    global _flip_counter, _flip_capture_idx
-    _update_input_state()
-    _original_flip()
-    _flip_counter += 1
-    if _flip_capture_idx < len(frame_list) and _flip_counter >= frame_list[_flip_capture_idx]:
-        target = frame_list[_flip_capture_idx]
-        path = os.path.join(output_dir, f"frame_{target:04d}.png")
-        try:
-            pyxel.screenshot(path, scale=capture_scale)
-        except Exception as e:
-            print(f"Capture error at flip {target}: {e}", file=sys.stderr)
-        _flip_capture_idx += 1
-        if _flip_capture_idx >= len(frame_list):
-            pyxel.quit()
-            os._exit(0)
-
-
-pyxel.flip = _patched_flip
-
-# Execute the user script
+patch_game_loop(_on_frame, on_show=_on_show, pre_update=_apply_input)
 run_script(script_path)
