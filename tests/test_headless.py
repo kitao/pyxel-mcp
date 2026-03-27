@@ -184,19 +184,21 @@ def test_patch_game_loop_show_default_calls_on_frame():
     assert received == [0]
 
 
-def test_patch_game_loop_flip_increments_counter():
-    """patch_game_loop tracks flip call count and passes it to on_frame."""
+def test_patch_game_loop_flip_uses_frame_count():
+    """patch_game_loop passes pyxel.frame_count to on_frame after flip."""
     received_frames = []
 
     def on_frame(frame_count, draw):
         received_frames.append(frame_count)
-        return frame_count >= 2  # exit after 2 flips
+        return frame_count >= 2
 
     mock_pyxel = _make_mock_pyxel()
+    mock_pyxel.frame_count = 0
 
-    # Keep track of original flip being called
-    flip_calls = []
-    mock_pyxel.flip = MagicMock(side_effect=lambda: flip_calls.append(True))
+    # Make flip increment frame_count (matches Pyxel 2.8.9 behavior)
+    def real_flip():
+        mock_pyxel.frame_count += 1
+    mock_pyxel.flip = real_flip
 
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
         from importlib import reload
@@ -205,10 +207,74 @@ def test_patch_game_loop_flip_increments_counter():
         headless.patch_game_loop(on_frame)
 
     with patch("os._exit"):
-        mock_pyxel.flip()  # frame 1 — on_frame returns False
-        mock_pyxel.flip()  # frame 2 — on_frame returns True, exits
+        mock_pyxel.flip()
+        mock_pyxel.flip()
 
     assert received_frames == [1, 2]
+
+
+def test_patch_game_loop_pre_update_called_before_update():
+    """pre_update is called before update() in pyxel.run path."""
+    call_order = []
+
+    def pre_update():
+        call_order.append("pre_update")
+
+    def on_frame(fc, draw):
+        return True
+
+    mock_pyxel = _make_mock_pyxel()
+    mock_pyxel.frame_count = 1
+    captured = {}
+
+    def fake_run(update, draw):
+        captured["update"] = update
+
+    mock_pyxel.run = fake_run
+
+    with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
+        from importlib import reload
+        import pyxel_mcp._headless as headless
+        reload(headless)
+        headless.patch_game_loop(on_frame, pre_update=pre_update)
+
+    user_update = MagicMock(side_effect=lambda: call_order.append("update"))
+    mock_pyxel.run(user_update, MagicMock())
+
+    with patch("os._exit"):
+        captured["update"]()
+
+    assert call_order == ["pre_update", "update"]
+
+
+def test_patch_game_loop_pre_update_called_before_on_frame_in_flip():
+    """pre_update is called before on_frame in flip path."""
+    call_order = []
+
+    def pre_update():
+        call_order.append("pre_update")
+
+    def on_frame(fc, draw):
+        call_order.append("on_frame")
+        return True
+
+    mock_pyxel = _make_mock_pyxel()
+    mock_pyxel.frame_count = 0
+
+    def real_flip():
+        mock_pyxel.frame_count += 1
+    mock_pyxel.flip = real_flip
+
+    with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
+        from importlib import reload
+        import pyxel_mcp._headless as headless
+        reload(headless)
+        headless.patch_game_loop(on_frame, pre_update=pre_update)
+
+    with patch("os._exit"):
+        mock_pyxel.flip()
+
+    assert call_order == ["pre_update", "on_frame"]
 
 
 # --- noop_game_loop ---
