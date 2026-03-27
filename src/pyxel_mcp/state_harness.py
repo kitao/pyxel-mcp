@@ -149,16 +149,13 @@ def _patched_show():
 
 pyxel.show = _patched_show
 
-# Patch pyxel.flip: count flips and dump at target
-_flip_counter = 0
+# Patch pyxel.flip: use frame_count (Pyxel 2.8.9 advances it on flip)
 _original_flip = pyxel.flip
 
 
 def _patched_flip():
-    global _flip_counter
     _original_flip()
-    _flip_counter += 1
-    _try_capture(_flip_counter)
+    _try_capture(pyxel.frame_count)
 
 
 pyxel.flip = _patched_flip
