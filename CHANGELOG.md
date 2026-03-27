@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.9.1
+
+- Bump Pyxel minimum version to 2.8.9
+- Replace monkey-patched input simulation with native set_btn/set_mouse_pos API
+- Remove manual flip counters; use Pyxel's frame_count in headless flip path
+- Add pre_update callback to patch_game_loop for input injection timing
+
 ## 0.9.0
 
 - Split server.py into focused modules (_errors, _palette, _audio, _format, _validate, _subprocess)
