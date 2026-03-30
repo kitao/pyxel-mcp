@@ -69,8 +69,9 @@ def test_partial_failure():
     with patch("pyxel_mcp.server.urlopen", flaky_urlopen), \
          patch("pyxel_mcp.server._installed_version", return_value="1.0.0"):
         lines = _check_updates()
-    # At least one should succeed (order not guaranteed due to error handling)
-    assert len(lines) <= 1
+    # First package (pyxel-mcp) fails, second (pyxel) succeeds
+    assert len(lines) == 1
+    assert "pyxel " in lines[0]
 
 
 def test_pyxel_info_includes_update_notice():
