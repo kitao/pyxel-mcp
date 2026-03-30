@@ -60,7 +60,7 @@ def setup_harness(script_path, transform_args=None):
     patch_headless_init(script_path, transform_args)
 
 
-def patch_game_loop(on_frame, on_show=None, pre_update=None):
+def patch_game_loop(on_frame, on_show=None, pre_update=None, on_run=None):
     """Patch pyxel.run/show/flip with unified frame-based capture.
 
     Args:
@@ -70,12 +70,16 @@ def patch_game_loop(on_frame, on_show=None, pre_update=None):
             calls on_frame(0, lambda: None) instead.
         pre_update: Called before update() in run path and before
             on_frame in flip path. Use for input injection.
+        on_run: Called with (update, draw) when pyxel.run() is invoked,
+            before the game loop starts. Use for App instance extraction.
     """
     _original_run = pyxel.run
     _original_show = pyxel.show
     _original_flip = pyxel.flip
 
     def _patched_run(update, draw):
+        if on_run:
+            on_run(update, draw)
         def _wrapped_update():
             if pre_update:
                 pre_update()

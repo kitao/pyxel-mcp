@@ -28,7 +28,7 @@ if len(sys.argv) > 3:
 
 import pyxel
 
-from pyxel_mcp._headless import run_script, setup_harness
+from pyxel_mcp._headless import run_script, setup_harness, patch_game_loop
 
 setup_harness(script_path)
 
@@ -96,15 +96,13 @@ def _capture_state():
     return result
 
 
-def _flush_and_quit():
+def _flush_results():
     # Output single object for one frame (backward compatible), array for multiple
     if len(frame_list) == 1:
         print("__PYXEL_MCP_JSON__:" + json.dumps(_results[0], default=str))
     else:
         print("__PYXEL_MCP_JSON__:" + json.dumps(_results, default=str))
     sys.stdout.flush()
-    pyxel.quit()
-    os._exit(0)
 
 
 def _try_capture(fc):
@@ -114,52 +112,31 @@ def _try_capture(fc):
     if fc >= frame_list[_capture_idx]:
         _results.append(_capture_state())
         _capture_idx += 1
-        if _capture_idx >= len(frame_list):
-            _flush_and_quit()
 
 
-# Custom run/show/flip patches instead of patch_game_loop because we need
-# to extract the App instance from update.__self__ / draw.__self__.
-_original_run = pyxel.run
-
-
-def _patched_run(update, draw):
+def _on_run(update, draw):
     global _app_instance
     if hasattr(update, "__self__"):
         _app_instance = update.__self__
     elif hasattr(draw, "__self__"):
         _app_instance = draw.__self__
 
-    def wrapped_update():
-        update()
-        _try_capture(pyxel.frame_count)
 
-    _original_run(wrapped_update, draw)
-
-
-pyxel.run = _patched_run
-
-# Patch pyxel.show: dump state immediately
-_original_show = pyxel.show
+def _on_frame(fc, draw):
+    _try_capture(fc)
+    if _capture_idx >= len(frame_list):
+        _flush_results()
+        return True  # signal exit to patch_game_loop
+    return False
 
 
-def _patched_show():
+def _on_show():
     _results.append(_capture_state())
-    _flush_and_quit()
+    _flush_results()
+    # patch_game_loop handles os._exit(0) after this returns
 
 
-pyxel.show = _patched_show
-
-# Patch pyxel.flip: use frame_count (Pyxel 2.8.9 advances it on flip)
-_original_flip = pyxel.flip
-
-
-def _patched_flip():
-    _original_flip()
-    _try_capture(pyxel.frame_count)
-
-
-pyxel.flip = _patched_flip
+patch_game_loop(_on_frame, on_show=_on_show, on_run=_on_run)
 
 # Execute the user script
 run_script(script_path)
