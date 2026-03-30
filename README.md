@@ -34,6 +34,10 @@ MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for 
 
 - **`pyxel_info`** — Get Pyxel installation info: package location, examples path, and API stubs path
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/kitao-pyxel-mcp).
+
 ## Getting Started
 
 Just ask your AI agent (e.g. Claude Code) to create a Pyxel game. The agent will automatically discover and set up pyxel-mcp from the [MCP Registry](https://registry.modelcontextprotocol.io/).
