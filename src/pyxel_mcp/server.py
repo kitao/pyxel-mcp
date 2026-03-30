@@ -14,8 +14,8 @@ from urllib.request import urlopen
 from mcp.server.fastmcp import FastMCP, Image
 
 from pyxel_mcp._audio import analyze_wav
-from pyxel_mcp._errors import decode_stderr, extract_stdout
-from pyxel_mcp._subprocess import run_harness, HARNESS_PATHS
+from pyxel_mcp._errors import extract_stdout
+from pyxel_mcp._subprocess import run_harness, run_harness_raw
 from pyxel_mcp._format import (
     format_sprite_report,
     format_layout_report,
@@ -151,34 +151,27 @@ async def run_and_capture(
         output_path = tmp.name
 
     try:
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable, HARNESS_PATHS["run"],
-            script_path, output_path, str(frames), str(scale),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        _, stderr_text, returncode = await run_harness_raw(
+            "run",
+            [script_path, output_path, str(frames), str(scale)],
             cwd=os.path.dirname(script_path),
-        )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout
+            timeout=timeout,
         )
 
         if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
-            error_msg = decode_stderr(stderr) or "Unknown error"
-            return [f"Capture failed (exit code {proc.returncode}): {error_msg}"]
+            error_msg = stderr_text or "Unknown error"
+            return [f"Capture failed (exit code {returncode}): {error_msg}"]
 
         with open(output_path, "rb") as f:
             image_data = f.read()
         result = [Image(data=image_data, format="png")]
         info = f"Captured at frame {frames}, scale {scale}x"
-        stderr_text = decode_stderr(stderr)
         if stderr_text:
             info += f"\nstderr: {stderr_text}"
         result.append(info)
         return result
 
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.communicate()
         return [f"Timeout: script did not finish within {timeout}s"]
     finally:
         if os.path.exists(output_path):
@@ -250,35 +243,31 @@ async def render_audio(
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         output_path = tmp.name
 
-    try:
-        harness_args = [
-            script_path,
-            output_path,
-            str(sound_index),
-            str(duration_sec) if duration_sec > 0 else "0",
-        ]
-        if music_index >= 0:
-            harness_args.append(str(music_index))
+    harness_args = [
+        script_path,
+        output_path,
+        str(sound_index),
+        str(duration_sec) if duration_sec > 0 else "0",
+    ]
+    if music_index >= 0:
+        harness_args.append(str(music_index))
 
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable, HARNESS_PATHS["audio"], *harness_args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+    try:
+        stdout_bytes, stderr_text, returncode = await run_harness_raw(
+            "audio", harness_args,
             cwd=os.path.dirname(script_path),
-        )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout
+            timeout=timeout,
         )
 
         if not os.path.isfile(output_path) or os.path.getsize(output_path) == 0:
-            error_msg = decode_stderr(stderr) or "Unknown error"
-            return f"Render failed (exit code {proc.returncode}): {error_msg}"
+            error_msg = stderr_text or "Unknown error"
+            return f"Render failed (exit code {returncode}): {error_msg}"
 
         meta = {}
         user_output = ""
-        if stdout:
+        if stdout_bytes:
             try:
-                json_str, user_output = extract_stdout(stdout)
+                json_str, user_output = extract_stdout(stdout_bytes)
                 meta = json.loads(json_str) if json_str else {}
             except (json.JSONDecodeError, ValueError):
                 pass
@@ -302,14 +291,11 @@ async def render_audio(
             )
         if user_output:
             result = f"Script output:\n{user_output}\n\n{result}"
-        stderr_text = decode_stderr(stderr)
         if stderr_text:
             result += f"\n\nstderr: {stderr_text}"
         return result
 
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.communicate()
         return f"Timeout: script did not finish within {timeout}s"
     finally:
         if os.path.exists(output_path):
@@ -480,15 +466,11 @@ async def capture_frames(
 
     try:
         frame_csv = ",".join(str(f) for f in frame_list)
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable, HARNESS_PATHS["frames"],
-            script_path, output_dir, frame_csv, str(scale),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        _, stderr_text, returncode = await run_harness_raw(
+            "frames",
+            [script_path, output_dir, frame_csv, str(scale)],
             cwd=os.path.dirname(script_path),
-        )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout
+            timeout=timeout,
         )
 
         result = []
@@ -508,10 +490,9 @@ async def capture_frames(
                 result.append("Captured via pyxel.show()")
 
         if not result:
-            error_msg = decode_stderr(stderr) or "No frames captured"
-            return [f"Capture failed (exit code {proc.returncode}): {error_msg}"]
+            error_msg = stderr_text or "No frames captured"
+            return [f"Capture failed (exit code {returncode}): {error_msg}"]
 
-        stderr_text = decode_stderr(stderr)
         info = f"Captured {len([r for r in result if isinstance(r, Image)])} frames"
         if stderr_text:
             info += f"\nstderr: {stderr_text}"
@@ -519,8 +500,6 @@ async def capture_frames(
         return result
 
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.communicate()
         return [f"Timeout: script did not finish within {timeout}s"]
     finally:
         shutil.rmtree(output_dir, ignore_errors=True)
@@ -586,15 +565,11 @@ async def play_and_capture(
             json.dump(input_data, f)
 
         frame_csv = ",".join(str(f) for f in frame_list)
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable, HARNESS_PATHS["input"],
-            script_path, output_dir, frame_csv, str(scale), input_tmp,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        _, stderr_text, returncode = await run_harness_raw(
+            "input",
+            [script_path, output_dir, frame_csv, str(scale), input_tmp],
             cwd=os.path.dirname(script_path),
-        )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout
+            timeout=timeout,
         )
 
         result = []
@@ -613,10 +588,9 @@ async def play_and_capture(
                 result.append("Captured via pyxel.show()")
 
         if not result:
-            error_msg = decode_stderr(stderr) or "No frames captured"
-            return [f"Capture failed (exit code {proc.returncode}): {error_msg}"]
+            error_msg = stderr_text or "No frames captured"
+            return [f"Capture failed (exit code {returncode}): {error_msg}"]
 
-        stderr_text = decode_stderr(stderr)
         info = f"Captured {len([r for r in result if isinstance(r, Image)])} frames"
         n_inputs = len(input_data)
         info += f" with {n_inputs} input event{'s' if n_inputs != 1 else ''}"
@@ -626,8 +600,6 @@ async def play_and_capture(
         return result
 
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.communicate()
         return [f"Timeout: script did not finish within {timeout}s"]
     finally:
         shutil.rmtree(output_dir, ignore_errors=True)
@@ -1091,15 +1063,11 @@ async def inspect_bank(
     output_path = os.path.join(output_dir, "bank.png")
 
     try:
-        proc = await asyncio.create_subprocess_exec(
-            sys.executable, HARNESS_PATHS["bank"],
-            script_path, output_path, str(bank), str(scale),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        _, stderr_text, returncode = await run_harness_raw(
+            "bank",
+            [script_path, output_path, str(bank), str(scale)],
             cwd=os.path.dirname(script_path),
-        )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(), timeout=timeout
+            timeout=timeout,
         )
 
         result = []
@@ -1108,17 +1076,14 @@ async def inspect_bank(
                 result.append(Image(data=f.read(), format="png"))
             result.append(f"Image bank {bank} (up to 256x256 pixels)")
         else:
-            error_msg = decode_stderr(stderr) or "No output captured"
-            return [f"Bank capture failed (exit code {proc.returncode}): {error_msg}"]
+            error_msg = stderr_text or "No output captured"
+            return [f"Bank capture failed (exit code {returncode}): {error_msg}"]
 
-        stderr_text = decode_stderr(stderr)
         if stderr_text:
             result.append(f"stderr: {stderr_text}")
         return result
 
     except asyncio.TimeoutError:
-        proc.kill()
-        await proc.communicate()
         return [f"Timeout: script did not finish within {timeout}s"]
     finally:
         shutil.rmtree(output_dir, ignore_errors=True)

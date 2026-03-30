@@ -23,6 +23,31 @@ HARNESS_PATHS = {
 }
 
 
+async def run_harness_raw(harness_key, args, *, cwd, timeout=10):
+    """Run a harness subprocess and return (stdout_bytes, stderr_text, returncode).
+
+    Unlike run_harness(), does not parse JSON — returns raw stdout bytes.
+    Raises asyncio.TimeoutError on timeout (process is killed first).
+    """
+    harness_path = HARNESS_PATHS[harness_key]
+    proc = await asyncio.create_subprocess_exec(
+        sys.executable, harness_path, *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=cwd,
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=timeout
+        )
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.communicate()
+        raise
+
+    return stdout, decode_stderr(stderr), proc.returncode
+
+
 async def run_harness(harness_name, args, *, cwd, timeout=10):
     """Run a harness subprocess and return (json_data, user_output, stderr_text).
 
