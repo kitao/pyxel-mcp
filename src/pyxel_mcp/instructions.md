@@ -16,6 +16,8 @@
    - `inspect_bank` to see all sprites/tiles in an image bank.
    - `compare_frames` for visual regression testing between frames.
    - `inspect_screen` for compact color grid (no image tokens).
+   - `capture_frames` for multi-frame animation and transition verification.
+   - `inspect_animation` for sprite animation consistency (palette, silhouette, frame diffs).
 5. Fix and re-verify.
 
 ### Error Recovery
@@ -44,6 +46,7 @@
 - **`inspect_palette`**: Returns color distribution and contrast warnings. Check that foreground colors have sufficient contrast against background.
 - **`inspect_tilemap`**: Returns tile grid, usage stats, and bounding box. Check `imgsrc` matches your image bank. Verify (0,0) tiles are empty.
 - **`inspect_bank`**: Returns image bank as screenshot (up to 256x256). Verify sprite/tile placement and find available space.
+- **`inspect_animation`**: Returns per-frame pixel diffs, palette consistency, and silhouette stability. Check that frames share a consistent outline and palette — large diffs between adjacent frames indicate flickering or misaligned sprites.
 
 ### Output Format
 
@@ -169,6 +172,8 @@ pyxel.sounds[11].mml("T120 @0 V60 L4 O2 [CC8C8 GG8G8 AA8A8 FF8F8]2")
 pyxel.sounds[12].mml("T120 @1 V40 L16 O4 [CEGCEGCEGCEG <B>DG<B>DG<B>DG<B>DG]2")
 pyxel.musics[0].set([10], [11], [12])
 ```
+
+**Volume scales:** MML uses `V0`-`V100` (e.g., `V80` = 80%). The `set()` API uses a `volumes` string with single-digit values `0`-`7` (e.g., `"7776"`). These are independent scales — `V7` in MML is very quiet, not the same as `7` in `set()`.
 
 **Genre moods by key and tempo:**
 
