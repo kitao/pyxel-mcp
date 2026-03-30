@@ -641,7 +641,7 @@ async def play_and_capture(
 @mcp.tool()
 async def inspect_layout(
     script_path: str,
-    frames: int = 5,
+    frame: int = 5,
     timeout: int = 10,
 ) -> str:
     """Analyze screen layout, text alignment, and visual balance.
@@ -651,20 +651,20 @@ async def inspect_layout(
 
     Args:
         script_path: Absolute path to the .py script to run.
-        frames: Frame number to analyze (default: 5).
+        frame: Frame number to analyze (default: 5).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
     script_path, err = _check_script(script_path)
     if err:
         return f"Error: {err}"
 
-    frames = max(1, min(frames, 1800))
+    frame = max(1, min(frame, 1800))
     timeout = max(1, min(timeout, 60))
 
     try:
         data, user_output, stderr_text = await run_harness(
             "layout",
-            [script_path, str(frames)],
+            [script_path, str(frame)],
             cwd=os.path.dirname(script_path),
             timeout=timeout,
         )
@@ -795,7 +795,7 @@ async def _run_screen_harness(script_path, frame_csv, timeout=10):
 @mcp.tool()
 async def inspect_screen(
     script_path: str,
-    frames: int = 5,
+    frame: int = 5,
     timeout: int = 10,
 ) -> str:
     """Capture screen as a compact color index grid.
@@ -806,19 +806,19 @@ async def inspect_screen(
 
     Args:
         script_path: Absolute path to the .py script to run.
-        frames: Frame number to capture (default: 5).
+        frame: Frame number to capture (default: 5).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
     script_path, err = _check_script(script_path)
     if err:
         return f"Error: {err}"
 
-    frames = max(1, min(frames, 1800))
+    frame = max(1, min(frame, 1800))
     timeout = max(1, min(timeout, 60))
 
     try:
         data, user_output, stderr_text = await _run_screen_harness(
-            script_path, str(frames), timeout
+            script_path, str(frame), timeout
         )
     except (RuntimeError, json.JSONDecodeError) as e:
         return str(e)
@@ -940,7 +940,7 @@ async def compare_frames(
 @mcp.tool()
 async def inspect_palette(
     script_path: str,
-    frames: int = 5,
+    frame: int = 5,
     timeout: int = 10,
 ) -> str:
     """Analyze color usage and contrast in a Pyxel screenshot.
@@ -951,19 +951,19 @@ async def inspect_palette(
 
     Args:
         script_path: Absolute path to the .py script to run.
-        frames: Frame number to analyze (default: 5).
+        frame: Frame number to analyze (default: 5).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
     script_path, err = _check_script(script_path)
     if err:
         return f"Error: {err}"
 
-    frames = max(1, min(frames, 1800))
+    frame = max(1, min(frame, 1800))
     timeout = max(1, min(timeout, 60))
 
     try:
         data, user_output, stderr_text = await _run_screen_harness(
-            script_path, str(frames), timeout
+            script_path, str(frame), timeout
         )
     except (RuntimeError, json.JSONDecodeError) as e:
         return str(e)

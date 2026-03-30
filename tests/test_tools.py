@@ -77,21 +77,21 @@ async def test_validate_script_syntax_error():
 @pytest.mark.asyncio
 async def test_inspect_screen(script_path):
     from pyxel_mcp.server import inspect_screen
-    result = await inspect_screen(script_path, frames=1, timeout=10)
+    result = await inspect_screen(script_path, frame=1, timeout=10)
     assert "32x32" in result
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_inspect_layout(game_script_path):
     from pyxel_mcp.server import inspect_layout
-    result = await inspect_layout(game_script_path, frames=2, timeout=10)
+    result = await inspect_layout(game_script_path, frame=2, timeout=10)
     assert "Screen:" in result
 
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_inspect_palette(game_script_path):
     from pyxel_mcp.server import inspect_palette
-    result = await inspect_palette(game_script_path, frames=2, timeout=10)
+    result = await inspect_palette(game_script_path, frame=2, timeout=10)
     assert "Colors used:" in result or "Palette" in result
 
 @pytest.mark.integration
