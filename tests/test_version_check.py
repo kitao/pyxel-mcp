@@ -1,7 +1,10 @@
 """Tests for version check logic."""
 
+import asyncio
 import json
 from unittest.mock import patch, MagicMock
+
+import pytest
 
 from pyxel_mcp.server import _check_updates
 
@@ -74,7 +77,8 @@ def test_partial_failure():
     assert "pyxel " in lines[0]
 
 
-def test_pyxel_info_includes_update_notice():
+@pytest.mark.asyncio
+async def test_pyxel_info_includes_update_notice():
     responses = {
         "pyxel-mcp": {"info": {"version": "99.0.0"}},
         "pyxel/json": {"info": {"version": "99.0.0"}},
@@ -83,12 +87,13 @@ def test_pyxel_info_includes_update_notice():
          patch("pyxel_mcp.server._installed_version", return_value="1.0.0"), \
          patch("pyxel_mcp.server._pyxel_dir", return_value="/fake/pyxel"):
         from pyxel_mcp.server import pyxel_info
-        result = pyxel_info()
+        result = await pyxel_info()
     assert "Update available: pyxel-mcp" in result
     assert "Update available: pyxel" in result
 
 
-def test_pyxel_info_no_notice_when_current():
+@pytest.mark.asyncio
+async def test_pyxel_info_no_notice_when_current():
     responses = {
         "pyxel-mcp": {"info": {"version": "1.0.0"}},
         "pyxel/json": {"info": {"version": "1.0.0"}},
@@ -97,5 +102,5 @@ def test_pyxel_info_no_notice_when_current():
          patch("pyxel_mcp.server._installed_version", return_value="1.0.0"), \
          patch("pyxel_mcp.server._pyxel_dir", return_value="/fake/pyxel"):
         from pyxel_mcp.server import pyxel_info
-        result = pyxel_info()
+        result = await pyxel_info()
     assert "Update available" not in result

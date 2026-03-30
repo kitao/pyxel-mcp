@@ -186,7 +186,7 @@ async def run_and_capture(
 
 
 @mcp.tool()
-def pyxel_info() -> str:
+async def pyxel_info() -> str:
     """Get Pyxel installation info: package location, examples path, and API stubs path."""
     pyxel_dir = _pyxel_dir()
     if not pyxel_dir:
@@ -206,7 +206,7 @@ def pyxel_info() -> str:
         files = sorted(glob.glob(os.path.join(examples, "*.py")))
         lines.append(f"Examples: {', '.join(os.path.basename(f) for f in files)}")
 
-    updates = _check_updates()
+    updates = await asyncio.to_thread(_check_updates)
     if updates:
         lines.append("")
         lines.extend(updates)
