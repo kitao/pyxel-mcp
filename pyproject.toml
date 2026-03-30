@@ -47,6 +47,7 @@ packages = ["src/pyxel_mcp"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = ["integration: tests that require Pyxel (GUI library)"]
 
 [project.scripts]
 pyxel-mcp = "pyxel_mcp.server:main"

@@ -45,6 +45,7 @@ def game_script_path():
     yield path
     os.unlink(path)
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_run_and_capture(game_script_path):
     from pyxel_mcp.server import run_and_capture
@@ -52,12 +53,14 @@ async def test_run_and_capture(game_script_path):
     assert len(result) >= 2
     assert "Captured" in str(result[-1])
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_validate_script_valid(script_path):
     from pyxel_mcp.server import validate_script
     result = await validate_script(script_path)
     assert "Script:" in result
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_validate_script_syntax_error():
     from pyxel_mcp.server import validate_script
@@ -70,30 +73,35 @@ async def test_validate_script_syntax_error():
     finally:
         os.unlink(path)
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_inspect_screen(script_path):
     from pyxel_mcp.server import inspect_screen
     result = await inspect_screen(script_path, frames=1, timeout=10)
     assert "32x32" in result
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_inspect_layout(game_script_path):
     from pyxel_mcp.server import inspect_layout
     result = await inspect_layout(game_script_path, frames=2, timeout=10)
     assert "Screen:" in result
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_inspect_palette(game_script_path):
     from pyxel_mcp.server import inspect_palette
     result = await inspect_palette(game_script_path, frames=2, timeout=10)
     assert "Colors used:" in result or "Palette" in result
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_compare_frames(game_script_path):
     from pyxel_mcp.server import compare_frames
     result = await compare_frames(game_script_path, frame_a=1, frame_b=5, timeout=10)
     assert "Frame" in result
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_run_and_capture_not_found():
     from pyxel_mcp.server import run_and_capture

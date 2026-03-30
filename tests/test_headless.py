@@ -5,6 +5,8 @@ import sys
 import types
 from unittest.mock import MagicMock, call, patch
 
+import pytest
+
 
 def _make_mock_pyxel():
     """Create a minimal mock pyxel module."""
@@ -18,6 +20,7 @@ def _make_mock_pyxel():
 
 # --- setup_harness ---
 
+@pytest.mark.integration
 def test_setup_harness_resets_argv(tmp_path):
     """setup_harness resets sys.argv to [script_path]."""
     script = str(tmp_path / "game.py")
@@ -33,6 +36,7 @@ def test_setup_harness_resets_argv(tmp_path):
     sys.argv = original_argv
 
 
+@pytest.mark.integration
 def test_setup_harness_calls_patch_headless_init(tmp_path):
     """setup_harness calls patch_headless_init with script_path."""
     script = str(tmp_path / "game.py")
@@ -45,6 +49,7 @@ def test_setup_harness_calls_patch_headless_init(tmp_path):
             mock_patch.assert_called_once_with(script, None)
 
 
+@pytest.mark.integration
 def test_setup_harness_passes_transform_args(tmp_path):
     """setup_harness forwards transform_args to patch_headless_init."""
     script = str(tmp_path / "game.py")
@@ -60,6 +65,7 @@ def test_setup_harness_passes_transform_args(tmp_path):
 
 # --- patch_game_loop ---
 
+@pytest.mark.integration
 def test_patch_game_loop_patches_run_show_flip():
     """patch_game_loop replaces pyxel.run, pyxel.show, pyxel.flip."""
     mock_pyxel = _make_mock_pyxel()
@@ -78,6 +84,7 @@ def test_patch_game_loop_patches_run_show_flip():
     assert mock_pyxel.flip is not original_flip
 
 
+@pytest.mark.integration
 def test_patch_game_loop_on_frame_receives_frame_count():
     """patch_game_loop calls on_frame with pyxel.frame_count and draw fn."""
     received = []
@@ -116,6 +123,7 @@ def test_patch_game_loop_on_frame_receives_frame_count():
     assert received == [42]
 
 
+@pytest.mark.integration
 def test_patch_game_loop_run_exits_when_on_frame_returns_true():
     """patch_game_loop calls os._exit(0) when on_frame returns True."""
     mock_pyxel = _make_mock_pyxel()
@@ -141,6 +149,7 @@ def test_patch_game_loop_run_exits_when_on_frame_returns_true():
         mock_exit.assert_called_once_with(0)
 
 
+@pytest.mark.integration
 def test_patch_game_loop_show_calls_on_show():
     """patch_game_loop calls on_show when pyxel.show() is invoked."""
     on_show_called = []
@@ -162,6 +171,7 @@ def test_patch_game_loop_show_calls_on_show():
     assert on_show_called == [True]
 
 
+@pytest.mark.integration
 def test_patch_game_loop_show_default_calls_on_frame():
     """patch_game_loop calls on_frame(0, ...) for pyxel.show() when no on_show."""
     received = []
@@ -184,6 +194,7 @@ def test_patch_game_loop_show_default_calls_on_frame():
     assert received == [0]
 
 
+@pytest.mark.integration
 def test_patch_game_loop_flip_uses_frame_count():
     """patch_game_loop passes pyxel.frame_count to on_frame after flip."""
     received_frames = []
@@ -213,6 +224,7 @@ def test_patch_game_loop_flip_uses_frame_count():
     assert received_frames == [1, 2]
 
 
+@pytest.mark.integration
 def test_patch_game_loop_pre_update_called_before_update():
     """pre_update is called before update() in pyxel.run path."""
     call_order = []
@@ -247,6 +259,7 @@ def test_patch_game_loop_pre_update_called_before_update():
     assert call_order == ["pre_update", "update"]
 
 
+@pytest.mark.integration
 def test_patch_game_loop_pre_update_called_before_on_frame_in_flip():
     """pre_update is called before on_frame in flip path."""
     call_order = []
@@ -279,6 +292,7 @@ def test_patch_game_loop_pre_update_called_before_on_frame_in_flip():
 
 # --- noop_game_loop ---
 
+@pytest.mark.integration
 def test_noop_game_loop_patches_run_show_flip():
     """noop_game_loop replaces run/show/flip with callables."""
     mock_pyxel = _make_mock_pyxel()
@@ -295,6 +309,7 @@ def test_noop_game_loop_patches_run_show_flip():
     assert callable(mock_pyxel.flip)
 
 
+@pytest.mark.integration
 def test_noop_game_loop_run_does_nothing():
     """noop_game_loop makes pyxel.run() a no-op (doesn't call update/draw)."""
     mock_pyxel = _make_mock_pyxel()
@@ -313,6 +328,7 @@ def test_noop_game_loop_run_does_nothing():
     draw.assert_not_called()
 
 
+@pytest.mark.integration
 def test_noop_game_loop_show_does_nothing():
     """noop_game_loop makes pyxel.show() a no-op."""
     mock_pyxel = _make_mock_pyxel()
@@ -328,6 +344,7 @@ def test_noop_game_loop_show_does_nothing():
     assert result is None
 
 
+@pytest.mark.integration
 def test_noop_game_loop_flip_does_nothing():
     """noop_game_loop makes pyxel.flip() a no-op."""
     mock_pyxel = _make_mock_pyxel()
