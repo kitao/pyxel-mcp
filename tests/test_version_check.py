@@ -71,3 +71,30 @@ def test_partial_failure():
         lines = _check_updates()
     # At least one should succeed (order not guaranteed due to error handling)
     assert len(lines) <= 1
+
+
+def test_pyxel_info_includes_update_notice():
+    responses = {
+        "pyxel-mcp": {"info": {"version": "99.0.0"}},
+        "pyxel/json": {"info": {"version": "99.0.0"}},
+    }
+    with patch("pyxel_mcp.server.urlopen", _mock_urlopen(responses)), \
+         patch("pyxel_mcp.server._installed_version", return_value="1.0.0"), \
+         patch("pyxel_mcp.server._pyxel_dir", return_value="/fake/pyxel"):
+        from pyxel_mcp.server import pyxel_info
+        result = pyxel_info()
+    assert "Update available: pyxel-mcp" in result
+    assert "Update available: pyxel" in result
+
+
+def test_pyxel_info_no_notice_when_current():
+    responses = {
+        "pyxel-mcp": {"info": {"version": "1.0.0"}},
+        "pyxel/json": {"info": {"version": "1.0.0"}},
+    }
+    with patch("pyxel_mcp.server.urlopen", _mock_urlopen(responses)), \
+         patch("pyxel_mcp.server._installed_version", return_value="1.0.0"), \
+         patch("pyxel_mcp.server._pyxel_dir", return_value="/fake/pyxel"):
+        from pyxel_mcp.server import pyxel_info
+        result = pyxel_info()
+    assert "Update available" not in result

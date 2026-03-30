@@ -205,6 +205,12 @@ def pyxel_info() -> str:
     if os.path.isdir(examples):
         files = sorted(glob.glob(os.path.join(examples, "*.py")))
         lines.append(f"Examples: {', '.join(os.path.basename(f) for f in files)}")
+
+    updates = _check_updates()
+    if updates:
+        lines.append("")
+        lines.extend(updates)
+
     return "\n".join(lines)
 
 
