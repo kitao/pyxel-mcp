@@ -138,6 +138,24 @@ class App:
     assert "start" in result and "run" in result.lower()
 
 
+def test_run_in_draw_no_duplicate():
+    """pyxel.run() in draw() should produce exactly one warning."""
+    source = '''
+import pyxel
+class App:
+    def __init__(self):
+        pyxel.init(64, 64)
+    def update(self):
+        pass
+    def draw(self):
+        pyxel.run(self.update, self.draw)
+'''
+    result = validate_source(source)
+    # Count lines containing a pyxel.run() warning (should be exactly 1)
+    run_warning_lines = [line for line in result.splitlines() if "pyxel.run()" in line and line.strip().startswith("-")]
+    assert len(run_warning_lines) == 1
+
+
 def test_run_in_init_no_warning():
     src = '''
 import pyxel

@@ -70,7 +70,7 @@ def validate_source(source, filename="script.py"):
 
     # Check pyxel.run() called in functions other than __init__
     for name, body in method_bodies.items():
-        if name not in ("__init__",) and re.search(r"pyxel\.run\s*\(", body):
+        if name not in ("__init__", "draw") and re.search(r"pyxel\.run\s*\(", body):
             issues.append(f"pyxel.run() found in {name}(). Move to __init__().")
 
     # Check for missing pyxel import
