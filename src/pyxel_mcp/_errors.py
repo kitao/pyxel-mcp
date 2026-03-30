@@ -4,6 +4,9 @@ import re
 
 _MAX_STDERR = 4000
 
+# Prefix added to harness JSON output to distinguish it from user print output
+HARNESS_JSON_PREFIX = "__PYXEL_MCP_JSON__:"
+
 _ERROR_HINTS = [
     (
         r"TypeError.*blt\(\)",
@@ -69,13 +72,26 @@ def decode_stderr(stderr):
 def extract_stdout(raw_stdout):
     """Separate user print output from harness JSON in stdout.
 
-    Returns (json_str, user_output). The harness always prints JSON as
-    the last non-empty line. Everything before it is user print output.
+    Returns (json_str, user_output). The harness prints JSON with a unique
+    prefix (HARNESS_JSON_PREFIX). Everything before that line is user output.
+
+    Falls back to the legacy heuristic (last line starting with { or [) for
+    backwards compatibility with harnesses that predate the prefix.
     """
     text = raw_stdout.decode(errors="replace").strip()
     if not text:
         return "", ""
     lines = text.split("\n")
+
+    # Primary: look for the harness marker prefix
+    for i in range(len(lines) - 1, -1, -1):
+        stripped = lines[i].strip()
+        if stripped.startswith(HARNESS_JSON_PREFIX):
+            json_str = stripped[len(HARNESS_JSON_PREFIX):]
+            user_output = "\n".join(lines[:i]).strip()
+            return json_str, user_output
+
+    # Fallback: last non-empty line starting with { or [ (legacy behaviour)
     for i in range(len(lines) - 1, -1, -1):
         stripped = lines[i].strip()
         if stripped.startswith(("{", "[")):
@@ -83,4 +99,5 @@ def extract_stdout(raw_stdout):
             user_lines = lines[:i]
             user_output = "\n".join(user_lines).strip()
             return json_str, user_output
+
     return text, ""

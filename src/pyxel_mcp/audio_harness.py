@@ -70,5 +70,5 @@ else:
         "num_notes": len(sound.notes),
     }
 
-print(json.dumps(meta))
+print("__PYXEL_MCP_JSON__:" + json.dumps(meta))
 sys.stdout.flush()

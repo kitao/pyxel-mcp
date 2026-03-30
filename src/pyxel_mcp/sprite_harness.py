@@ -168,5 +168,5 @@ if frame_count > 1:
 
     result["frames"] = all_frames
 
-print(json.dumps(result))
+print("__PYXEL_MCP_JSON__:" + json.dumps(result))
 sys.stdout.flush()

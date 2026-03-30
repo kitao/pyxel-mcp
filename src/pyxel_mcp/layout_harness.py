@@ -380,7 +380,7 @@ def _analyze_and_quit():
         "font_height": font_h,
         "grid_alignment": check_grid_alignment(bbox, text_alignment),
     }
-    print(json.dumps(result))
+    print("__PYXEL_MCP_JSON__:" + json.dumps(result))
     sys.stdout.flush()
     return True
 

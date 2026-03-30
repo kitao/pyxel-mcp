@@ -86,7 +86,7 @@ def _dump_tilemap():
         "unique_tiles": len(usage),
     }
 
-    print(json.dumps(result))
+    print("__PYXEL_MCP_JSON__:" + json.dumps(result))
     sys.stdout.flush()
     return True
 

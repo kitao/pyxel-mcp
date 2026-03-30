@@ -50,7 +50,7 @@ def _on_frame(fc, draw):
     _results.append(_read_screen())
     _capture_idx += 1
     if _capture_idx >= len(frame_list):
-        print(json.dumps(_results))
+        print("__PYXEL_MCP_JSON__:" + json.dumps(_results))
         sys.stdout.flush()
         return True
     return False
@@ -58,7 +58,7 @@ def _on_frame(fc, draw):
 
 def _on_show():
     _results.append(_read_screen())
-    print(json.dumps(_results))
+    print("__PYXEL_MCP_JSON__:" + json.dumps(_results))
     sys.stdout.flush()
 
 

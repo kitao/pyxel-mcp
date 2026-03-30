@@ -99,9 +99,9 @@ def _capture_state():
 def _flush_and_quit():
     # Output single object for one frame (backward compatible), array for multiple
     if len(frame_list) == 1:
-        print(json.dumps(_results[0], default=str))
+        print("__PYXEL_MCP_JSON__:" + json.dumps(_results[0], default=str))
     else:
-        print(json.dumps(_results, default=str))
+        print("__PYXEL_MCP_JSON__:" + json.dumps(_results, default=str))
     sys.stdout.flush()
     pyxel.quit()
     os._exit(0)
