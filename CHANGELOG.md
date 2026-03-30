@@ -1,5 +1,19 @@
 # Change Log
 
+## 0.9.2
+
+- Add update notifications in pyxel_info for pyxel-mcp and pyxel
+- Use marker prefix for harness JSON to prevent user print misdetection
+- Extract run_harness_raw helper to reduce subprocess duplication
+- Unify state_harness with patch_game_loop via on_run callback
+- Make pyxel_info async to avoid blocking on version check
+- Rename frames→frame parameter for single-frame tools
+- Fix duplicate pyxel.run() warning when found in draw()
+- Add inspect_animation and capture_frames to workflow instructions
+- Clarify MML vs set() volume scale difference in instructions
+- Add format_palette_report and analyze_wav tests
+- Add integration marker to Pyxel-dependent tests
+
 ## 0.9.1
 
 - Bump Pyxel minimum version to 2.8.9
