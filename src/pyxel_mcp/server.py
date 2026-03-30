@@ -7,7 +7,9 @@ import os
 import shutil
 import sys
 import tempfile
+from importlib.metadata import version as pkg_version
 from importlib.util import find_spec
+from urllib.request import urlopen
 
 from mcp.server.fastmcp import FastMCP, Image
 
@@ -66,6 +68,47 @@ def _check_script(script_path, need_pyxel=True):
     if not os.path.isfile(path):
         return None, f"script not found: {path}"
     return path, None
+
+
+def _installed_version(pkg):
+    """Get installed version of a package, or None."""
+    try:
+        return pkg_version(pkg)
+    except Exception:
+        return None
+
+
+def _parse_version(v):
+    """Parse version string to comparable tuple of ints."""
+    try:
+        return tuple(int(x) for x in v.split(".")[:3])
+    except (ValueError, AttributeError):
+        return ()
+
+
+def _check_updates():
+    """Check PyPI for newer versions of pyxel-mcp and pyxel.
+
+    Returns list of notification strings. Empty on failure or if up to date.
+    """
+    notifications = []
+    for pkg in ("pyxel-mcp", "pyxel"):
+        try:
+            installed = _installed_version(pkg)
+            if not installed:
+                continue
+            url = f"https://pypi.org/pypi/{pkg}/json"
+            with urlopen(url, timeout=3) as resp:
+                data = json.loads(resp.read())
+            latest = data["info"]["version"]
+            if _parse_version(latest) > _parse_version(installed):
+                notifications.append(
+                    f"Update available: {pkg} {installed} → {latest}"
+                    f" (pip install --upgrade {pkg})"
+                )
+        except Exception:
+            continue
+    return notifications
 
 
 _INSTRUCTIONS_PATH = os.path.join(os.path.dirname(__file__), "instructions.md")
