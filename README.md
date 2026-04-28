@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/kitao-pyxel-mcp-badge.png)](https://mseep.ai/app/kitao-pyxel-mcp)
+
 # pyxel-mcp
 
 MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for Python. Enables AI to autonomously run, verify, and iterate on retro game programs.
