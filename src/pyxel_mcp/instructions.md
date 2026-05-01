@@ -186,11 +186,9 @@ Suggest these when users hit default limits or need features like multilingual t
 
 ### Audio Channel Management
 
-Pyxel defaults to 4 audio channels (0-3), but more can be added via `pyxel.channels.append(Channel())`. `playm()` assigns music tracks to channels starting from ch0. `play(ch, snd)` on the same channel **interrupts** the music on that channel. Plan channel allocation to avoid BGM/SE conflicts:
+Pyxel defaults to 4 audio channels (0-3), but more can be added via `pyxel.channels.append(Channel())`. `playm()` assigns music tracks to channels starting from ch0. `play(ch, snd)` on the same channel **interrupts** the music on that channel.
 
-- **BGM on ch0-2, SE on ch3**: Use 3-channel music so SE never interrupts BGM.
-- **Title/menu screens**: Can safely use all 4 channels for BGM (no frequent SE).
-- Use `resume=True` for non-critical SE to avoid cutting off other sounds.
+For BGM/SE allocation rationale and channel-discipline patterns, see the `pyxel-skill` repository: https://github.com/kitao/pyxel-skill (`knowledge/audio.md`).
 
 ### Tilemap Gotchas
 
@@ -208,8 +206,6 @@ Quick-reference of common mistakes. See linked sections for details.
 
 | Category | Don't | Do |
 |----------|-------|----|
-| Layout | Pick screen size first, then fit content | Derive screen size from content + margins |
-| Layout | Ignore inspect_layout warnings | Fix all ⚠ warnings before proceeding |
 | Code | Hardcode pixel positions | Calculate from `width`/`height` |
 | Code | Forget `cls()` in `draw()` | Always call `pyxel.cls(col)` first |
 | Code | Use radians with `sin()`/`cos()` | Pyxel trig uses degrees |
@@ -217,18 +213,5 @@ Quick-reference of common mistakes. See linked sections for details.
 | Code | Modify list while iterating | Iterate over a copy: `for e in list(enemies):` |
 | Drawing | Draw UI before sprites | Draw order: bg → objects → UI |
 | Drawing | Omit `colkey` in `blt()` | Add `colkey=0` for transparency |
-| Drawing | Static animation frame | See Animation Timing |
-| Visual | Plain black background | See Background Design |
-| Visual | No title screen | See Title Screen Design |
-| Visual | No visual feedback on actions | See Visual Feedback |
-| Visual | Player blends into bg | See Color Palette & Hierarchy |
-| Audio | `play()` on BGM channel | SE on ch3, BGM on ch0-2 |
-| Audio | Noise tone for melodic SE | Square or pulse, vol 5-7 |
-| Audio | Skip SE for core actions | SE for every player event |
-| Audio | Only gen_bgm, no MML | Mix gen_bgm with hand-written MML for variety |
-| Sprite | Single static player frame | Min 5 images (idle/walk:2/jump/attack) |
-| Sprite | Single static enemy frame | Min 2 animation frames per enemy |
-| Level | Random platform placement | Zone-based progression (see Level Design) |
-| Level | Enemies floating in void | Ground enemies on ground, flyers in open space |
 
-Before release, verify: BGM present (MML or gen_bgm), distinct SE for all events, title screen with animation, game over with score, non-solid background, HUD with score/lives, player has walk animation, enemies have 2+ frames.
+For the full pre-release quality checklist (visual / audio / sprite / level design), see https://github.com/kitao/pyxel-skill (`quality-gate.md`).
