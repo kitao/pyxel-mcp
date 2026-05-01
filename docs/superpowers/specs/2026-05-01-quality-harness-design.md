@@ -1,339 +1,261 @@
-# Pyxel MCP Quality Harness Design
+# Pyxel MCP Quality Harness Design (godogen-modeled)
 
 ## Problem
 
-The current pyxel-mcp (0.9.3) provides tools but no enforcement. AI using
-the MCP can declare "done" while shipping unplayable garbage:
+The current pyxel-mcp (0.9.3) is a tool dump. AI using it can declare
+"done" while shipping unplayable garbage:
 
-- Sprites that aren't recognizable as anything (single-blob shapes)
+- Sprites that aren't recognizable as anything
 - Physics broken (jump-through-floor, no slope walking)
 - Game flow broken (barrels never reach bottom, win never triggers)
 - BGM/SE declared but never verified to actually play
-- Verification = "I captured frame 30 and frame 200, looks fine"
+- Verification = "I captured frame 30, looks fine"
 
-Both my own dkong and a fresh subagent's dkong demonstrate this:
-each looked superficially complete, neither was playable to clear.
+Both my own dkong and a fresh subagent's dkong demonstrate this.
 
-The MCP must stop being a tool dump and become a **harness** in the
-sense established by harness-engineering literature: an environment
-that constrains the agent so quality cannot be shortcut.
+## Reference: godogen
 
-## References
+[godogen](https://github.com/htdt/godogen) is a working autonomous
+game-development pipeline for Godot/Bevy. Its harness is **not new
+tools** — it's:
 
-This design is anchored to existing solutions, not invented:
+1. A pipeline definition in a top-level skill (orchestrator)
+2. Phase-specific markdown files JIT-loaded when entering each phase
+3. Persistent state files surviving compaction (PLAN, STRUCTURE,
+   MEMORY, ASSETS)
+4. A risk-slice / main-build two-phase execution
+5. A stop hook that requires a final proof bundle to exist
+6. Instructions explicitly forbidding shortcuts:
+   - "When code and media disagree, trust the media"
+   - "Placeholder primitives in gameplay code are a signal that the
+     asset step was skipped"
+   - "A bundle where the opening seconds look correct and the rest
+     degenerates is failure, not partial pass"
 
-- **[godogen](https://github.com/htdt/godogen)** — autonomous Godot/Bevy
-  game generation with frame-grounded self-repair. Proven that the
-  Plan→Code→Asset-gen→Engine-run→Screenshot-capture→Visual-verify-and-repair
-  loop produces working games when the AI is *prompted* to evaluate
-  visible output, not code metrics.
-- **[Harness Engineering for AI Coding Agents](https://www.augmentcode.com/guides/harness-engineering-ai-coding-agents)** —
-  three-layer model (Constraint, Feedback, Quality Gate) with PEV
-  (Plan-Execute-Verify) phase gates between transitions. Hard gates
-  via "error" not "warn". No inline suppression.
-- **[Quality Gates 3-tier](https://dev.to/yurukusa/why-your-ai-agent-needs-a-quality-gate-not-just-tests-42eo)** —
-  Stability hard-gate, Balance-band soft-gate (4 sub-checks, need 3/4),
-  Regression vs baseline. Externalized config thresholds.
-- **[TITAN](https://arxiv.org/html/2509.22170v1)** — LLM-driven MMORPG
-  testing. Symbolic state abstraction, action templates, multiple
-  oracles (crash / stall / time monitor), Reflective Reasoning when
-  progress stalls.
-- **[Godot MCP Pro](https://github.com/youichi-uda/godot-mcp-pro)** —
-  proves a 172-tool game-dev MCP organized around runtime analysis,
-  input simulation, screenshot compare, assertion-driven testing is
-  feasible and useful.
+This is the proven pattern. We adapt it to Pyxel.
 
-## Non-Goals
+## Architecture for Pyxel
 
-- Reproducing arcade ROMs verbatim. The harness ensures *playable
-  faithful homages*, not byte-for-byte clones.
-- Subjective "fun" judgment. Tier-2 balance band gives objective
-  proxies; "is the dodge satisfying" remains a human call.
-- Replacing existing tools. `inspect_*`, `render_audio`,
-  `play_and_capture`, `record_gameplay` stay. The harness composes them.
-
-## The Harness Architecture
-
-### Phase Order (PEV applied to game dev)
+### Pipeline (orchestrator → JIT phases)
 
 ```
-PLAN ─→ BUILD ─→ VERIFY ─→ GATE ─→ DONE
-        ↑          │        │
-        └──────────┴────────┘
-        (each FAIL bounces back to BUILD with actionable remediation)
+User: "make a Pyxel game"
+    │
+    ▼
+Read instructions.md (orchestrator) — defines pipeline + invariants
+    │
+    ▼
+Phase 1: visual-target → REFERENCE.md (game's vision: palette, sprite
+                                        list with sizes/positions, HUD,
+                                        layout, audio cues)
+    │
+    ▼
+Phase 2: decomposer → PLAN.md (risk tasks, main build, verify criteria
+                                per task, win/lose milestone tables)
+    │
+    ▼
+Phase 3: scaffold → STRUCTURE.md + skeleton main.py
+    │
+    ▼
+Phase 4: asset-planner → ASSETS.md (sprite manifest with size, palette
+                                     budget, what each represents)
+    │
+    ▼
+Phase 5: asset-gen → images[N].set() implementations, inspect_sprite
+                      after each sprite to verify identity
+    │
+    ▼
+Phase 6: task-execution → implement gameplay/physics/scenes
+                           validate_script → run_and_capture → iterate
+    │
+    ▼
+Phase 7: test-harness → milestone assertion via inspect_state,
+                         closed-loop input via play_and_capture
+    │
+    ▼
+Phase 8: capture → screenshots/result/{N}/ proof bundle:
+                    record_gameplay (full clear + full death),
+                    capture_frames at key moments,
+                    render_audio for each declared sound
+    │
+    ▼
+Phase 9: quality-gate → final checklist; if any fail, return to
+                         appropriate phase; PASS allows done declaration
 ```
 
-Phase transitions are gated. The next phase refuses to start until
-the current phase reports PASS.
+Each phase is a separate markdown file. They're JIT-read — not in the
+top-level `instructions.md`. This keeps context clean.
 
-### Phase 1: PLAN — `lock_game_spec`
+### Distribution: MCP Resources
 
-**Tool:** `lock_game_spec(spec_json: str) -> str`
+Phase markdown files ship as MCP Resources:
 
-**Schema enforced:**
+- `pyxel://skills/visual-target`
+- `pyxel://skills/decomposer`
+- `pyxel://skills/scaffold`
+- `pyxel://skills/asset-planner`
+- `pyxel://skills/asset-gen`
+- `pyxel://skills/task-execution`
+- `pyxel://skills/test-harness`
+- `pyxel://skills/capture`
+- `pyxel://skills/quirks`
+- `pyxel://skills/quality-gate`
+- `pyxel://skills/pyxel-api` (existing — references Pyxel API)
 
-```json
-{
-  "title": "string",
-  "genre": "string",
-  "screen": {"w": 128..256, "h": 128..256},
-  "physics": {
-    "gravity": float,
-    "jump_initial_vy": float,
-    "max_fall_speed": float,
-    "walk_speed": float,
-    "climb_speed": float
-  },
-  "controls": {
-    "left": "KEY_*", "right": "KEY_*",
-    "up": "KEY_*", "down": "KEY_*",
-    "jump": "KEY_*"
-  },
-  "layout": {
-    "platforms": [{"name": "...", "y0": int, "y1": int, "x0": int, "x1": int}],
-    "ladders": [{"x": int, "top_platform": "...", "bottom_platform": "..."}]
-  },
-  "win_condition": {
-    "description": "...",
-    "predicate": "player.y < 32 and abs(player.x - princess.x) < 16"
-  },
-  "lose_condition": {
-    "description": "...",
-    "predicate": "lives <= 0"
-  },
-  "assets": [
-    {
-      "name": "player_walk_1",
-      "image_index": 0,
-      "u": int, "v": int, "w": int, "h": int,
-      "represents": "Mario walking, frame 1",
-      "min_distinct_colors": 3,
-      "must_have_outline": true
-    },
-    ...
-  ],
-  "audio": [
-    {"sound_index": 10, "represents": "jump SE", "trigger": "on jump"},
-    {"sound_index": 0, "represents": "BGM melody channel 0", "trigger": "looping during play"},
-    ...
-  ],
-  "milestones_win": [
-    {"frame": 60, "input_until_now": "...", "asserts": {"scene": "==PLAY"}},
-    {"frame": 600, "asserts": {"player.y": "<32"}},
-    {"frame": 700, "asserts": {"scene": "==WIN"}}
-  ],
-  "milestones_lose": [
-    {"frame": 30, "asserts": {"lives": "==3"}},
-    {"frame": 300, "asserts": {"lives": "==0"}},
-    {"frame": 360, "asserts": {"scene": "==LOSE"}}
-  ]
-}
-```
+The orchestrator in `instructions.md` tells the AI to read each
+resource only when entering its phase.
 
-**Behavior:**
-- Validates schema (missing required field → FAIL with field name)
-- Persists to `.pyxel-mcp-spec.json` next to the script
-- Returns spec_id (hash). Downstream tools take spec_id and refuse if
-  the script's spec hash doesn't match (re-lock required if spec changes).
+### Persistent State Files
 
-**Why required first:** without numeric layout/physics/milestones,
-verification has nothing to assert against. Locking the spec also
-forces the AI to commit to specific values before writing code.
+The AI maintains, at the project root:
 
-### Phase 2: BUILD
+| File | Created in phase | Purpose |
+|------|------------------|---------|
+| `REFERENCE.md` | visual-target | Vision anchor: palette, sprite list, layout, HUD, audio |
+| `PLAN.md` | decomposer | Risk tasks, main build, verify criteria, win/lose milestones |
+| `STRUCTURE.md` | scaffold | Architecture: classes, scene state machine, file layout |
+| `ASSETS.md` | asset-planner | Sprite manifest with palette budgets and identity descriptions |
+| `MEMORY.md` | task-execution | Discoveries, gotchas, what worked/didn't (cross-compaction memory) |
 
-No new tool. AI writes the script. Reference the locked spec for
-constants. `validate_script` already exists for syntax/anti-patterns.
+These are the AI's working state. The MCP doesn't manage them — the AI
+maintains them via Read/Write tools. They survive compaction by being
+on disk.
 
-### Phase 3: VERIFY (the four gates)
+### One New MCP Tool: `quality_gate`
 
-#### 3a. `verify_assets(script_path) -> str`
-
-For each asset declared in spec.assets:
-- Capture pixels via existing sprite reading
-- Run heuristic checks:
-  - **Bounded silhouette**: pixels do not fill > 95% of bounding box
-    (single-blob detection)
-  - **Multi-region**: at least `min_distinct_colors` distinct colors
-    used in non-transparent pixels
-  - **Outline present**: if `must_have_outline`, perimeter pixels are
-    color-distinct from interior majority color
-  - **Animation diff** (for paired walk/run frames): adjacent frames
-    must differ in 5-50% of pixels (else static or unrelated)
-
-Report per asset: PASS / FAIL with specific failed check.
-
-#### 3b. `verify_physics(script_path) -> str`
-
-Run deterministic invariant scenarios (auto-derived from locked spec):
-
-- **jump_lands**: at known platform, press jump; assert player returns
-  to a platform y within 30 frames; vy returns to 0; no NaN/divergence
-- **no_fall_through**: stand on each platform for 60 frames; assert y
-  variance < 1px and player.y stays at platform top
-- **slope_follow** (if any platform has y0 != y1): walk left/right,
-  assert y interpolates linearly with x along slope
-- **ladder_climb**: at each ladder x, press up; assert y decreases
-  monotonically until reaching top platform
-- **ladder_descend**: same with down
-- **gravity_terminal**: drop from height; assert vy caps at
-  `max_fall_speed`
-
-Each scenario uses scripted `set_btn` schedules and reads
-`inspect_state`-equivalent attributes. Report per scenario: PASS / FAIL
-with measured values + expected.
-
-#### 3c. `verify_playthrough(script_path, scenario: "win"|"lose") -> str`
-
-- Read `milestones_win` or `milestones_lose` from locked spec
-- Build input schedule from milestones (each milestone has
-  `input_until_now` describing inputs leading up to it; harness
-  concatenates)
-- Run the script with input injection
-- At each milestone frame, capture state (App attributes)
-- Evaluate each `asserts` predicate; aggregate PASS/FAIL
-
-TITAN-style monitors run concurrently:
-- **Crash monitor**: subprocess returncode != 0 anywhere → FAIL
-- **Stall monitor**: state hash unchanged for 60 frames despite input
-  → FAIL with last-stable-state report
-- **Time monitor**: any frame > 100ms execution → FAIL (perf bug)
-
-#### 3d. `verify_audio(script_path) -> str`
-
-For each entry in spec.audio:
-- Run existing `render_audio` for the declared sound
-- Assert duration > 0, peak > some minimum threshold
-- For BGM channel-mapped sounds, assert at least one note
-- For SE, assert non-empty render
-
-### Phase 4: GATE — `quality_gate`
-
-**Tool:** `quality_gate(script_path) -> str`
-
-Runs all of the above in order. Composes a Tier 1/2/3 report:
-
-- **Tier 1 (hard, must-pass)**: spec locked, validate_script clean,
-  verify_assets PASS, verify_physics PASS, verify_playthrough(win) PASS,
-  verify_playthrough(lose) PASS, verify_audio PASS, no crashes/stalls
-- **Tier 2 (soft, 3/4 sub-checks)**:
-  - `inspect_palette` hierarchy_score == 2/2
-  - `inspect_palette` low_contrast_warnings == 0 (or ≤ 1 with waiver)
-  - `inspect_layout` margin imbalance < 20% on intended-centered scenes
-  - HUD coverage: at least one text element matches each of the
-    declared HUD pieces in spec
-- **Tier 3 (regression, optional)**: compare to last passing baseline
-  saved alongside spec; warn if any metric regresses > 25%
-
-Return value structure:
+The only new tool. Composes existing tools per the gate criteria.
 
 ```
-=== Quality Gate Report ===
-Spec: <title> (locked at <time>)
-
-Tier 1 (Stability — HARD):
-  [PASS] spec locked
-  [PASS] validate_script
-  [FAIL] verify_assets — asset 'player_walk_1' FAIL: single-blob (one color region)
-  [SKIP] verify_physics  (depends on assets)
-  [SKIP] verify_playthrough(win)
-  [SKIP] verify_playthrough(lose)
-  [PASS] verify_audio
-
-Tier 2 (Balance — SOFT):
-  [SKIP] (Tier 1 not green)
-
-Overall: FAIL — fix Tier 1 first. Remediation:
-  - asset 'player_walk_1': sprite has only 1 color region. Pyxel sprites
-    need at least 3 distinct colors (cap, face, body) to be recognizable.
-    See Pixel Art Rules section in instructions.md.
+quality_gate(script_path) -> structured report
 ```
 
-**Critical rule:** the AI cannot tell the user "done" until
-`quality_gate` reports `Overall: PASS` with all Tier 1 PASS and ≥3/4
-Tier 2 PASS.
+Behavior:
 
-### Phase 5: instructions.md as Rules File
+- Reads `PLAN.md` for declared milestones and verify criteria
+- Reads `ASSETS.md` for sprite manifest
+- Runs `validate_script`
+- For each declared sprite: runs internal sprite-identity heuristics
+  (silhouette boundedness, multi-region count, contrast against bg)
+- Runs scripted milestone playthroughs (win path, lose path) and
+  asserts state at each milestone via `inspect_state` equivalent
+- For each declared sound: runs `render_audio`, asserts non-empty
+- Verifies `screenshots/result/{N}/` bundle exists for current attempt
+- Returns Tier 1 (Stability hard) / Tier 2 (Balance soft, 3/4 needed)
+  / Tier 3 (Regression vs prior bundle) report
+- Tier 1 FAIL → AI must return to relevant phase
+- All Tier 1 PASS + ≥3/4 Tier 2 PASS → AI may declare done
 
-Restructured as an `always_apply` rules file (per the AGENTS.md
-pattern). Content order:
+The gate is the contract that prevents shortcuts. The orchestrator's
+contract:
 
-1. **MANDATORY WORKFLOW** (top of file, can't miss):
-   - lock_game_spec FIRST. No coding before spec lock.
-   - Build referencing locked spec constants.
-   - Run quality_gate. Address every FAIL.
-   - "DONE" can only be claimed after quality_gate PASS.
-2. **GATES** explanation (each phase's PASS criteria, remediation flow)
-3. **NO SHORTCUTS**: explicit list of behaviors that fail review
-   - "I captured a frame, looks fine" — not verification
-   - "Sprite added" without verify_assets PASS — not done
-   - "Game runs" without verify_playthrough(win) AND (lose) PASS — not done
-4. Existing quality content (visual design, SE design, pixel rules,
-   gen_bgm) reorganized as REFERENCE under each phase
+> Do not claim done until `quality_gate` returns "Overall: PASS".
+> The result of `quality_gate` is the only authoritative signal of
+> done; AI self-assessment does not count.
 
-The Quality Checklist section becomes redundant once gates exist; it
-either gets pulled into the gate criteria themselves, or remains as
-a glossary.
+### Anti-Shortcut Rules in instructions.md
 
-## Tool Surface Summary (new)
+Borrowed from godogen patterns:
 
-| Tool | Phase | Inputs | Output |
-|------|-------|--------|--------|
-| `lock_game_spec` | PLAN | spec_json | spec_id, validation report |
-| `verify_assets` | VERIFY | script_path | per-asset PASS/FAIL with specifics |
-| `verify_physics` | VERIFY | script_path | per-invariant PASS/FAIL |
-| `verify_playthrough` | VERIFY | script_path, "win"\|"lose" | per-milestone PASS/FAIL + monitor signals |
-| `verify_audio` | VERIFY | script_path | per-sound PASS/FAIL |
-| `quality_gate` | GATE | script_path | tier-1/2/3 report, overall PASS/FAIL |
+- **Visual primacy**: when code says X happened but capture shows Y,
+  trust the capture
+- **No procedural fallback**: rectangles/blobs in place of declared
+  assets means asset-gen was skipped — go back
+- **Bundle integrity**: `screenshots/result/{N}/video.gif` (or
+  `record_gameplay` output) must show behavior across full duration,
+  not just one good frame; static / looping / degenerating bundles fail
+- **Bias toward failure**: if behavior is not clearly visible in
+  capture, treat as not-done
+- **Closed-loop input**: scripted playthrough reads observed state,
+  steers toward next milestone — open-loop timed press/release fails
+  due to drift
 
-Six new tools. All are subprocess-driven over the existing harness
-plumbing (`_common/subprocess.py` + new `_harnesses/` files).
+### What's NOT changing
 
-## Implementation Plan
+- Existing tools (`run_and_capture`, `inspect_*`, `render_audio`,
+  `play_and_capture`, `record_gameplay`) stay unchanged
+- Pyxel as engine, Python as language, single-file `.py` outputs stay
+- The MCP architecture (FastMCP + harnesses) stays
+- Versioning stays conservative (this work targets `0.10.0`)
 
-1. `_harnesses/playthrough.py` — combine input + state capture at
-   milestone frames + monitor signals
-2. `_harnesses/physics.py` — predefined invariant scenarios
-3. `_harnesses/assets.py` — pixel reading for asset checks
-4. `_common/spec.py` — spec schema, validation, persistence
-5. `_tools/quality.py` — registers the six new tools
-6. `instructions.md` — rewritten per Phase 5 above
-7. Tests covering each tool with known-bad scripts (single-blob sprite,
-   broken jump, missing milestone, etc.)
-8. **Validation**: rebuild dkong using only the harness; iterate until
-   `quality_gate` PASS; user plays and confirms
+## Implementation Plan (revised)
 
-## Rollout
+1. **Phase skill markdown** — write 10 phase files in
+   `src/pyxel_mcp/skills/` (new directory)
+2. **Resource registration** — add `_resources/skills.py` exposing each
+   phase markdown as `pyxel://skills/<name>`
+3. **`quality_gate` tool** — new MCP tool composing existing ones,
+   reads PLAN.md / ASSETS.md, returns tier report
+4. **`instructions.md` rewrite** — orchestrator only:
+   - Pipeline definition (phase order)
+   - When to read each phase resource
+   - Persistent state file contract
+   - Anti-shortcut rules
+   - Move existing quality content into the relevant phase files
+5. **CHANGELOG, version 0.10.0** — describe the new harness model
+6. **Validation: rebuild dkong using only the harness** — must end
+   with `quality_gate: PASS`, user plays and confirms playable +
+   recognizable
 
-- Branch: `feat/quality-harness` (current worktree)
-- New version: `0.10.0` (semver minor: substantive new functionality)
-  — but not 1.0.0; "stable" claim still requires field validation
-- CHANGELOG: explicit "introduces mandatory quality harness; behaviors
-  that previously declared 'done' will now FAIL gate"
+## Out of Scope for This Iteration
 
-## Open Questions
-
-- **Spec authoring overhead**: requiring a 30+ field spec before coding
-  may feel heavy. Can the MCP provide a `propose_game_spec(genre)` tool
-  that drafts a starter spec the AI can refine? (Yes — Phase 9 stretch.)
-- **Subjective quality**: who defines "this sprite is recognizable"?
-  Heuristic checks catch obvious garbage (single-blob) but not
-  "looks like a person but a really bad one". Consider adding a
-  separate-LLM-judge mode in a later phase.
-- **Author intent vs gate strictness**: a deliberately abstract game
-  may legitimately fail "must have outline" or "must have 3 colors".
-  Spec-level waivers (`override_check: "must_have_outline = false"`)
-  let intent override default heuristics.
+- Image-generation integration (godogen uses Gemini/Grok for
+  reference.png; for Pyxel we use ASCII / palette-table descriptions
+  in REFERENCE.md). Could be added later for AI-generated reference
+  imagery converted to 16-color palette.
+- Stop hook installation. godogen's stop hook is in Claude Code
+  settings, not in the MCP server. We can document the recommended
+  hook in instructions.md but cannot install it from the server side.
+  Future: ship a hook config snippet under `_resources/`.
+- Tripo3D / Grok video / Gemini integration. Not relevant for Pyxel
+  16-color sprites; users author sprites via `pyxel.images[N].set()`.
 
 ## Success Criteria
 
 The harness is successful if:
 
-1. A subagent given only "make Donkey Kong" + this MCP cannot declare
-   "done" until quality_gate PASS
-2. quality_gate FAIL is informative enough that the agent self-corrects
-3. The dkong I (or the subagent) made earlier would FAIL the gate at
-   verify_assets (single-blob), verify_physics (jump-fall-through), or
-   verify_playthrough(win) (never reaches princess)
-4. After harness-driven iteration, the same task produces a clearable,
-   recognizable game in a single conversation
+1. A subagent given only "make Donkey Kong" with this MCP cannot
+   declare "done" until `quality_gate` returns PASS
+2. `quality_gate` FAIL is informative enough that the agent
+   self-corrects without human re-prompting
+3. The previous dkong garbage outputs would FAIL the gate at
+   verify_assets (single-blob), verify_physics (jump-fall-through),
+   or verify_playthrough(win) (never reaches princess)
+4. After harness-driven iteration, the same task produces a
+   clearable, recognizable game in a single conversation
+5. The user plays the result and confirms it's recognizable as
+   the target genre + actually playable
+
+## Risks
+
+- **Spec authoring overhead** — REFERENCE.md and PLAN.md authoring
+  takes context tokens before any code. Acceptable: it's the
+  difference between garbage in 30s and a real game in 5min
+- **AI may still skip phases**: harness rules are markdown, AI can
+  technically ignore them. Mitigation: `quality_gate` requires
+  artifacts (PLAN.md / ASSETS.md / screenshots/result/{N}/) to exist
+  with proper structure. Missing artifact → tool returns FAIL with
+  the specific missing piece. AI can't fake artifacts without
+  filling them.
+- **Bundle integrity check is heuristic**: detecting "frozen middle
+  segment" requires per-frame state diff analysis. Initial version
+  uses simple checks (file sizes, frame count, audio non-empty).
+
+## Notes on Mimicking godogen
+
+This design copies godogen's *structural patterns* (phase markdown +
+persistent state + visual primacy + procedural-fallback prohibition +
+proof bundle requirement). The actual content of phase markdown files
+is written from scratch for Pyxel, not transplanted from godogen.
+
+Specific patterns adopted:
+
+| godogen pattern | Pyxel-mcp realization |
+|-----------------|----------------------|
+| `${GODOGEN_SKILL_DIR}/<phase>.md` | `pyxel://skills/<phase>` resource |
+| `reference.png` from Gemini | `REFERENCE.md` ASCII / palette table |
+| `PLAN.md` with risk tasks | Same name, same purpose, Pyxel risks |
+| `screenshots/result/{N}/video.mp4` | `screenshots/result/{N}/video.gif` from `record_gameplay` |
+| `dotnet build` + `godot --headless --import` | `validate_script` + run smoke test |
+| SceneTree `TestT3.cs` with ASSERT PASS/FAIL | `play_and_capture` + `inspect_state` with milestone asserts |
+| Telegram stop hook | (Future) Claude Code hook documented |
+| "Placeholder primitives signal asset step skipped" | Same rule, applied to Pyxel rect-blob sprites |
