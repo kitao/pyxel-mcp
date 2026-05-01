@@ -1,6 +1,6 @@
 """Tests for _format module."""
 
-from pyxel_mcp._format import (
+from pyxel_mcp._common.format import (
     format_sprite_report,
     format_layout_report,
     format_state_report,

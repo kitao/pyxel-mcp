@@ -28,7 +28,7 @@ if len(sys.argv) > 3:
 
 import pyxel
 
-from pyxel_mcp._headless import run_script, setup_harness, patch_game_loop
+from pyxel_mcp._common.headless import run_script, setup_harness, patch_game_loop
 
 setup_harness(script_path)
 

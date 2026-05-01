@@ -1,6 +1,6 @@
 """Tests for _validate module."""
 
-from pyxel_mcp._validate import validate_source
+from pyxel_mcp._common.validate import validate_source
 
 
 def test_valid_script():

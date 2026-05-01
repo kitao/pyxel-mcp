@@ -8,6 +8,7 @@ MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for 
 
 - **`run_and_capture`** — Run a Pyxel script and capture a screenshot after N frames
 - **`capture_frames`** — Capture screenshots at multiple frame points for animation verification
+- **`record_gameplay`** — Record N frames as a GIF for animation/transition verification
 - **`play_and_capture`** — Play a game by sending simulated input and capture screenshots
 
 ### Inspect & Debug
@@ -29,6 +30,16 @@ MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for 
 ### Audio
 
 - **`render_audio`** — Render a Pyxel sound or music to WAV and return waveform analysis
+
+### Resources (Pyxel reference)
+
+In addition to tools, the server exposes Pyxel reference content as MCP Resources:
+
+- `pyxel://api-reference`, `pyxel://user-guide`, `pyxel://mml-commands`, `pyxel://pyxres-format` — official Pyxel docs
+- `pyxel://examples/<name>` — official Pyxel examples (e.g. `02_jump_game`)
+- `pyxel://palette/default` — 16-color palette with use hints
+
+In Claude Code, reference them with `@pyxel:examples/02_jump_game` etc.
 
 ### Utility
 

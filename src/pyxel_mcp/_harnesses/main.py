@@ -5,7 +5,7 @@ pyxel.show(), and pyxel.flip() to automatically capture a screenshot
 after a specified number of frames and then quit.
 
 Usage:
-    python -m pyxel_mcp.harness <script_path> <output_path> <frames> <scale>
+    python -m pyxel_mcp._harnesses.main <script_path> <output_path> <frames> <scale>
 """
 
 import os
@@ -13,7 +13,7 @@ import sys
 
 # Parse arguments before importing pyxel (avoids SDL init issues)
 if len(sys.argv) < 5:
-    print("Usage: python -m pyxel_mcp.harness <script> <output> <frames> <scale>",
+    print("Usage: python -m pyxel_mcp._harnesses.main <script> <output> <frames> <scale>",
           file=sys.stderr)
     sys.exit(1)
 
@@ -24,7 +24,7 @@ capture_scale = int(sys.argv[4])
 
 import pyxel
 
-from pyxel_mcp._headless import patch_game_loop, run_script, setup_harness
+from pyxel_mcp._common.headless import patch_game_loop, run_script, setup_harness
 
 setup_harness(script_path)
 

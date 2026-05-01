@@ -8,7 +8,7 @@ import wave
 import numpy as np
 import pytest
 
-from pyxel_mcp._audio import (
+from pyxel_mcp._common.audio import (
     freq_to_note, freq_to_midi, estimate_freq,
     detect_key, analyze_intervals, suggest_role,
     analyze_wav,

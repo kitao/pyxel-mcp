@@ -24,7 +24,7 @@ capture_scale = int(sys.argv[4]) if len(sys.argv) > 4 else 1
 
 import pyxel
 
-from pyxel_mcp._headless import patch_game_loop, run_script, setup_harness
+from pyxel_mcp._common.headless import patch_game_loop, run_script, setup_harness
 
 # Force 256x256 screen for full bank capture
 setup_harness(script_path, transform_args=lambda args: (256, 256) + args[2:])

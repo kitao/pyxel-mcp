@@ -6,23 +6,26 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from pyxel_mcp._subprocess import HARNESS_PATHS, run_harness
+from pyxel_mcp._common.subprocess import HARNESS_MODULES, run_harness
 
 
-def test_harness_paths_keys():
-    """HARNESS_PATHS must have exactly 10 entries with expected keys."""
+def test_harness_modules_keys():
+    """HARNESS_MODULES must have exactly 11 entries with expected keys."""
     expected_keys = {
         "run", "audio", "sprite", "frames", "layout",
-        "input", "state", "screen", "tilemap", "bank",
+        "input", "state", "screen", "tilemap", "bank", "record",
     }
-    assert set(HARNESS_PATHS.keys()) == expected_keys
-    assert len(HARNESS_PATHS) == 10
+    assert set(HARNESS_MODULES.keys()) == expected_keys
+    assert len(HARNESS_MODULES) == 11
 
 
-def test_harness_paths_values_are_strings():
-    """All harness paths must be string values."""
-    for key, path in HARNESS_PATHS.items():
-        assert isinstance(path, str), f"HARNESS_PATHS[{key!r}] is not a string"
+def test_harness_modules_values_are_dotted_paths():
+    """All harness module values must be dotted module paths under pyxel_mcp._harnesses."""
+    for key, module in HARNESS_MODULES.items():
+        assert isinstance(module, str), f"HARNESS_MODULES[{key!r}] is not a string"
+        assert module.startswith("pyxel_mcp._harnesses."), (
+            f"HARNESS_MODULES[{key!r}] = {module!r} is not under _harnesses"
+        )
 
 
 def _make_mock_proc(returncode, stdout_bytes, stderr_bytes):

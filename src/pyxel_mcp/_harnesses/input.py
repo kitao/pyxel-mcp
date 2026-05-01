@@ -29,7 +29,7 @@ with open(input_file) as f:
 
 import pyxel
 
-from pyxel_mcp._headless import patch_game_loop, run_script, setup_harness
+from pyxel_mcp._common.headless import patch_game_loop, run_script, setup_harness
 
 setup_harness(script_path)
 
@@ -69,6 +69,10 @@ def _apply_input():
             pyxel.set_btn(key, True)
 
         _active_keys = new_keys
+
+        # Apply analog input (gamepad axes / triggers)
+        for name, val in entry.get("btnv", {}).items():
+            pyxel.set_btnv(_resolve_key(name), int(val))
 
         # Set mouse position if specified
         if "mouse_x" in entry or "mouse_y" in entry:

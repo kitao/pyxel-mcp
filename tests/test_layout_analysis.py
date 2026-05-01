@@ -27,8 +27,8 @@ def _import_layout_harness():
         pyxel_stub.height = 16
         sys.modules["pyxel"] = pyxel_stub
 
-    # Stub _headless to avoid real patching
-    headless_stub = types.ModuleType("pyxel_mcp._headless")
+    # Stub _common.headless to avoid real patching
+    headless_stub = types.ModuleType("pyxel_mcp._common.headless")
     headless_stub.setup_harness = MagicMock()
     headless_stub.patch_game_loop = MagicMock()
     headless_stub.run_script = MagicMock()
@@ -40,23 +40,23 @@ def _import_layout_harness():
         sys.path.insert(0, src)
 
     orig_argv = sys.argv[:]
-    orig_headless = sys.modules.get("pyxel_mcp._headless")
+    orig_headless = sys.modules.get("pyxel_mcp._common.headless")
 
     sys.argv = ["layout_harness", "dummy_script.py", "1"]
-    sys.modules["pyxel_mcp._headless"] = headless_stub
+    sys.modules["pyxel_mcp._common.headless"] = headless_stub
 
     # Force fresh import
-    if "pyxel_mcp.layout_harness" in sys.modules:
-        del sys.modules["pyxel_mcp.layout_harness"]
+    if "pyxel_mcp._harnesses.layout" in sys.modules:
+        del sys.modules["pyxel_mcp._harnesses.layout"]
 
     try:
-        import pyxel_mcp.layout_harness as lh
+        import pyxel_mcp._harnesses.layout as lh
     finally:
         sys.argv = orig_argv
         if orig_headless is not None:
-            sys.modules["pyxel_mcp._headless"] = orig_headless
+            sys.modules["pyxel_mcp._common.headless"] = orig_headless
         else:
-            sys.modules.pop("pyxel_mcp._headless", None)
+            sys.modules.pop("pyxel_mcp._common.headless", None)
 
     return lh
 

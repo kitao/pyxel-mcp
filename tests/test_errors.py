@@ -1,6 +1,6 @@
 """Tests for _errors module."""
 
-from pyxel_mcp._errors import (
+from pyxel_mcp._common.errors import (
     enrich_error,
     decode_stderr,
     extract_stdout,
