@@ -6,3 +6,4 @@ build/
 .venv/
 .mcpregistry_*
 uv.lock
+.worktrees/
