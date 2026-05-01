@@ -29,3 +29,28 @@ async def test_palette_resource_content(mcp):
     assert "Pyxel Default Palette" in text
     assert "black" in text  # color name 0
     assert "navy" in text   # color name 1
+
+
+@pytest.mark.asyncio
+async def test_examples_listed_from_installed_pyxel(mcp):
+    """At least the canonical 01_hello_pyxel example is enumerated."""
+    resources = await mcp.list_resources()
+    uris = [str(r.uri) for r in resources]
+    assert "pyxel://examples/01_hello_pyxel" in uris
+
+
+@pytest.mark.asyncio
+async def test_example_content_returns_python(mcp):
+    contents = await mcp.read_resource(
+        "pyxel://examples/01_hello_pyxel"
+    )
+    text = "".join(c.content for c in contents)
+    assert "import pyxel" in text
+
+
+@pytest.mark.asyncio
+async def test_examples_count_at_least_15(mcp):
+    """Sanity check: enumeration finds the expected example set."""
+    resources = await mcp.list_resources()
+    example_uris = [str(r.uri) for r in resources if str(r.uri).startswith("pyxel://examples/")]
+    assert len(example_uris) >= 15  # 20 currently, allow for future additions/removals
