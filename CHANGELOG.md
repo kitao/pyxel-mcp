@@ -1,5 +1,18 @@
 # Change Log
 
+## 1.0.0
+
+- Bump Pyxel minimum version to 2.9.4
+- Reorganize package into _common/_tools/_harnesses/_resources subpackages
+- Slim server.py to FastMCP wiring only (~30 lines)
+- Add record_gameplay tool — capture gameplay as GIF via screencast
+- Extend play_and_capture with btnv analog input events
+- Add MCP Resources: pyxel://api-reference, user-guide, mml-commands,
+  pyxres-format, examples/<name>, palette/default
+- Document Pyxel 2.9 APIs (resize, screencast, set_btnv) in instructions.md
+- Fix gen_bgm examples in instructions.md for Pyxel 2.9 signature
+- Mark Production/Stable; add Python 3.14 classifier
+
 ## 0.9.2
 
 - Add update notifications in pyxel_info for pyxel-mcp and pyxel
