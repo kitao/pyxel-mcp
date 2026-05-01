@@ -10,13 +10,13 @@ from pyxel_mcp._common.subprocess import HARNESS_MODULES, run_harness
 
 
 def test_harness_modules_keys():
-    """HARNESS_MODULES must have exactly 10 entries with expected keys."""
+    """HARNESS_MODULES must have exactly 11 entries with expected keys."""
     expected_keys = {
         "run", "audio", "sprite", "frames", "layout",
-        "input", "state", "screen", "tilemap", "bank",
+        "input", "state", "screen", "tilemap", "bank", "record",
     }
     assert set(HARNESS_MODULES.keys()) == expected_keys
-    assert len(HARNESS_MODULES) == 10
+    assert len(HARNESS_MODULES) == 11
 
 
 def test_harness_modules_values_are_dotted_paths():

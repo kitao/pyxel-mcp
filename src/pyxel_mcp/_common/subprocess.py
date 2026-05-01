@@ -17,6 +17,7 @@ HARNESS_MODULES = {
     "screen": "pyxel_mcp._harnesses.screen",
     "tilemap": "pyxel_mcp._harnesses.tilemap",
     "bank": "pyxel_mcp._harnesses.bank",
+    "record": "pyxel_mcp._harnesses.record",
 }
 
 

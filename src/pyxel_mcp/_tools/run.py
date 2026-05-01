@@ -9,7 +9,49 @@ import tempfile
 from mcp.server.fastmcp import Image
 
 from pyxel_mcp._common.pyxel_env import check_script
-from pyxel_mcp._common.subprocess import run_harness_raw
+from pyxel_mcp._common.subprocess import run_harness, run_harness_raw
+
+
+async def _record_gameplay_impl(script_path, duration=60, inputs="[]", scale=1, timeout=15):
+    """Implementation for record_gameplay tool — exposed at module level for testing."""
+    abs_path, err = check_script(script_path)
+    if err:
+        return f"Error: {err}"
+
+    duration = max(1, min(duration, 600))
+    scale = max(1, min(scale, 4))
+    timeout = max(1, min(timeout, 60))
+
+    try:
+        events = json.loads(inputs)
+        if not isinstance(events, list):
+            return "Error: inputs must be a JSON array"
+    except json.JSONDecodeError as e:
+        return f"Error: inputs is not valid JSON ({e})"
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        out_gif = os.path.join(tmpdir, "out.gif")
+        input_json = os.path.join(tmpdir, "events.json")
+        with open(input_json, "w") as f:
+            json.dump(events, f)
+
+        try:
+            await run_harness(
+                "record",
+                [abs_path, out_gif, str(duration), str(scale), input_json],
+                cwd=os.path.dirname(abs_path),
+                timeout=timeout,
+            )
+        except asyncio.TimeoutError:
+            return f"Error: script timed out after {timeout}s"
+        except RuntimeError as e:
+            return f"Error: {e}"
+
+        if not os.path.isfile(out_gif):
+            return "Error: GIF not produced (script may not have rendered any frames)"
+
+        with open(out_gif, "rb") as f:
+            return Image(data=f.read(), format="gif")
 
 
 def register(mcp):
@@ -239,3 +281,28 @@ def register(mcp):
             shutil.rmtree(output_dir, ignore_errors=True)
             if input_tmp and os.path.isfile(input_tmp):
                 os.unlink(input_tmp)
+
+    @mcp.tool()
+    async def record_gameplay(
+        script_path: str,
+        duration: int = 60,
+        inputs: str = "[]",
+        scale: int = 1,
+        timeout: int = 15,
+    ):
+        """Record gameplay as a GIF using Pyxel's screencast.
+
+        Returns the GIF as a single image for visual verification of
+        animations, transitions, and gameplay flow over time. For
+        input-driven sequences, pass a JSON string of frame events in
+        `inputs` (same format as play_and_capture, with optional
+        `btnv` field for analog input).
+
+        Args:
+            script_path: Absolute path to the .py script to record.
+            duration: Number of frames to record (1-600, default 60).
+            inputs: JSON array of frame input events (default empty).
+            scale: GIF scale multiplier (1-4, default 1).
+            timeout: Maximum seconds to wait for the script (default 15).
+        """
+        return await _record_gameplay_impl(script_path, duration, inputs, scale, timeout)
