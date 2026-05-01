@@ -5,16 +5,17 @@ import glob
 import json
 import os
 import shutil
-import sys
 import tempfile
-from importlib.metadata import version as pkg_version
-from importlib.util import find_spec
-from urllib.request import urlopen
 
 from mcp.server.fastmcp import FastMCP, Image
 
 from pyxel_mcp._common.audio import analyze_wav
 from pyxel_mcp._common.errors import extract_stdout
+from pyxel_mcp._common.pyxel_env import (
+    check_script,
+    check_updates,
+    pyxel_dir,
+)
 from pyxel_mcp._common.subprocess import run_harness, run_harness_raw
 from pyxel_mcp._common.format import (
     format_sprite_report,
@@ -26,90 +27,6 @@ from pyxel_mcp._common.format import (
 )
 from pyxel_mcp._common.palette import color_name
 from pyxel_mcp._common.validate import validate_source
-
-def _pyxel_dir():
-    """Find installed Pyxel package directory (without importing Pyxel)."""
-    try:
-        spec = find_spec("pyxel")
-        if spec:
-            if spec.origin:
-                return os.path.dirname(spec.origin)
-            if spec.submodule_search_locations:
-                return list(spec.submodule_search_locations)[0]
-    except ModuleNotFoundError:
-        pass
-    except ValueError:
-        # sys.modules["pyxel"] may be a stub without __spec__ set
-        # (e.g. from test mocks). Try again after temporarily removing it.
-        saved = sys.modules.pop("pyxel", None)
-        try:
-            spec = find_spec("pyxel")
-            if spec:
-                if spec.origin:
-                    return os.path.dirname(spec.origin)
-                if spec.submodule_search_locations:
-                    return list(spec.submodule_search_locations)[0]
-        except (ModuleNotFoundError, ValueError):
-            pass
-        finally:
-            if saved is not None:
-                sys.modules["pyxel"] = saved
-    return None
-
-
-def _check_script(script_path, need_pyxel=True):
-    """Validate script path (and optionally Pyxel installation).
-
-    Returns (abs_path, None) on success or (None, error_message) on failure.
-    """
-    if need_pyxel and not _pyxel_dir():
-        return None, "Pyxel is not installed. Run: pip install pyxel-mcp"
-    path = os.path.abspath(script_path)
-    if not os.path.isfile(path):
-        return None, f"script not found: {path}"
-    return path, None
-
-
-def _installed_version(pkg):
-    """Get installed version of a package, or None."""
-    try:
-        return pkg_version(pkg)
-    except Exception:
-        return None
-
-
-def _parse_version(v):
-    """Parse version string to comparable tuple of ints."""
-    try:
-        return tuple(int(x) for x in v.split(".")[:3])
-    except (ValueError, AttributeError):
-        return ()
-
-
-def _check_updates():
-    """Check PyPI for newer versions of pyxel-mcp and pyxel.
-
-    Returns list of notification strings. Empty on failure or if up to date.
-    """
-    notifications = []
-    for pkg in ("pyxel-mcp", "pyxel"):
-        try:
-            installed = _installed_version(pkg)
-            if not installed:
-                continue
-            url = f"https://pypi.org/pypi/{pkg}/json"
-            with urlopen(url, timeout=3) as resp:
-                data = json.loads(resp.read())
-            latest = data["info"]["version"]
-            if _parse_version(latest) > _parse_version(installed):
-                notifications.append(
-                    f"Update available: {pkg} {installed} → {latest}"
-                    f" (pip install --upgrade {pkg})"
-                )
-        except Exception:
-            continue
-    return notifications
-
 
 _INSTRUCTIONS_PATH = os.path.join(os.path.dirname(__file__), "instructions.md")
 try:
@@ -139,7 +56,7 @@ async def run_and_capture(
         scale: Screenshot scale multiplier (default: 1).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    script_path, err = _check_script(script_path)
+    script_path, err = check_script(script_path)
     if err:
         return [f"Error: {err}"]
 
@@ -181,17 +98,17 @@ async def run_and_capture(
 @mcp.tool()
 async def pyxel_info() -> str:
     """Get Pyxel installation info: package location, examples path, and API stubs path."""
-    pyxel_dir = _pyxel_dir()
-    if not pyxel_dir:
+    pyxel_path = pyxel_dir()
+    if not pyxel_path:
         return (
             "Pyxel is not installed.\n"
             "Install it with: pip install pyxel-mcp\n"
             "See https://github.com/kitao/pyxel for details."
         )
-    examples = os.path.join(pyxel_dir, "examples")
-    pyi = os.path.join(pyxel_dir, "__init__.pyi")
+    examples = os.path.join(pyxel_path, "examples")
+    pyi = os.path.join(pyxel_path, "__init__.pyi")
     lines = [
-        f"Pyxel package: {pyxel_dir}",
+        f"Pyxel package: {pyxel_path}",
         f"API type stubs: {pyi}" + (" (found)" if os.path.isfile(pyi) else " (not found)"),
         f"Examples dir: {examples}" + (" (found)" if os.path.isdir(examples) else " (not found)"),
     ]
@@ -199,7 +116,7 @@ async def pyxel_info() -> str:
         files = sorted(glob.glob(os.path.join(examples, "*.py")))
         lines.append(f"Examples: {', '.join(os.path.basename(f) for f in files)}")
 
-    updates = await asyncio.to_thread(_check_updates)
+    updates = await asyncio.to_thread(check_updates)
     if updates:
         lines.append("")
         lines.extend(updates)
@@ -230,7 +147,7 @@ async def render_audio(
         music_index: Music slot index. Default range 0-7, extendable.
             When set (>=0), renders the full multi-channel music mix instead of a single sound.
     """
-    script_path, err = _check_script(script_path)
+    script_path, err = check_script(script_path)
     if err:
         return f"Error: {err}"
 
@@ -329,7 +246,7 @@ async def inspect_sprite(
         h: Height of the region to inspect (default: 8).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    script_path, err = _check_script(script_path)
+    script_path, err = check_script(script_path)
     if err:
         return f"Error: {err}"
 
@@ -389,7 +306,7 @@ async def inspect_animation(
         frame_count: Number of animation frames to check (default: 2).
         timeout: Maximum seconds to wait (default: 10).
     """
-    script_path, err = _check_script(script_path)
+    script_path, err = check_script(script_path)
     if err:
         return f"Error: {err}"
 
@@ -446,7 +363,7 @@ async def capture_frames(
         scale: Screenshot scale multiplier (default: 1).
         timeout: Maximum seconds to wait for the script (default: 30).
     """
-    script_path, err = _check_script(script_path)
+    script_path, err = check_script(script_path)
     if err:
         return [f"Error: {err}"]
 
@@ -532,7 +449,7 @@ async def play_and_capture(
         scale: Screenshot scale multiplier (default: 1).
         timeout: Maximum seconds to wait for the script (default: 30).
     """
-    script_path, err = _check_script(script_path)
+    script_path, err = check_script(script_path)
     if err:
         return [f"Error: {err}"]
 
@@ -626,7 +543,7 @@ async def inspect_layout(
         frame: Frame number to analyze (default: 5).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    script_path, err = _check_script(script_path)
+    script_path, err = check_script(script_path)
     if err:
         return f"Error: {err}"
 
@@ -679,7 +596,7 @@ async def inspect_state(
         attributes: Comma-separated attribute names to inspect (default: all).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    script_path, err = _check_script(script_path)
+    script_path, err = check_script(script_path)
     if err:
         return f"Error: {err}"
 
@@ -738,7 +655,7 @@ async def validate_script(script_path: str) -> str:
     Args:
         script_path: Absolute path to the .py script to validate.
     """
-    script_path, err = _check_script(script_path, need_pyxel=False)
+    script_path, err = check_script(script_path, need_pyxel=False)
     if err:
         return f"Error: {err}"
 
@@ -781,7 +698,7 @@ async def inspect_screen(
         frame: Frame number to capture (default: 5).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    script_path, err = _check_script(script_path)
+    script_path, err = check_script(script_path)
     if err:
         return f"Error: {err}"
 
@@ -837,7 +754,7 @@ async def compare_frames(
         frame_b: Second frame number (default: 30).
         timeout: Maximum seconds to wait for the script (default: 15).
     """
-    script_path, err = _check_script(script_path)
+    script_path, err = check_script(script_path)
     if err:
         return f"Error: {err}"
 
@@ -926,7 +843,7 @@ async def inspect_palette(
         frame: Frame number to analyze (default: 5).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    script_path, err = _check_script(script_path)
+    script_path, err = check_script(script_path)
     if err:
         return f"Error: {err}"
 
@@ -967,7 +884,7 @@ async def inspect_tilemap(
         frames: Frame at which to read tilemap (default: 1).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    script_path, err = _check_script(script_path)
+    script_path, err = check_script(script_path)
     if err:
         return f"Error: {err}"
 
@@ -1051,7 +968,7 @@ async def inspect_bank(
         scale: Screenshot scale multiplier (default: 1).
         timeout: Maximum seconds to wait for the script (default: 10).
     """
-    script_path, err = _check_script(script_path)
+    script_path, err = check_script(script_path)
     if err:
         return [f"Error: {err}"]
 
