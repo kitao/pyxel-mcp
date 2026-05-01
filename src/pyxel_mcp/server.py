@@ -13,10 +13,10 @@ from urllib.request import urlopen
 
 from mcp.server.fastmcp import FastMCP, Image
 
-from pyxel_mcp._audio import analyze_wav
-from pyxel_mcp._errors import extract_stdout
-from pyxel_mcp._subprocess import run_harness, run_harness_raw
-from pyxel_mcp._format import (
+from pyxel_mcp._common.audio import analyze_wav
+from pyxel_mcp._common.errors import extract_stdout
+from pyxel_mcp._common.subprocess import run_harness, run_harness_raw
+from pyxel_mcp._common.format import (
     format_sprite_report,
     format_layout_report,
     format_palette_report,
@@ -24,8 +24,8 @@ from pyxel_mcp._format import (
     format_state_timeline,
     format_animation_report,
 )
-from pyxel_mcp._palette import color_name
-from pyxel_mcp._validate import validate_source
+from pyxel_mcp._common.palette import color_name
+from pyxel_mcp._common.validate import validate_source
 
 def _pyxel_dir():
     """Find installed Pyxel package directory (without importing Pyxel)."""

@@ -2,7 +2,7 @@
 
 import json
 
-from pyxel_mcp._palette import (
+from pyxel_mcp._common.palette import (
     analyze_hierarchy,
     classify_color,
     color_name,

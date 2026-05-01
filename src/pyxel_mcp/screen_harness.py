@@ -23,7 +23,7 @@ frame_list = sorted(set(max(1, int(f)) for f in sys.argv[2].split(",")))
 
 import pyxel
 
-from pyxel_mcp._headless import patch_game_loop, run_script, setup_harness
+from pyxel_mcp._common.headless import patch_game_loop, run_script, setup_harness
 
 setup_harness(script_path)
 

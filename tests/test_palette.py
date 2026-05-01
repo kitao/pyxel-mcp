@@ -1,7 +1,7 @@
 """Tests for _palette module."""
 
 import pytest
-from pyxel_mcp._palette import (
+from pyxel_mcp._common.palette import (
     PALETTE,
     analyze_hierarchy,
     classify_color,

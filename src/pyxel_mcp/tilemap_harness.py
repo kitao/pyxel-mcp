@@ -24,7 +24,7 @@ target_frame = int(sys.argv[3]) if len(sys.argv) > 3 else 1
 
 import pyxel
 
-from pyxel_mcp._headless import patch_game_loop, run_script, setup_harness
+from pyxel_mcp._common.headless import patch_game_loop, run_script, setup_harness
 
 setup_harness(script_path)
 

@@ -28,7 +28,7 @@ def test_setup_harness_resets_argv(tmp_path):
 
     mock_pyxel = _make_mock_pyxel()
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
-        from pyxel_mcp._headless import setup_harness
+        from pyxel_mcp._common.headless import setup_harness
         sys.argv = ["harness.py", script, "out.png", "30"]
         setup_harness(script)
         assert sys.argv == [script]
@@ -43,7 +43,7 @@ def test_setup_harness_calls_patch_headless_init(tmp_path):
 
     mock_pyxel = _make_mock_pyxel()
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         with patch.object(headless, "patch_headless_init") as mock_patch:
             headless.setup_harness(script)
             mock_patch.assert_called_once_with(script, None)
@@ -57,7 +57,7 @@ def test_setup_harness_passes_transform_args(tmp_path):
 
     mock_pyxel = _make_mock_pyxel()
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         with patch.object(headless, "patch_headless_init") as mock_patch:
             headless.setup_harness(script, transform)
             mock_patch.assert_called_once_with(script, transform)
@@ -75,7 +75,7 @@ def test_patch_game_loop_patches_run_show_flip():
 
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
         from importlib import reload
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         reload(headless)
         headless.patch_game_loop(lambda frame, draw: False)
 
@@ -107,7 +107,7 @@ def test_patch_game_loop_on_frame_receives_frame_count():
 
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
         from importlib import reload
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         reload(headless)
         headless.patch_game_loop(on_frame)
 
@@ -138,7 +138,7 @@ def test_patch_game_loop_run_exits_when_on_frame_returns_true():
 
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
         from importlib import reload
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         reload(headless)
         headless.patch_game_loop(lambda frame, draw: True)
 
@@ -161,7 +161,7 @@ def test_patch_game_loop_show_calls_on_show():
 
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
         from importlib import reload
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         reload(headless)
         headless.patch_game_loop(lambda frame, draw: False, on_show=on_show)
 
@@ -184,7 +184,7 @@ def test_patch_game_loop_show_default_calls_on_frame():
 
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
         from importlib import reload
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         reload(headless)
         headless.patch_game_loop(on_frame)
 
@@ -213,7 +213,7 @@ def test_patch_game_loop_flip_uses_frame_count():
 
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
         from importlib import reload
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         reload(headless)
         headless.patch_game_loop(on_frame)
 
@@ -246,7 +246,7 @@ def test_patch_game_loop_pre_update_called_before_update():
 
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
         from importlib import reload
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         reload(headless)
         headless.patch_game_loop(on_frame, pre_update=pre_update)
 
@@ -280,7 +280,7 @@ def test_patch_game_loop_pre_update_called_before_on_frame_in_flip():
 
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
         from importlib import reload
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         reload(headless)
         headless.patch_game_loop(on_frame, pre_update=pre_update)
 
@@ -299,7 +299,7 @@ def test_noop_game_loop_patches_run_show_flip():
 
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
         from importlib import reload
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         reload(headless)
         headless.noop_game_loop()
 
@@ -318,7 +318,7 @@ def test_noop_game_loop_run_does_nothing():
 
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
         from importlib import reload
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         reload(headless)
         headless.noop_game_loop()
 
@@ -335,7 +335,7 @@ def test_noop_game_loop_show_does_nothing():
 
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
         from importlib import reload
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         reload(headless)
         headless.noop_game_loop()
 
@@ -351,7 +351,7 @@ def test_noop_game_loop_flip_does_nothing():
 
     with patch.dict(sys.modules, {"pyxel": mock_pyxel}):
         from importlib import reload
-        import pyxel_mcp._headless as headless
+        import pyxel_mcp._common.headless as headless
         reload(headless)
         headless.noop_game_loop()
 

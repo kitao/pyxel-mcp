@@ -27,7 +27,7 @@ music_index = int(sys.argv[5]) if len(sys.argv) > 5 else -1
 
 import pyxel
 
-from pyxel_mcp._headless import noop_game_loop, run_script, setup_harness
+from pyxel_mcp._common.headless import noop_game_loop, run_script, setup_harness
 
 setup_harness(script_path)
 noop_game_loop()

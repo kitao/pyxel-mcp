@@ -5,9 +5,9 @@ import json
 import os
 import sys
 
-from pyxel_mcp._errors import decode_stderr, extract_stdout
+from pyxel_mcp._common.errors import decode_stderr, extract_stdout
 
-_PKG_DIR = os.path.dirname(__file__)
+_PKG_DIR = os.path.dirname(os.path.dirname(__file__))  # parent of _common
 
 HARNESS_PATHS = {
     "run": os.path.join(_PKG_DIR, "harness.py"),

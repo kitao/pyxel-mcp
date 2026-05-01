@@ -29,7 +29,7 @@ with open(input_file) as f:
 
 import pyxel
 
-from pyxel_mcp._headless import patch_game_loop, run_script, setup_harness
+from pyxel_mcp._common.headless import patch_game_loop, run_script, setup_harness
 
 setup_harness(script_path)
 

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from pyxel_mcp._subprocess import HARNESS_PATHS, run_harness
+from pyxel_mcp._common.subprocess import HARNESS_PATHS, run_harness
 
 
 def test_harness_paths_keys():
