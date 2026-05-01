@@ -12,6 +12,9 @@
 - Document Pyxel 2.9 APIs (resize, screencast, set_btnv) in instructions.md
 - Fix gen_bgm examples in instructions.md for Pyxel 2.9 signature
 - Add Python 3.14 classifier
+- Move design knowledge sections to pyxel-skill (color hierarchy, pixel art rules, background design, screen layout, title screen, visual feedback, SE cookbook, game patterns, game feel constants, animation timing, MML composition).
+- Trim instructions.md to technical reference (~200 lines from 906).
+- Add cross-link to pyxel-skill production harness.
 
 ## 0.9.2
 
