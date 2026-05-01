@@ -190,28 +190,29 @@ pyxel.musics[0].set([10], [11], [12])
 `gen_bgm` generates procedural music — great for rapid iteration, but all outputs share a similar flavor. Combine with hand-written MML for variety.
 
 ```python
-# See API reference for gen_bgm preset/instr details
+# gen_bgm(preset, transp, instr, seed, play=False) — first 4 args required
 # Returns 4 MML strings — drop ch3 if you need it for SE
 
 # Example: 3-channel BGM (reserve ch3 for SE)
-mml = pyxel.gen_bgm(7, 1, seed=42)
+mml = pyxel.gen_bgm(preset=7, transp=0, instr=1, seed=42)
 for i in range(3):
     pyxel.sounds[10 + i].mml(mml[i])
 pyxel.musics[0].set([10], [11], [12])
 
 # Quick play (uses all 4 channels — good for title screens)
-pyxel.gen_bgm(preset, instr, seed=42, play=True)
+pyxel.gen_bgm(preset=7, transp=0, instr=3, seed=42, play=True)
 
 # Scene-specific BGM — vary preset/seed per scene for distinct moods
 def play_bgm(self, scene):
     BGM = {
-        "title":    (0, 1, 100),  # title/departure, melody+bass+drums
-        "game":     (4, 2, 200),  # field/adventure, melody+sub+bass
-        "boss":     (7, 1, 300),  # battle/crisis, melody+bass+drums
-        "gameover": (2, 0, 400),  # town/peaceful, melody+reverb+bass
+        # (preset, transp, instr, seed)
+        "title":    (0, 0, 1, 100),  # title/departure, melody+bass+drums
+        "game":     (4, 0, 2, 200),  # field/adventure, melody+sub+bass
+        "boss":     (7, 0, 1, 300),  # battle/crisis, melody+bass+drums
+        "gameover": (2, 0, 0, 400),  # town/peaceful, melody+reverb+bass
     }
-    preset, instr, seed = BGM[scene]
-    mml = pyxel.gen_bgm(preset, instr, seed=seed)
+    preset, transp, instr, seed = BGM[scene]
+    mml = pyxel.gen_bgm(preset, transp, instr, seed)
     for i in range(3):
         pyxel.sounds[60 + i].mml(mml[i])
     pyxel.musics[0].set([60], [61], [62])
