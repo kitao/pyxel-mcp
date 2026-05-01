@@ -85,11 +85,12 @@ async def test_pyxel_info_includes_update_notice():
     }
     with patch("pyxel_mcp._common.pyxel_env.urlopen", _mock_urlopen(responses)), \
          patch("pyxel_mcp._common.pyxel_env.installed_version", return_value="1.0.0"), \
-         patch("pyxel_mcp.server.pyxel_dir", return_value="/fake/pyxel"):
-        from pyxel_mcp.server import pyxel_info
-        result = await pyxel_info()
-    assert "Update available: pyxel-mcp" in result
-    assert "Update available: pyxel" in result
+         patch("pyxel_mcp._tools.info.pyxel_dir", return_value="/fake/pyxel"):
+        from pyxel_mcp.server import mcp
+        result = await mcp.call_tool("pyxel_info", {})
+    text = str(result)
+    assert "Update available: pyxel-mcp" in text
+    assert "Update available: pyxel" in text
 
 
 @pytest.mark.asyncio
@@ -100,7 +101,7 @@ async def test_pyxel_info_no_notice_when_current():
     }
     with patch("pyxel_mcp._common.pyxel_env.urlopen", _mock_urlopen(responses)), \
          patch("pyxel_mcp._common.pyxel_env.installed_version", return_value="1.0.0"), \
-         patch("pyxel_mcp.server.pyxel_dir", return_value="/fake/pyxel"):
-        from pyxel_mcp.server import pyxel_info
-        result = await pyxel_info()
-    assert "Update available" not in result
+         patch("pyxel_mcp._tools.info.pyxel_dir", return_value="/fake/pyxel"):
+        from pyxel_mcp.server import mcp
+        result = await mcp.call_tool("pyxel_info", {})
+    assert "Update available" not in str(result)
