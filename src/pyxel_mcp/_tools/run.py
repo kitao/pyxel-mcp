@@ -286,9 +286,12 @@ def register(mcp):
         Args:
             script_path: Absolute path to the .py script to run.
             inputs: JSON array of input events. Each event:
-                {"frame": N, "keys": ["KEY_SPACE", ...], "mouse_x": X, "mouse_y": Y}
+                {"frame": N, "keys": ["KEY_SPACE", ...], "mouse_x": X, "mouse_y": Y,
+                 "btnv": {"GAMEPAD1_AXIS_LEFTX": 16384}}
                 Keys are held from their frame until a later entry changes them.
-                Default state: no keys pressed, mouse at (0,0).
+                btnv values set analog input via pyxel.set_btnv() (gamepad axes/triggers,
+                typically -32768..32767 for sticks, 0..32767 for triggers).
+                Default state: no keys pressed, mouse at (0,0), no analog input.
             frames: Comma-separated frame numbers to capture screenshots (default: "1,30,60").
             scale: Screenshot scale multiplier (default: 1).
             timeout: Maximum seconds to wait for the script (default: 30).
