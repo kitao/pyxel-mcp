@@ -13,7 +13,7 @@ from pyxel_mcp._common.subprocess import run_harness
 from pyxel_mcp._common.validate import validate_source
 
 
-async def _run_screen_harness(script_path, frame_csv, timeout=10):
+async def _run_screen_harness(script_path, frame_csv, timeout=10) -> tuple:
     """Run screen_harness and return parsed JSON + user output."""
     return await run_harness(
         "screen",

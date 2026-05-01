@@ -18,7 +18,7 @@ async def _play_and_capture_impl(
     frames="1,30,60",
     scale=1,
     timeout=30,
-):
+) -> list:
     """Implementation for play_and_capture tool — exposed at module level for testing."""
     script_path, err = check_script(script_path)
     if err:
@@ -95,7 +95,9 @@ async def _play_and_capture_impl(
             os.unlink(input_tmp)
 
 
-async def _record_gameplay_impl(script_path, duration=60, inputs="[]", scale=1, timeout=15):
+async def _record_gameplay_impl(
+    script_path, duration=60, inputs="[]", scale=1, timeout=15,
+) -> Image | str:
     """Implementation for record_gameplay tool — exposed at module level for testing."""
     abs_path, err = check_script(script_path)
     if err:
