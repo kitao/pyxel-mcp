@@ -46,11 +46,11 @@ def _import_layout_harness():
     sys.modules["pyxel_mcp._common.headless"] = headless_stub
 
     # Force fresh import
-    if "pyxel_mcp.layout_harness" in sys.modules:
-        del sys.modules["pyxel_mcp.layout_harness"]
+    if "pyxel_mcp._harnesses.layout" in sys.modules:
+        del sys.modules["pyxel_mcp._harnesses.layout"]
 
     try:
-        import pyxel_mcp.layout_harness as lh
+        import pyxel_mcp._harnesses.layout as lh
     finally:
         sys.argv = orig_argv
         if orig_headless is not None:
