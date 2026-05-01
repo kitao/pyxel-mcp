@@ -17,6 +17,7 @@
    - `compare_frames` for visual regression testing between frames.
    - `inspect_screen` for compact color grid (no image tokens).
    - `capture_frames` for multi-frame animation and transition verification.
+   - `record_gameplay` for animation flow as a single GIF (clearer than multiple PNGs for transitions, AI motion, parallax).
    - `inspect_animation` for sprite animation consistency (palette, silhouette, frame diffs).
 5. Fix and re-verify.
 
@@ -38,6 +39,7 @@
 - **`inspect_sprite`**: Returns a pixel grid + symmetry report. Asymmetric pixels are listed by row — fix those coordinates in `images[N].set()`.
 - **`inspect_layout`**: Returns margins, horizontal/vertical balance, quadrant density, center of mass, and text positions. Check margins for symmetry, balance > 70%, and quadrant distribution. Warnings (⚠) flag specific issues.
 - **`capture_frames`**: Returns multiple screenshots. Compare frames to verify animation progresses smoothly without jumps or flicker.
+- **`record_gameplay`**: Returns a GIF of N frames. Visually verify motion smoothness, transition timing, and that input events trigger expected state changes over time.
 - **`play_and_capture`**: Returns screenshots with simulated input. Verify that input causes expected state changes (player moved, menu changed, bullet spawned).
 - **`inspect_state`**: Returns game object attributes at a specific frame. Check that variable values match expectations (score, position, game state). Use comma-separated frames for timeline diff: `frames="10,30,60"`.
 - **`validate_script`**: Returns syntax errors and anti-pattern warnings. Run before `run_and_capture` to catch issues without Pyxel execution overhead.
@@ -65,6 +67,16 @@ play_and_capture("game.py",
     inputs='[{"frame":30,"keys":["KEY_SPACE"]},{"frame":50,"keys":[]}]',
     frames="29,31,51")
 ```
+
+```python
+# Analog stick (gamepad): tilt left stick X to 50% right at frame 10
+play_and_capture("game.py",
+    inputs='[{"frame":10,"btnv":{"GAMEPAD1_AXIS_LEFTX":16384}}]',
+    frames="11,30,60")
+```
+
+`btnv` values are int analog values matching SDL gamepad ranges
+(typically `-32768`...`32767` for sticks, `0`...`32767` for triggers).
 
 Input events persist until changed by a later entry. Use this for:
 - Menu navigation (KEY_RETURN to start, verify game screen)
@@ -107,6 +119,22 @@ Official docs (fetch for API details, usage guides, and syntax):
 - Local stubs and examples: call `pyxel_info`.
 - User-created games: https://github.com/kitao/pyxel/wiki/Pyxel-User-Examples
 
+## Pyxel Reference via MCP Resources
+
+In addition to fetching the URLs above directly, this MCP server
+exposes Pyxel docs and official examples as MCP Resources for
+faster access:
+
+- `pyxel://api-reference` — full API reference
+- `pyxel://user-guide` — concepts and patterns
+- `pyxel://mml-commands` — MML syntax for procedural music
+- `pyxel://pyxres-format` — `.pyxres` file structure
+- `pyxel://examples/<name>` — official examples (e.g. `02_jump_game`, `09_shooter`, `10_platformer`)
+- `pyxel://palette/default` — 16-color reference with use hints
+
+In Claude Code, reference them with `@pyxel:api-reference` or
+`@pyxel:examples/02_jump_game` directly in chat.
+
 ## Essential Tips
 
 Common gotchas not obvious from the API reference:
@@ -119,6 +147,23 @@ Common gotchas not obvious from the API reference:
 - Use `btnp()` for one-shot actions, `btn()` for continuous hold
 - Always call `pyxel.cls(col)` at the start of `draw()`
 - Iterate over a copy when removing: `for e in list(enemies):`
+
+### Pyxel 2.9 APIs Worth Knowing
+
+- **`pyxel.resize(w, h)`** — change the screen size at runtime. Use cases: options menus, responsive layouts, "fullscreen" toggle.
+
+  ```python
+  pyxel.resize(256, 192)  # widescreen
+  ```
+
+- **`pyxel.screencast(filename)`** — save a GIF of recent frames. Pyxel buffers frames automatically. The MCP exposes this via `record_gameplay`; you can also call it directly from your script:
+
+  ```python
+  if pyxel.btnp(pyxel.KEY_F9):
+      pyxel.screencast("clip")  # saves clip.gif
+  ```
+
+- **`pyxel.set_btnv(key, val)`** — set an analog input value (gamepad axes/triggers). Mainly for headless testing — invoked automatically by `play_and_capture` and `record_gameplay` when you pass a `btnv` event.
 
 ### Beyond Defaults
 
