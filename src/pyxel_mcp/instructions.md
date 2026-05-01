@@ -215,3 +215,9 @@ Quick-reference of common mistakes. See linked sections for details.
 | Drawing | Omit `colkey` in `blt()` | Add `colkey=0` for transparency |
 
 For the full pre-release quality checklist (visual / audio / sprite / level design), see https://github.com/kitao/pyxel-skill (`quality-gate.md`).
+
+## Beyond verification: production harness
+
+For an end-to-end game-production workflow (architecture, sprite design, gameplay logic, quality gating), see https://github.com/kitao/pyxel-skill — a Claude Code Skill that drives this MCP server through a phased pipeline.
+
+The skill covers visual target authoring, decomposition into a verifiable plan, scaffolding, sprite manifests with identity contracts, gameplay implementation with milestone playthroughs, and a quality gate with structured PASS/FAIL reports. It depends on this MCP server for verification verbs.
