@@ -8,12 +8,12 @@
     "url": "https://github.com/kitao/pyxel-mcp",
     "source": "github"
   },
-  "version": "1.0.0",
+  "version": "0.9.3",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "pyxel-mcp",
-      "version": "1.0.0",
+      "version": "0.9.3",
       "transport": {
         "type": "stdio"
       }
