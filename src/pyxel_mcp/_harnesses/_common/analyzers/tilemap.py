@@ -7,6 +7,26 @@ from typing import Any
 _TILES_GRID_LIMIT = 4096
 
 
+def _resolve_imgsrc(tm) -> int:
+    """Return the source-bank index of a tilemap.
+
+    Pyxel exposes the source bank as `tm.imgsrc` (int). If user code did
+    `tm.image = pyxel.images[N]` (legacy shortcut), `imgsrc` becomes an
+    Image object, not an int — the naive `int(getattr(tm, "imgsrc", 0))`
+    raises TypeError. Identity-scan over `pyxel.images` to recover the
+    index in that case; default to 0 for any other surprise.
+    """
+    import pyxel
+    val = getattr(tm, "imgsrc", 0)
+    if isinstance(val, int):
+        return val
+    # imgsrc may be an Image instance (after `tm.image = pyxel.images[N]`).
+    for i in range(len(pyxel.images)):
+        if pyxel.images[i] is val:
+            return i
+    return 0
+
+
 def _zero_zero_is_visible(imgsrc: int) -> bool:
     """Check if the (0,0) 8x8 tile in the source bank has any non-zero pixels."""
     import pyxel
@@ -60,7 +80,7 @@ def analyze_tilemap(
     tm = pyxel.tilemaps[tilemap]
     tm_w: int = tm.width
     tm_h: int = tm.height
-    imgsrc: int = int(getattr(tm, "imgsrc", 0))
+    imgsrc = _resolve_imgsrc(tm)
 
     # Count tile usage via pget iteration
     counter: Counter[str] = Counter()

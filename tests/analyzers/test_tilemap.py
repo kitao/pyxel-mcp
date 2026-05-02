@@ -45,6 +45,26 @@ def test_zero_zero_trap_detected():
     assert result["trap_warning"] is True
 
 
+def test_imgsrc_resolved_when_tilemap_image_assigned():
+    """`tm.image = pyxel.images[N]` is a legacy shortcut Pyxel still accepts;
+    after it, `tm.imgsrc` becomes an Image instance, not an int. The analyzer
+    must fall back to identity-scanning pyxel.images and recover the index
+    rather than crashing on `int(Image)`.
+    """
+    tm = pyxel.tilemaps[0]
+    # Set imgsrc to an Image instance (not a normal int) — _resolve_imgsrc
+    # should identity-scan and return 1.
+    tm.imgsrc = pyxel.images[1]
+    try:
+        # Should not raise; should treat bank 1 as the source.
+        result = analyze_tilemap(tilemap=0)
+        # bounding_box / usage shape unchanged from the int case.
+        assert "trap_warning" in result
+        assert result["errors"] == []
+    finally:
+        tm.imgsrc = 0
+
+
 def test_large_tilemap_returns_none_tiles():
     # Pyxel default tilemap size is 256x256 = 65536 cells, well above 4096.
     result = analyze_tilemap(tilemap=0)
