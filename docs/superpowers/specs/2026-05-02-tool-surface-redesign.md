@@ -35,7 +35,9 @@ The redesign is successful when:
 
 ### 3.1 The fragmentation problem
 
-The current 16-tool surface evolved feature-by-feature. As of 0.9.2 (PyPI) and 0.9.3 (in-flight trim), the tools are:
+The current 16-tool surface evolved feature-by-feature. The latest PyPI release is 0.9.2; 0.9.3 was previously planned as an `instructions.md`-only trim release (`feat/v0.9.3-trim-instructions` branch in this repo, work-in-progress as of 2026-05-01). **This spec supersedes that previously-planned 0.9.3 scope**: the version label is reused, but the scope is broadened to a full tool-surface redesign. The `0.9.3` label is provisional; the user may bump to `0.10.0` or `1.0.0` at release time depending on judgment of breaking-change magnitude.
+
+The 16 tools today are:
 
 ```
 pyxel_info, validate_script,
@@ -239,13 +241,21 @@ Tool calls return successfully (HTTP 200 / MCP success) even when errors occur d
 
 **Frame numbering:** When tools auto-generate filenames from a `output_pattern: "frames/{frame}.png"` template, the `{frame}` field is zero-padded to **5 digits** (`frames/00030.png`). 5 digits supports up to 99999 frames; Pyxel runs at 30 fps so this covers ~55 minutes of capture, far beyond any realistic test scenario.
 
-### 5.6 MCP description density
+### 5.6 Two distinct MCP context surfaces
 
-**Constraint:** Each MCP tool description (the text the agent sees in the tool catalog) is concise: 1-paragraph purpose + 1-paragraph signature + 1 representative example. Detailed schemas are surfaced via MCP Resources (`pyxel://run-snapshots-schema`, etc.).
+The MCP protocol exposes pyxel-mcp to the agent via three layers, each with its own concise / detailed split. Spec terminology distinguishes these clearly so implementation does not conflate them:
 
-**Why:** The full snapshot schema for `run` would bloat the tool list to hundreds of lines. Agents activate the `pyxel-skill` Skill which has context-specific examples; tool descriptions need to explain shape, not enumerate every kind.
+| Layer                            | Where it lives                                  | What's in it                                                                                          | Length budget         |
+|----------------------------------|-------------------------------------------------|-------------------------------------------------------------------------------------------------------|-----------------------|
+| **A. Per-tool description**      | FastMCP `@mcp.tool()` decorator docstring       | One-paragraph purpose + signature summary + one canonical example. Returned in MCP `list_tools` query | ~10-30 lines per tool |
+| **B. Server `instructions`**     | `src/pyxel_mcp/instructions.md` (loaded by FastMCP at server init, attached as the MCP `instructions` field) | Tool catalog overview + workflow guidance + Pyxel-API quirks. The agent reads this once at session start | ~150-200 lines total  |
+| **C. MCP Resources (full schemas)** | `src/pyxel_mcp/_resources/*.md` files served as `pyxel://...` URIs | Full snapshot kind schemas, anti-pattern category enumeration, Pyxel API reference, examples list. The agent fetches on demand when extra detail is needed | Unbounded (per resource) |
 
-**Implementation:** Tool descriptions live in `instructions.md` (loaded by MCP) and mirror the spec but are abbreviated. MCP Resources provide the full schema as separate URIs.
+**Constraint:** Layer A and Layer B together must give the agent enough information to call each tool correctly for common cases. Layer C is for edge cases and reference. Avoid duplicating content between layers (cross-link instead).
+
+**Why:** Layer A's per-tool description is what the agent sees first when the tool list is queried; bloating it with full snapshot kind schemas would degrade tool selection. Layer B (instructions) is loaded once and is the right place for cross-tool workflow notes ("use `run` with state+screen snapshots together for milestone verification"). Layer C is fetched only when the agent needs full detail.
+
+**Implementation:** Layer A docstrings are short, written in the tool registration code (`server.py`). Layer B is `instructions.md`, loaded via `FastMCP(instructions=Path("instructions.md").read_text())`. Layer C resources are served via FastMCP `@mcp.resource()` decorators reading from `_resources/`.
 
 ## 6. The `run` primitive
 
@@ -266,14 +276,19 @@ run(
 
 For each frame `F` in `[0, frames)`:
 
-1. Apply any `InputEvent` with `frame == F` (set `pyxel.btn_state` per the events).
-2. Recompute `btnp` / `btnr` deltas against the previous frame's button state.
-3. Run `pyxel.update()` (script's update logic responds to inputs).
-4. Run `pyxel.draw()` (script renders this frame).
-5. Capture all `Snapshot`s with `frame == F` (or whose `[start_frame, end_frame]` range includes `F` for `video` kind).
-6. Advance `pyxel.frame_count`.
+1. Set `pyxel.frame_count = F` (incremented to the new frame's value before logic runs, matching Pyxel's normal loop).
+2. Apply any `InputEvent` with `frame == F`. The harness updates the held button set, axis values, and mouse position from the event.
+3. Recompute `btnp` / `btnr` deltas against the previous frame's button state.
+4. Run `pyxel.update()` — the script's update logic responds to current inputs.
+5. Run `pyxel.draw()` — the script renders this frame.
+6. **For single-frame snapshots** (`screen_image`, `screen_grid`, `state`, `layout`) with `frame == F`: capture and produce a `SnapshotResult` immediately.
+7. **For `video` snapshots** whose `[start_frame, end_frame)` range contains F: write the post-draw frame to a temp PNG. The video is encoded into the final output file only after the run completes (step 8 below). This is accumulation, not per-frame capture.
 
-**Snapshot ordering within a single frame:** The order of snapshots in the input list is preserved in the output. Within a frame, all snapshots see the post-update + post-draw state. Two snapshots at the same frame with different kinds capture the same logical frame state.
+**After the loop completes:** Encode any accumulated `video` snapshots from the temp PNG sequence into the requested output format (GIF or MP4). Emit one `SnapshotResult` per `video` input.
+
+**Snapshot ordering within a single frame:** The order of snapshots in the input list is preserved in the output. Within a frame, all single-frame snapshots see the post-update + post-draw state. Two snapshots at the same frame with different kinds capture the same logical frame state.
+
+**`pyxel.frame_count` semantics:** Set at the start of frame F (step 1), so during `update()` and `draw()` the script sees `pyxel.frame_count == F`. Snapshots captured at frame F therefore record `pyxel.frame_count == F`. This matches Pyxel's normal interactive-mode behavior.
 
 ### 6.3 InputEvent
 
@@ -286,37 +301,63 @@ For each frame `F` in `[0, frames)`:
 }
 ```
 
-**State replacement, not delta.** `buttons` represents the full set of buttons held from this frame onward until the next event. To release a button, the next event must omit it from the list. To release all, set `"buttons": []`.
+**State replacement, not delta.** `buttons` represents the full set of buttons held from this frame onward until the next event.
+
+**Field-omitted vs explicit-empty (CRITICAL distinction):**
+
+| Value supplied                | Meaning                                                |
+|-------------------------------|--------------------------------------------------------|
+| `buttons` field omitted, or `null` | **No change** — preserve the previous frame's held button set. |
+| `buttons: []` (empty list)    | **Release all** — no buttons are held from this frame onward. |
+| `buttons: ["KEY_SPACE"]`      | Replace held set with exactly `{KEY_SPACE}`. Previously held buttons not in the new list are released. |
+
+The same distinction applies to `axes` (omit / `null` = no change; `{}` = all axes reset to 0; explicit dict = replace) and `mouse_pos` (omit / `null` = no change; explicit `[x, y]` = move).
+
+**Why explicit-empty is needed:** without `[]` semantics, releasing all buttons would require the agent to enumerate every previously-held button in the next event with the released ones omitted. That's error-prone for long-held inputs.
 
 **Edge detection.** The harness internally tracks the previous frame's button state. `pyxel.btnp(K)` returns true at frame F when K was not in the previous frame's set but is in F's set. `pyxel.btnr(K)` returns true at frame F when K was in the previous frame's set but is not in F's set.
 
 **Initial state.** Before any input event fires, all buttons are released, all axes are 0, mouse_pos is `(0, 0)`.
 
-**Mouse position.** Pyxel exposes `mouse_x` / `mouse_y` as read-only globals. The harness uses Pyxel 2.9's `set_mouse_pos(x, y)` (or equivalent internal API) to drive these; if a Pyxel version lacks this API, harness manually patches the globals.
+**Mouse position.** Pyxel exposes `mouse_x` / `mouse_y` as read-only globals. The harness uses Pyxel 2.9's `set_mouse_pos(x, y)` (or equivalent internal API) to drive these; if a Pyxel version lacks this API, harness manually patches the globals (see §13 open question).
 
-**Button name namespace.** Strings match Pyxel's constant names: `"KEY_SPACE"`, `"KEY_LEFT"`, `"MOUSE_BUTTON_LEFT"`, `"GAMEPAD1_BUTTON_A"`, etc. Axes: `"GAMEPAD1_AXIS_LEFTX"`, etc. The harness translates strings to Pyxel int constants via `getattr(pyxel, name)`.
+**Button name namespace.** Strings match Pyxel's constant names: `"KEY_SPACE"`, `"KEY_LEFT"`, `"MOUSE_BUTTON_LEFT"`, `"GAMEPAD1_BUTTON_A"`, etc. Axes: `"GAMEPAD1_AXIS_LEFTX"`, etc. The harness translates strings to Pyxel int constants via `getattr(pyxel, name)`. Unknown names raise a validation error at tool call time.
 
 ### 6.4 Snapshot kinds (5)
 
 #### 6.4.1 `screen_image`
 
-Captures the rendered screen at a frame as a PNG file.
+Captures the rendered screen at a frame (or sequence of frames) as PNG file(s).
 
 ```python
-Input: {
+Input (single-frame form):
+{
     "frame": int,
     "kind": "screen_image",
-    "output": str,          # path; parent directory created if missing
-    "scale": int = 1,       # upscaling factor (matches pyxel.run scale)
+    "output": str,          # absolute or run-cwd-relative path; parent dirs auto-created
+    "scale": int = 1,       # upscaling factor; nearest-neighbor (no smoothing)
 }
 
-Output: {
+Input (multi-frame form, paired with §6.6 frames range syntax):
+{
+    "frames": list[int] | str,    # see §6.6
+    "kind": "screen_image",
+    "output_pattern": str,         # path with {frame} template (5-digit zero-padded)
+    "scale": int = 1,
+}
+
+Output (per emitted SnapshotResult):
+{
     "frame": int,
     "kind": "screen_image",
     "path": str,            # absolute path written
     "size": [int, int],     # [width, height] in pixels
 }
 ```
+
+**Scale algorithm:** Nearest-neighbor only. Pixel art must not be smoothed; smoothing produces blurry output that misrepresents the rendered state. PIL's `Image.resize(... resample=Image.NEAREST)` is the implementation.
+
+**`output` vs `output_pattern`:** Single-frame snapshots use `output` (a literal path). Multi-frame snapshots (with `frames`) use `output_pattern`, where `{frame}` expands to the 5-digit zero-padded frame number (e.g., `"frames/{frame}.png"` → `"frames/00030.png"`). The two fields are mutually exclusive, matched to single-frame / multi-frame mode respectively. Validation errors otherwise.
 
 #### 6.4.2 `screen_grid`
 
@@ -388,7 +429,7 @@ Output: {
 
 #### 6.4.5 `video`
 
-Records frames `[start_frame, end_frame]` and encodes them into a single output file.
+Accumulates frames `[start_frame, end_frame)` during the run loop and encodes them into a single output file after the run completes.
 
 ```python
 Input: {
@@ -396,31 +437,37 @@ Input: {
     "start_frame": int,
     "end_frame": int,        # exclusive
     "fps": int = 30,
-    "output": str,           # extension determines format: .gif (native) | .mp4 (requires ffmpeg)
-    "scale": int = 1,
+    "output": str,           # extension determines format (see below)
+    "scale": int = 1,        # nearest-neighbor upscaling
 }
 
 Output: {
     "kind": "video",
-    "path": str,             # absolute path written
+    "path": str,             # absolute path of the file actually written
     "format": "gif" | "mp4",
-    "frame_count": int,
+    "frame_count": int,      # frames actually encoded (see below)
     "duration_seconds": float,
-    "warnings": list[str],   # e.g., "ffmpeg unavailable; fell back to GIF"
+    "warnings": list[str],
 }
 ```
 
-**Implementation:** During the run, the harness saves each frame in `[start_frame, end_frame)` as a temporary PNG to a temp dir. After the run, frames are encoded:
-- `.gif`: PIL.Image.save with append_images
-- `.mp4`: `ffmpeg -framerate {fps} -i {temp_dir}/%05d.png -c:v libx264 -pix_fmt yuv420p {output}` if ffmpeg is on PATH, else fall back to GIF (warning emitted).
+**Output extension validation:** The `output` extension MUST be one of `.gif` or `.mp4`. Any other extension (or no extension) is a validation error at tool call time. Future formats (e.g., `.webm`) require a spec amendment.
+
+**Encoding pipeline:**
+- `.gif`: PIL.Image.save with `append_images=[...]`, `loop=0`, `duration=int(1000/fps)`. No external dependency.
+- `.mp4`: `ffmpeg -framerate {fps} -i {temp_dir}/%05d.png -c:v libx264 -pix_fmt yuv420p -movflags +faststart {output}`. Requires `ffmpeg` on PATH. **If ffmpeg is unavailable, the harness falls back to GIF**: it rewrites `path` to `<output_basename>.gif`, sets `format: "gif"`, and emits a warning `"ffmpeg unavailable; fell back to GIF: <new_path>"`. The agent is expected to handle either format.
+
+**`frame_count` on crash:** This is the number of frames *actually written into the encoded file*. If the run crashed at frame F where `start_frame <= F < end_frame`, only `F - start_frame` frames were accumulated and encoded; `frame_count` reflects that lower number. If `end_frame > actual frames executed`, `frame_count` is also lower than `end_frame - start_frame`. The agent compares `frame_count` against the requested range to detect truncation.
 
 **Range validation:** `start_frame >= 0`, `end_frame <= frames`, `start_frame < end_frame`. Violations are validation errors at tool call time.
+
+**`frames` range syntax not supported:** `video` uses its own `start_frame` / `end_frame` fields. The §6.6 `frames` shorthand is rejected for `video` snapshots.
 
 ### 6.5 RunResult
 
 ```python
 {
-    "snapshots": list[SnapshotResult],    # one per input snapshot, same order
+    "snapshots": list[SnapshotResult],    # see ordering rules below
     "exit_status": "ok" | "crashed" | "timeout" | "stalled",
     "frame_count": int,                   # actual frames executed (may be less than `frames` on crash)
     "elapsed_seconds": float,             # wall-clock harness time
@@ -429,6 +476,21 @@ Output: {
     "errors": list[ToolError],            # per §5.4
 }
 ```
+
+**Snapshot ordering:**
+- The output `snapshots` list preserves the **input order** of the input `snapshots` list.
+- Single-frame inputs (using `frame`) produce **exactly one** SnapshotResult in the matching position.
+- Multi-frame inputs (using `frames` per §6.6) expand into a **contiguous run** of N SnapshotResults at the original input's position, in **frame-ascending order** (e.g., a multi-frame snapshot at input position 3 with resolved frames `[30, 60, 120]` produces 3 SnapshotResults at output positions 3, 4, 5).
+- `video` inputs always produce exactly one SnapshotResult (encoded after the run completes).
+
+**Log content (informational reference):** The `log` field captures stdout + stderr from the harness subprocess. Common content the agent may scan for:
+- Pyxel startup banner / version line
+- Asset load failures (`"asset load failed: <path>"`)
+- Pyxel runtime warnings (e.g., `"warning: cls() not called this frame"`)
+- Python traceback when the script crashes
+- Harness diagnostic messages prefixed `[pyxel-mcp]`
+
+This list is non-exhaustive and informational; structured failures are reported via `errors` field, not parsed from `log`.
 
 **Stall detection** (`exit_status="stalled"`) is opt-in via `stall_detection: bool = False` parameter (added to `run` signature; not shown above for brevity). When true, the harness computes a hash of `(screen_grid, state)` each frame and sets `stalled` if 60 consecutive frames have identical hash despite scheduled inputs. Default off; agent enables for long-path verification.
 
@@ -443,13 +505,20 @@ For high-frequency snapshots (e.g., capture every frame's state), specifying 720
 {"frames": "all", "kind": "screen_grid"}                                                # all frames
 ```
 
-When `frames` is used:
-- `output` becomes `output_pattern` with `{frame}` template expansion (5-digit zero-padded).
-- The output `snapshots` array contains one `SnapshotResult` per frame in the resolved range.
+**Field consistency between `frame` and `frames` modes:**
 
-When `frame` (singular) is used, exactly one snapshot is emitted.
+| Mode         | Frame selector | Output destination (for `screen_image`) | Result count |
+|--------------|----------------|------------------------------------------|--------------|
+| Single-frame | `frame: int`   | `output: str` (literal path)             | 1            |
+| Multi-frame  | `frames: ...`  | `output_pattern: str` with `{frame}` template (5-digit zero-padded) | N            |
 
-`frame` and `frames` are mutually exclusive. `kind: "video"` does not accept `frames` (it has its own range fields).
+`frame` / `frames` are mutually exclusive. `output` / `output_pattern` are mutually exclusive and matched to single / multi mode respectively. Mismatches (e.g., `frame: 30` paired with `output_pattern`) are validation errors.
+
+For `state` and `screen_grid` snapshots (no file output), the multi-frame mode just emits N SnapshotResults inline.
+
+For `layout` snapshots, multi-frame mode is supported and produces N analysis results.
+
+`kind: "video"` does **not** accept `frames` — it has its own `start_frame` / `end_frame` fields (§6.4.5).
 
 ### 6.7 Example: DK win-path verification in 1 call
 
@@ -554,9 +623,11 @@ Output: {
 
 **Bank size handling:** Default `w=h=None` means "the actual size of `pyxel.images[image]`". If the user passes explicit `w`/`h` that exceed the bank's bounds, the region is clamped and a warning is emitted. If the bank index does not exist, `errors` contains a `script_import` or `build_assets` phase entry.
 
-**Large region pixel return:** If `w * h > 4096` (e.g., a region larger than 64×64), `pixels` is set to `None` to avoid bloating JSON. The agent must use `render_path` to visualize large regions. `color_count`, `fill_ratio`, etc. are still computed.
+**Large region pixel return:** If `w * h > 4096`, `pixels` is set to `None` to avoid bloating JSON. The agent must use `render_path` to visualize large regions. `color_count`, `fill_ratio`, etc. are still computed.
 
-**Symmetry / edge_density:** Computed only when region is small enough to be a sprite (`w * h <= 4096`). For larger regions these analytics are omitted (set to `None`).
+**Threshold rationale (4096 = 64×64):** Common Pyxel sprite sizes are 8×8 (=64), 16×16 (=256), 24×24 (=576), 32×32 (=1024), 48×48 (=2304), 64×64 (=4096). 4096 is the upper bound of practical sprite analytics; full image banks (256×256 = 65536) and larger composite regions exceed this and produce JSON payloads of ~50 KB+ for the `pixels` field alone, which is wasteful when the agent only needs aggregate stats. Above the threshold, `inspect_image` continues to compute aggregate analytics (`color_count`, `fill_ratio`) but skips the pixel grid; agent uses `render_path` for visualization.
+
+**Symmetry / edge_density:** Computed only when region is small enough to be a sprite (`w * h <= 4096`). For larger regions these analytics are meaningless (whole-bank symmetry is incidental) and are omitted (set to `None`).
 
 ### 7.3 `inspect_animation(script, image, x, y, w, h, frame_count, direction)`
 
@@ -658,7 +729,7 @@ Output: {
 - `anti_pattern.iter_modify` — modifying a list while iterating it
 - `anti_pattern.btn_one_shot` — `btn()` used for a one-shot action (should be `btnp()`)
 - `anti_pattern.palette_animation` — palette mutation via index assignment in a loop
-- `anti_pattern.cls_missing` — `draw()` body does not begin with `pyxel.cls(...)`
+- `anti_pattern.cls_missing` — the first effective drawing operation in `draw()` is not `pyxel.cls(...)`. Variable assignments, conditional `return` statements, and helper-function calls that do not draw are permitted before `cls`. The detector flags `draw()` only if a draw API (`blt`, `bltm`, `pset`, `line`, `rect`, `rectb`, `circ`, `circb`, `tri`, `trib`, `text`, `pal`, `dither`) is invoked before any `cls()` call. Helper methods called from `draw()` are inlined for the analysis up to one level of depth.
 - `anti_pattern.degree_radian_mix` — `math.sin/cos` used alongside `pyxel.sin/cos`
 - `anti_pattern.other` — catch-all for future detectors before they get their own category
 
@@ -833,10 +904,14 @@ src/pyxel_mcp/
 The MCP server (FastMCP) registers each of the 9 tools as an MCP function. Each registration:
 
 1. Accepts the tool's parameters via FastMCP decorator.
-2. Spawns subprocess `python -m pyxel_mcp._harnesses.main <subcommand> --input-json <json>`.
-3. Reads stdout (JSON) as the tool result.
-4. Captures stderr as the tool's `log` field (for `run`) or merged into `errors[].message` (for inspectors).
-5. On subprocess timeout (per `timeout` parameter or default), kills the process and returns `exit_status="timeout"`.
+2. Serializes the tool's parameters to JSON.
+3. Spawns subprocess `python -m pyxel_mcp._harnesses.main <subcommand>` (no parameters in argv beyond the subcommand name).
+4. Writes the parameter JSON to the subprocess's **stdin** and closes stdin.
+5. Reads stdout (JSON result) and stderr (logs).
+6. Returns the parsed JSON result. For `run`, stderr → `log` field; for inspectors, stderr → merged into `errors[].message` if non-empty.
+7. On subprocess timeout (per `timeout` parameter or default), kills the process and returns `exit_status="timeout"` (for `run`) or an error result (for other tools).
+
+**Why stdin (not argv) for parameter passing:** A `run` call's snapshot schedule can be hundreds of lines of JSON. macOS / Linux `ARG_MAX` is ~256 KB, and shell escape of arbitrary JSON in argv is fragile. stdin handles arbitrary size and avoids quoting issues. The subprocess interface is `<binary> <subcommand>` + JSON-on-stdin → JSON-on-stdout.
 
 `server.py` itself contains no Pyxel logic; it is purely a dispatcher.
 
@@ -850,16 +925,24 @@ Existing `pyxel-mcp` has 234 passing tests against the 16-tool surface. The rede
 
 Estimated count: 250–300 tests after redesign. TDD: each new tool / snapshot kind is implemented test-first.
 
-### 11.4 instructions.md
+### 11.4 instructions.md and per-tool docstrings
 
-The current 0.9.3 trim work (from `feat/v0.9.3-trim-instructions` branch) reduced `instructions.md` from 906 lines to 223 lines by extracting design knowledge to `pyxel-skill/knowledge/`. That separation principle (mcp = technical verbs; skill = design knowledge) is preserved on merit.
+Per §5.6, two distinct surfaces convey tool information to the agent: per-tool docstrings (FastMCP decorator) and `instructions.md` (server-wide instructions payload).
 
-The new `instructions.md` is rewritten from scratch for the 9-tool surface — not by editing the existing trimmed file. The result will be ~150-200 lines:
-- Tool catalog (9 tools, each 1-paragraph description + 1 example)
-- Cross-link to `pyxel-skill` for production workflow
-- Pointer to `pyxel://run-snapshots-schema` MCP Resource for full `run` schema
+**Per-tool docstrings** (FastMCP `@mcp.tool()` parameter or first-line docstring):
+- Concise: ~10-30 lines per tool
+- Content: 1-paragraph purpose + signature summary + 1 canonical example
+- Cross-links to instructions.md for workflow guidance and to `pyxel://...` resources for full schemas
+- Written inline in `server.py`, alongside each `@mcp.tool()` registration
 
-Existing trimmed content is reference material during the rewrite, not a base to incrementally edit.
+**`src/pyxel_mcp/instructions.md`** (~150-200 lines):
+- Server-wide overview: what pyxel-mcp does, how to use the 9-tool surface together
+- Workflow patterns (e.g., "use `run` with state+screen snapshots for milestone verification")
+- Pyxel-API quirks index (cross-link to `pyxel://api-reference`)
+- Cross-link to `pyxel-skill` repo for full production workflow
+- Pointer to `pyxel://run-snapshots-schema` for the `run` snapshot schema in full detail
+
+**Migration:** The current 0.9.3 in-flight `instructions.md` (223 lines, trimmed from 906; design-knowledge extracted to pyxel-skill/knowledge/) is **rewritten from scratch** for the 9-tool surface. The separation-of-concerns principle (mcp = technical verbs; skill = design knowledge) is preserved on merit; the existing trimmed content is reference material, not a base to incrementally edit.
 
 ### 11.5 ffmpeg as optional system dependency
 
@@ -902,11 +985,14 @@ Phase 9  pyxel-skill v0.1.0+ tag (post-PyPI publish)
 ## 13. Open questions and risks
 
 1. **Pyxel 2.9 mouse-position API.** The spec assumes Pyxel 2.9+ exposes a way to set `mouse_x` / `mouse_y` (either a `set_mouse_pos` API or direct module-attribute assignment). Verify against current Pyxel source before implementing `mouse_pos` in InputEvent. If the API does not exist, harness implementation may need to monkey-patch `pyxel._mouse_x` etc.
-2. **`stall_detection` overhead.** Computing a state hash every frame is non-trivial. Default-off keeps the common path fast; enabling it for long-path verification incurs ~5-15% slowdown depending on state size. Acceptable; document.
-3. **`ffmpeg` availability assumption.** Pyxel-skill tests on macOS in development; ffmpeg is typically installed via brew. CI environments (when added) need ffmpeg in their image.
-4. **Validation iteration count.** The redesign aims to make DK validation pass in 1-2 iterations vs the current 4+. This is an expectation, not a guarantee. If the redesigned surface still requires many iterations, additional design refinement may be needed before PyPI publish.
-5. **`pyxel://run-snapshots-schema` MCP Resource.** This is a new resource URI; pyxel-mcp's resource-serving infrastructure must be extended to provide the schema as either a static markdown or a JSON Schema file.
-6. **Anti-pattern category taxonomy completeness.** The closed enum in §8.1 covers anti-patterns the project knows about today. New patterns discovered during DK validation may require enum extensions; spec amendments are expected and noted as iterative.
+2. **Pyxel `set_btnv` argument-range convention.** §6.3 accepts axis values matching SDL gamepad ranges (typically `-32768..32767` for sticks, `0..32767` for triggers). Verify Pyxel's actual `set_btnv` signature accepts the same int range; if Pyxel normalizes to floats `-1.0..1.0`, the harness must convert before calling.
+3. **`stall_detection` overhead.** Computing a state hash every frame is non-trivial. Default-off keeps the common path fast; enabling it for long-path verification incurs ~5-15% slowdown depending on state size. Acceptable; document.
+4. **`ffmpeg` availability assumption.** Pyxel-skill tests on macOS in development; ffmpeg is typically installed via brew. CI environments (when added) need ffmpeg in their image. Headless servers may not have it; the GIF fallback is the safety net.
+5. **Validation iteration count.** The redesign aims to make DK validation pass in 1-2 iterations vs the current 4+. This is an expectation, not a guarantee. If the redesigned surface still requires many iterations, additional design refinement may be needed before PyPI publish.
+6. **`pyxel://run-snapshots-schema` MCP Resource.** This is a new resource URI; pyxel-mcp's resource-serving infrastructure must be extended to provide the schema as either a static markdown or a JSON Schema file.
+7. **Anti-pattern category taxonomy completeness.** The closed enum in §8.1 covers anti-patterns the project knows about today. New patterns discovered during DK validation may require enum extensions; spec amendments are expected and noted as iterative.
+8. **Spec ↔ implementation alignment validation.** During implementation (Phase 3), discrepancies between this spec and what's actually built will surface. Process: (a) implementer flags discrepancy in implementation plan task, (b) controller decides spec amendment vs implementation correction, (c) if amendment, this spec is updated and committed before implementation proceeds. The plan (Phase 2 output) is responsible for naming the discrepancy-tracking artifact.
+9. **`repr()` truncation length (200 chars) is a default, not a hard rule.** Custom App attrs of pathological size (e.g., a list of 10000 enemies serialized inline) could still bloat the result. If real-world cases warrant, the limit becomes a `state` snapshot parameter (`max_repr_chars`); deferred until needed.
 
 ## 14. References
 
