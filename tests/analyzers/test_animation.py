@@ -68,3 +68,20 @@ def test_overflow_raises_validation_via_caller():
     the analyzer itself raises ValueError on overflow."""
     with pytest.raises(ValueError, match="overflow"):
         analyze_animation(image=0, x=250, y=0, w=8, h=8, region_count=4, direction="horizontal")
+
+
+# --- performance regression guard --------------------------------------------
+
+
+def test_analyze_animation_under_500ms_for_8_frames():
+    """8-frame strip analysis must complete fast post-vectorization."""
+    import time
+    t0 = time.monotonic()
+    result = analyze_animation(
+        image=0, x=0, y=0, w=16, h=16, region_count=8, direction="horizontal",
+    )
+    elapsed = time.monotonic() - t0
+    assert elapsed < 0.5, (
+        f"analyze_animation 8-frame took {elapsed*1000:.1f}ms (limit 500ms)"
+    )
+    assert len(result["region_diffs"]) == 7
