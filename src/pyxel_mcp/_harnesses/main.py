@@ -28,9 +28,8 @@ def register(subcommand: str):
 
 def _import_tool_modules() -> None:
     """Import all tool modules so their @register decorators run."""
-    # Subsequent tasks add imports here as tools are implemented.
-    # Each `from pyxel_mcp._harnesses.tools import X` triggers X's @register call.
-    pass
+    from pyxel_mcp._harnesses.tools import validate as _v
+    register("validate")(_v.run)
 
 
 def main(argv: list[str] | None = None) -> int:
