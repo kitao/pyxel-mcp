@@ -2,19 +2,24 @@
 
 ## 0.9.3
 
+- Redesign tool surface from 16 to 9 tools
+- Add `run` primitive with scheduled inputs and 5 snapshot kinds
+- Support `screen_image`, `screen_grid`, `state`, `layout`, `video` snapshots
+- Support multi-frame snapshots via list or range string syntax
+- Parse `ASSERT PASS|FAIL` lines from stdout into structured assertions
+- Add `inspect_palette` with WCAG contrast and 3-layer hierarchy
+- Add `inspect_image` for image bank region pixel analysis
+- Add `inspect_animation` with cross-region Jaccard metrics
+- Add `inspect_tilemap` with (0,0)-tile trap detection
+- Add `compare_frames` for pixel-wise PNG diff
+- Replace `validate_script` with `validate` (10 anti-pattern detectors)
+- Read subprocess JSON payload from stdin instead of argv
+- Inject `random_seed` at pre-loop checkpoint for deterministic runs
+- Unify error shape across all tools as `errors: list[ToolError]`
 - Bump Pyxel minimum version to 2.9.4
-- Reorganize package into _common/_tools/_harnesses/_resources subpackages
-- Slim server.py to FastMCP wiring only (~30 lines)
-- Add record_gameplay tool — capture gameplay as GIF via screencast
-- Extend play_and_capture with btnv analog input events
-- Add MCP Resources: pyxel://api-reference, user-guide, mml-commands,
-  pyxres-format, examples/<name>, palette/default
-- Document Pyxel 2.9 APIs (resize, screencast, set_btnv) in instructions.md
-- Fix gen_bgm examples in instructions.md for Pyxel 2.9 signature
+- Trim instructions.md and migrate design knowledge to pyxel-skill
+- Add `pyxel://run-snapshots-schema` MCP resource
 - Add Python 3.14 classifier
-- Move design knowledge sections to pyxel-skill (color hierarchy, pixel art rules, background design, screen layout, title screen, visual feedback, SE cookbook, game patterns, game feel constants, animation timing, MML composition).
-- Trim instructions.md to technical reference (~200 lines from 906).
-- Add cross-link to pyxel-skill production harness.
 
 ## 0.9.2
 
