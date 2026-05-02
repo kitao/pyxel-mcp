@@ -1,4 +1,5 @@
 """Tests for run() — dynamic execution driver (spec §6)."""
+import pytest
 from pyxel_mcp._harnesses.tools.run import run as run_tool
 from tests.conftest import SCRIPTS
 
@@ -108,3 +109,76 @@ def test_log_includes_stderr():
     """Script that writes to sys.stderr must have that text in log."""
     result = run_tool({"script": str(SCRIPTS / "stderr_printing.py"), "frames": 1})
     assert "stderr message" in result["log"]
+
+
+# --- Snapshot integration tests ---
+
+def test_run_with_screen_image_snapshot(tmp_path):
+    out = tmp_path / "f2.png"
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"frame": 2, "kind": "screen_image", "output": str(out)}],
+    })
+    assert result["exit_status"] == "ok"
+    assert len(result["snapshots"]) == 1
+    assert result["snapshots"][0]["frame"] == 2
+    assert result["snapshots"][0]["kind"] == "screen_image"
+    assert out.exists()
+
+
+def test_run_with_screen_grid_snapshot():
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 3,
+        "snapshots": [{"frame": 1, "kind": "screen_grid"}],
+    })
+    snap = result["snapshots"][0]
+    assert snap["kind"] == "screen_grid"
+    assert "grid" in snap
+
+
+def test_run_with_state_snapshot():
+    """stateful_app.App.update increments counter each frame.
+    After 5 frames (f=0..4), update is called 5 times → counter == 5."""
+    result = run_tool({
+        "script": str(SCRIPTS / "stateful_app.py"),
+        "frames": 5,
+        "snapshots": [{"frame": 4, "kind": "state", "attrs": ["counter"]}],
+    })
+    assert result["snapshots"][0]["values"]["counter"] == 5
+
+
+def test_run_with_layout_snapshot():
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 3,
+        "snapshots": [{"frame": 1, "kind": "layout"}],
+    })
+    snap = result["snapshots"][0]
+    assert snap["kind"] == "layout"
+    assert "h_balance" in snap
+
+
+def test_run_with_video_snapshot(tmp_path):
+    out = tmp_path / "play.gif"
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 10,
+        "snapshots": [{"kind": "video", "start_frame": 0, "end_frame": 10,
+                       "fps": 30, "output": str(out)}],
+    })
+    assert out.exists()
+    snap = result["snapshots"][0]
+    assert snap["kind"] == "video"
+    assert snap["frames_encoded"] == 10
+
+
+def test_invalid_snapshot_kind_is_validation_error():
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 1,
+        "snapshots": [{"frame": 0, "kind": "bogus"}],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
