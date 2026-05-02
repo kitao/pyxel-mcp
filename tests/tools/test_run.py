@@ -160,6 +160,19 @@ def test_input_release_stops_movement():
     assert result["snapshots"][0]["values"]["x"] == 5
 
 
+def test_axes_input():
+    result = run_tool({
+        "script": str(SCRIPTS / "axes_responder.py"),
+        "frames": 5,
+        "inputs": [{"frame": 2, "axes": {"GAMEPAD1_AXIS_LEFTX": 0.5}}],
+        "snapshots": [{"frame": 4, "kind": "state", "attrs": ["last_x_axis"]}],
+    })
+    # Verify the script saw the axis value (modulo Pyxel's internal int range)
+    assert result["exit_status"] == "ok"
+    assert result["errors"] == []
+    assert result["snapshots"][0]["values"]["last_x_axis"] != 0
+
+
 # --- Snapshot integration tests ---
 
 def test_run_with_screen_image_snapshot(tmp_path):
