@@ -19,6 +19,12 @@ except FileNotFoundError:
 mcp = FastMCP(name="pyxel", instructions=_INSTRUCTIONS)
 
 
+@mcp.resource("pyxel://run-snapshots-schema")
+def run_snapshots_schema() -> str:
+    """Full snapshot schema reference for the run tool's snapshots parameter."""
+    return (Path(__file__).parent / "_resources" / "run-snapshots-schema.md").read_text()
+
+
 def _dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> dict[str, Any]:
     """Run the harness subprocess with payload as JSON on stdin."""
     cmd = [sys.executable, "-m", "pyxel_mcp._harnesses.main", subcommand]
