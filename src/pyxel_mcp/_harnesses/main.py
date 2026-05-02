@@ -13,36 +13,27 @@ from pyxel_mcp._harnesses._common.error_capture import (
 )
 
 
-_TOOLS: dict[str, Callable[[dict], dict]] = {}
-
-
-def register(subcommand: str):
-    """Decorator: registers a tool handler under the given subcommand name."""
-    def _wrap(fn: Callable[[dict], dict]) -> Callable[[dict], dict]:
-        if subcommand in _TOOLS:
-            raise RuntimeError(f"duplicate registration: {subcommand}")
-        _TOOLS[subcommand] = fn
-        return fn
-    return _wrap
-
-
-def _import_tool_modules() -> None:
-    """Import all tool modules so their @register decorators run."""
+def _build_tools() -> dict[str, Callable[[dict], dict]]:
+    """Lazy-built dispatch table. Imported on first dispatch call to avoid
+    paying the pyxel-import cost at module-load time (e.g., for argv-only
+    error paths that never need a tool handler).
+    """
     from pyxel_mcp._harnesses.tools import (
-        validate as _v, pyxel_info as _i, run as _r,
-        inspect_palette as _ip, inspect_image as _ii,
-        inspect_animation as _ia, inspect_tilemap as _it,
-        render_audio as _ra, compare_frames as _cf,
+        run, validate, pyxel_info,
+        inspect_palette, inspect_image, inspect_animation, inspect_tilemap,
+        render_audio, compare_frames,
     )
-    register("validate")(_v.run)
-    register("pyxel_info")(_i.run)
-    register("run")(_r.run)
-    register("inspect_palette")(_ip.run)
-    register("inspect_image")(_ii.run)
-    register("inspect_animation")(_ia.run)
-    register("inspect_tilemap")(_it.run)
-    register("render_audio")(_ra.run)
-    register("compare_frames")(_cf.run)
+    return {
+        "run": run.run,
+        "validate": validate.run,
+        "pyxel_info": pyxel_info.run,
+        "inspect_palette": inspect_palette.run,
+        "inspect_image": inspect_image.run,
+        "inspect_animation": inspect_animation.run,
+        "inspect_tilemap": inspect_tilemap.run,
+        "render_audio": render_audio.run,
+        "compare_frames": compare_frames.run,
+    }
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -64,14 +55,14 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(result))
         return 0
 
-    _import_tool_modules()
+    tools = _build_tools()
 
-    if subcommand not in _TOOLS:
+    if subcommand not in tools:
         result = {"errors": [make_validation_error(f"unknown subcommand: {subcommand}")]}
         print(json.dumps(result))
         return 0
 
-    handler = _TOOLS[subcommand]
+    handler = tools[subcommand]
     try:
         result = handler(payload)
     except Exception as e:
