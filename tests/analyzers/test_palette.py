@@ -61,7 +61,7 @@ def test_contrast_ratio_pure_black_white():
 
 
 def test_contrast_warnings_for_close_colors():
-    """Two near-identical colors should produce a warning at ratio < 3.0."""
+    """Stored ratio <= 3.0 (rounded from raw < 3.0 filter inside the analyzer)."""
     info = analyze_palette()
     assert isinstance(info["contrast_warnings"], list)
     for w in info["contrast_warnings"]:
