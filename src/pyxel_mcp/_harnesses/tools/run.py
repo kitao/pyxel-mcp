@@ -1,9 +1,7 @@
 """run(script, frames, ...) — dynamic execution driver (spec §6)."""
 from __future__ import annotations
 import contextlib
-import os
 import re
-import tempfile
 import time
 import traceback as _tb
 from io import StringIO
@@ -275,25 +273,30 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
 def _capture_screen_as_pil() -> Image.Image:
     """Return current pyxel.screen contents as a PIL.Image (RGB mode).
 
-    Uses pyxel.screen.save() to write a temp PNG and reads it back via PIL.
-    Reuses the established pyxel.screen.save pattern from screen_image.py.
+    Reads pyxel.screen.data_ptr() directly into a numpy array of palette
+    indices, then converts to RGB via a (256, 3) LUT built from
+    pyxel.colors. Avoids the disk round-trip (write PNG, read PNG) that
+    earlier versions of this code did per video frame — for a 600-frame
+    video that's 600 redundant filesystem operations gone.
     """
     import pyxel
+    import numpy as np
 
-    fd, tmp_path = tempfile.mkstemp(suffix=".png")
-    os.close(fd)
-    try:
-        # pyxel.screen.save appends .png automatically; strip it to avoid double extension.
-        base = tmp_path[:-4]
-        pyxel.screen.save(base, 1)  # scale=1; VideoAccumulator handles its own scaling
-        img = Image.open(tmp_path)
-        img.load()  # force-read before deleting the underlying file
-    finally:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-    return img
+    w, h = pyxel.width, pyxel.height
+    arr = np.frombuffer(
+        pyxel.screen.data_ptr(), dtype=np.uint8, count=w * h,
+    ).reshape((h, w))
+
+    # Build the palette LUT — pad to 256 entries so direct indexing is safe
+    # even if a script writes an out-of-palette value (defensive).
+    lut = np.zeros((256, 3), dtype=np.uint8)
+    for i, c in enumerate(pyxel.colors):
+        lut[i, 0] = (c >> 16) & 0xFF
+        lut[i, 1] = (c >> 8) & 0xFF
+        lut[i, 2] = c & 0xFF
+
+    rgb = lut[arr]
+    return Image.fromarray(rgb, "RGB")
 
 
 def _grid_signature(grid: list) -> tuple:
