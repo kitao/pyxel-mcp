@@ -618,13 +618,13 @@ For `layout` snapshots, multi-frame mode is supported and produces N analysis re
 
 `kind: "video"` does **not** accept `frames` — it has its own `start_frame` / `end_frame` fields (§6.4.5).
 
-**List normalization:** When `frames` is an explicit list (e.g., `[60, 30, 30]`), the harness sorts ascending and deduplicates before resolving snapshots. A warning is emitted if either operation changed the list (`"frames list was sorted and/or deduplicated"`). Range strings (`"0:720"`, `"all"`) are inherently ordered and unique, so no warning fires.
+**List normalization:** When `frames` is an explicit list (e.g., `[60, 30, 30]`), the harness sorts ascending and deduplicates before resolving snapshots. A warning is emitted if either operation changed the list (`"snapshots[i]: frames list was sorted and/or deduplicated"`, where `i` is the input snapshot index). Range strings (`"0:720"`, `"all"`) are inherently ordered and unique, so no warning fires.
 
 ### 6.7 Console assertions
 
 Scripts may report verification outcomes by writing structured lines to stdout. The harness parses these and populates `RunResult.assertions`:
 
-**Convention:** A line matching the regex `^ASSERT (PASS|FAIL): (\S+)(?: \| (.*))?$` is captured as one `Assertion`:
+**Convention:** A line matching the regex `^ASSERT (PASS|FAIL): (\S+)(?:\s*\|\s*(.*))?$` is captured as one `Assertion`. Whitespace around the `|` separator is tolerated so authors can write either `name | msg` or `name|msg`:
 
 ```python
 Assertion = {
@@ -634,6 +634,8 @@ Assertion = {
     "frame": int | None,   # frame_count at time of capture (None if printed during init/pre-loop)
 }
 ```
+
+**v0.9.3 frame-of-emission note:** Capturing the precise frame at which an `ASSERT` line was printed requires interleaving stdout capture with the per-frame loop. v0.9.3 parses assertions from the full captured log after the run completes, so `frame` is always `None`. Per-frame interleaving is reserved for a later iteration; agents should not rely on `frame` until that lands.
 
 **Why a stdout convention:** Pyxel scripts already print to stdout for debugging. A line-based convention requires no API changes to Pyxel, no harness ABI for the script to call, and works across script structures (class-based or function-based). The convention is symmetric with godogen's `ASSERT PASS/FAIL` regime, which is the source of inspiration.
 
