@@ -2,6 +2,8 @@
 from __future__ import annotations
 from typing import Any
 
+import numpy as np
+
 # Pyxel default palette index ranges (heuristic per spec §7.1):
 # - background: 0, 1, 5
 # - environment: 3, 4, 13
@@ -56,29 +58,59 @@ def _scan_image_banks() -> tuple[set[int], set[tuple[int, int]]]:
     image bank. The transparent index 0 is excluded — pairings against the
     canvas don't represent on-screen contrast between rendered shapes.
 
-    Both fields are returned from one pass to avoid re-scanning ~65k pixels
-    per bank twice.
+    Vectorised via numpy on top of `pyxel.images[i].data_ptr()` — Pyxel exposes
+    each bank as a contiguous (h, w) uint8 buffer of palette indices. We
+    `.copy()` once per bank so subsequent script mutations don't leak into the
+    snapshot, then derive used-indices from `np.unique` and co-located pairs
+    from horizontal/vertical neighbour comparisons. Pre-fix this loop did
+    ~200k Python pget calls per inspect_palette; post-fix it's 3 numpy passes.
     """
     import pyxel
     used: set[int] = set()
     pairs: set[tuple[int, int]] = set()
     for img in pyxel.images:
         w, h = img.width, img.height
-        for y in range(h):
-            for x in range(w):
-                idx = img.pget(x, y)
-                if idx == 0:
-                    continue
-                used.add(idx)
-                # 4-neighbour adjacency (right + down only — undirected).
-                if x + 1 < w:
-                    nb = img.pget(x + 1, y)
-                    if nb != 0 and nb != idx:
-                        pairs.add((idx, nb) if idx < nb else (nb, idx))
-                if y + 1 < h:
-                    nb = img.pget(x, y + 1)
-                    if nb != 0 and nb != idx:
-                        pairs.add((idx, nb) if idx < nb else (nb, idx))
+        # Snapshot the bank to avoid aliasing if user code mutates it later.
+        arr = np.frombuffer(
+            img.data_ptr(), dtype=np.uint8, count=w * h,
+        ).reshape((h, w)).copy()
+
+        # used_indices: every non-zero unique value in the bank.
+        uniq = np.unique(arr)
+        for idx in uniq.tolist():
+            if idx != 0:
+                used.add(int(idx))
+
+        # Co-located pairs via shifted comparisons:
+        # - horizontal: arr[:, :-1] vs arr[:, 1:] (i.e., each pixel and its right neighbour)
+        # - vertical:   arr[:-1, :] vs arr[1:, :] (each pixel and its down neighbour)
+        # We keep both orientations because the original loop was directionally
+        # biased (right + down) but the pair is order-invariant (sorted ascending).
+        if w >= 2:
+            a = arr[:, :-1].ravel()
+            b = arr[:, 1:].ravel()
+            mask = (a != 0) & (b != 0) & (a != b)
+            if mask.any():
+                ai = a[mask].astype(np.int32)
+                bi = b[mask].astype(np.int32)
+                lo = np.minimum(ai, bi)
+                hi = np.maximum(ai, bi)
+                # Encode pair as lo * 65536 + hi for cheap unique; both fit in 16 bits.
+                packed = (lo.astype(np.int64) << 16) | hi.astype(np.int64)
+                for v in np.unique(packed).tolist():
+                    pairs.add((int(v >> 16), int(v & 0xFFFF)))
+        if h >= 2:
+            a = arr[:-1, :].ravel()
+            b = arr[1:, :].ravel()
+            mask = (a != 0) & (b != 0) & (a != b)
+            if mask.any():
+                ai = a[mask].astype(np.int32)
+                bi = b[mask].astype(np.int32)
+                lo = np.minimum(ai, bi)
+                hi = np.maximum(ai, bi)
+                packed = (lo.astype(np.int64) << 16) | hi.astype(np.int64)
+                for v in np.unique(packed).tolist():
+                    pairs.add((int(v >> 16), int(v & 0xFFFF)))
     return used, pairs
 
 

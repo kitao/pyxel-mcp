@@ -213,3 +213,31 @@ def test_verdict_fail_when_more_than_five_warnings():
     h = {"score": 2, "background": [0], "environment": [3], "interactive": [8]}
     six = [{"a": i, "b": i + 1, "ratio": 1.0, "message": ""} for i in range(6)]
     assert _palette_verdict(h, six) == "fail"
+
+
+# --- performance regression guard --------------------------------------------
+
+
+def test_scan_image_banks_completes_under_500ms():
+    """Full 3-bank scan (3 * 65k px) must complete fast post-vectorization.
+
+    Pre-fix this took multiple seconds via nested pget loops; post-fix it's
+    numpy operations on contiguous buffers (~5-30ms range expected).
+    """
+    import time
+    import pyxel
+    # Splatter some pixels across bank 0 to ensure the unique/pair paths run.
+    for i in range(100):
+        pyxel.images[0].pset(i % 64, i // 64, (i % 15) + 1)
+    try:
+        from pyxel_mcp._harnesses._common.analyzers.palette import _scan_image_banks
+        t0 = time.monotonic()
+        used, pairs = _scan_image_banks()
+        elapsed = time.monotonic() - t0
+        assert elapsed < 0.5, (
+            f"_scan_image_banks took {elapsed*1000:.1f}ms (limit 500ms)"
+        )
+        assert isinstance(used, set)
+        assert isinstance(pairs, set)
+    finally:
+        pyxel.images[0].cls(0)
