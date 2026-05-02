@@ -398,6 +398,49 @@ def test_output_pattern_missing_frame_token_is_validation_error(tmp_path):
     assert result["errors"][0]["phase"] == "validation"
 
 
+def test_output_pattern_zero_padded(tmp_path):
+    """Resolved filenames use 5-digit zero-padded {frame}."""
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{
+            "frames": [3],
+            "kind": "screen_image",
+            "output_pattern": str(tmp_path / "f-{frame}.png"),
+        }],
+    })
+    assert result["exit_status"] == "ok"
+    assert result["errors"] == []
+    # Path should be f-00003.png, not f-3.png
+    assert (tmp_path / "f-00003.png").exists()
+    assert not (tmp_path / "f-3.png").exists()
+
+
+def test_output_pattern_unrecognized_token_validation_error(tmp_path):
+    """Format specifiers like {frame:03d} are rejected."""
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 10,
+        "snapshots": [{"frames": [0], "kind": "screen_image", "output_pattern": str(tmp_path / "f-{frame:03d}.png")}],
+    })
+    assert result["exit_status"] == "invalid"
+
+
+def test_output_pattern_unknown_token_validation_error(tmp_path):
+    """Unknown tokens like {foo} are rejected."""
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{
+            "frames": [0],
+            "kind": "screen_image",
+            "output_pattern": str(tmp_path / "f-{frame}-{foo}.png"),
+        }],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+
+
 # --- Frame-bounds validation tests ---
 
 def test_snapshot_frame_out_of_bounds_is_validation_error():

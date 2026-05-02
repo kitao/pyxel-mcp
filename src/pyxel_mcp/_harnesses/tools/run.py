@@ -2,6 +2,7 @@
 from __future__ import annotations
 import contextlib
 import os
+import re
 import tempfile
 import time
 import traceback as _tb
@@ -48,6 +49,21 @@ def _empty_result(*, exit_status: str = "ok", errors: list | None = None) -> dic
 
 
 _VALID_SNAPSHOT_KINDS = {"screen_image", "screen_grid", "state", "layout", "video"}
+
+
+def _substitute_output_pattern(pattern: str, frame: int) -> str:
+    """Replace {frame} with 5-digit zero-padded integer; reject other tokens.
+
+    Raises ValueError for format specifiers ({frame:03d}) or unknown tokens ({foo}).
+    """
+    if re.search(r"\{[^}]*:[^}]*\}", pattern):
+        raise ValueError(f"output_pattern: format specifiers like {{frame:03d}} not supported")
+    if "{frame}" not in pattern:
+        raise ValueError(f"output_pattern must contain literal {{frame}}: {pattern!r}")
+    other = re.search(r"\{(?!frame\b)[^}]+\}", pattern)
+    if other:
+        raise ValueError(f"output_pattern: unknown token {other.group(0)}")
+    return pattern.replace("{frame}", f"{frame:05d}")
 
 
 def _expand_multi_frame_snapshots(
@@ -101,9 +117,12 @@ def _expand_multi_frame_snapshots(
                 raise _ValidationFailed(make_validation_error(
                     f"`snapshots[{i}]` multi-frame screen_image requires `output_pattern`"
                 ))
-            if "{frame}" not in snap["output_pattern"]:
+            # Validate pattern structure once before expanding frames
+            try:
+                _substitute_output_pattern(snap["output_pattern"], 0)
+            except ValueError as e:
                 raise _ValidationFailed(make_validation_error(
-                    f"`snapshots[{i}].output_pattern` must contain {{frame}} token"
+                    f"`snapshots[{i}].output_pattern` error: {e}"
                 ))
 
         # Resolve frames list
@@ -124,7 +143,7 @@ def _expand_multi_frame_snapshots(
             derived = {k: v for k, v in snap.items() if k not in ("frames", "output_pattern")}
             derived["frame"] = f
             if kind == "screen_image":
-                derived["output"] = snap["output_pattern"].replace("{frame}", f"{f:05d}")
+                derived["output"] = _substitute_output_pattern(snap["output_pattern"], f)
             expanded.append(derived)
 
     return expanded, warnings
