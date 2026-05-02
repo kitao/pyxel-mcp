@@ -124,3 +124,21 @@ def test_verdict_fail_at_far_below_lower_fill():
     from pyxel_mcp._harnesses._common.analyzers.image import _image_verdict
     # 0.05 below threshold = 0.10 still within 0.05; 0.09 is just outside
     assert _image_verdict([[0]], 0.05, {0: 60, 1: 2, 2: 2}) == "fail"
+
+
+# --- performance regression guard --------------------------------------------
+
+
+def test_analyze_image_full_bank_under_500ms():
+    """Full-bank scan (256x256 = 65k px) must complete fast post-vectorization.
+
+    Pre-fix: nested pget loops; post-fix: numpy slice on data_ptr().
+    """
+    import time
+    t0 = time.monotonic()
+    result = analyze_image(image=0, x=0, y=0, w=None, h=None)
+    elapsed = time.monotonic() - t0
+    assert elapsed < 0.5, (
+        f"analyze_image full-bank took {elapsed*1000:.1f}ms (limit 500ms)"
+    )
+    assert result["bank_size"] == [256, 256]

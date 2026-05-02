@@ -1,6 +1,5 @@
 """Image bank region analyzer (spec §7.2)."""
 from __future__ import annotations
-from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -16,19 +15,26 @@ def _bank_size(image: int) -> tuple[int, int]:
 
 
 def _read_region(image: int, x: int, y: int, w: int, h: int) -> np.ndarray:
-    """Read a region from an image bank using pget (Pyxel 2.9.4 has no .data attr)."""
+    """Read a region from an image bank via numpy slicing on data_ptr().
+
+    Pyxel exposes each bank as a contiguous (h, w) uint8 buffer of palette
+    indices. We `.copy()` the slice so subsequent script writes don't leak
+    into this snapshot (data_ptr aliases live memory).
+    """
     import pyxel
     bank = pyxel.images[image]
-    arr = np.array(
-        [[bank.pget(xx, yy) for xx in range(x, x + w)] for yy in range(y, y + h)],
-        dtype=np.uint8,
-    )
-    return arr
+    bw, bh = bank.width, bank.height
+    full = np.frombuffer(
+        bank.data_ptr(), dtype=np.uint8, count=bw * bh,
+    ).reshape((bh, bw))
+    return full[y:y + h, x:x + w].copy()
 
 
 def _color_count(region: np.ndarray) -> dict[int, int]:
-    flat = region.flatten().tolist()
-    return dict(Counter(flat))
+    if region.size == 0:
+        return {}
+    vals, counts = np.unique(region, return_counts=True)
+    return {int(v): int(c) for v, c in zip(vals.tolist(), counts.tolist())}
 
 
 def _fill_ratio(region: np.ndarray) -> float:
