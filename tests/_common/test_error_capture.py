@@ -36,3 +36,9 @@ def test_make_error_with_traceback():
 def test_make_error_unknown_phase_rejected():
     with pytest.raises(TypeError):
         make_error("not_a_phase_enum", "msg")  # passing a str instead of ErrorPhase
+
+
+def test_make_error_capture_traceback_outside_except_returns_none():
+    """capture_traceback=True outside an except block must NOT return 'NoneType: None\\n'."""
+    err = make_error(ErrorPhase.GAME_LOOP, "no active exception", capture_traceback=True)
+    assert err["traceback"] is None
