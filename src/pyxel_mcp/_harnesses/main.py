@@ -8,7 +8,9 @@ import json
 import sys
 from typing import Callable
 
-from pyxel_mcp._harnesses._common.error_capture import make_validation_error
+from pyxel_mcp._harnesses._common.error_capture import (
+    ErrorPhase, make_error, make_validation_error,
+)
 
 
 _TOOLS: dict[str, Callable[[dict], dict]] = {}
@@ -17,6 +19,8 @@ _TOOLS: dict[str, Callable[[dict], dict]] = {}
 def register(subcommand: str):
     """Decorator: registers a tool handler under the given subcommand name."""
     def _wrap(fn: Callable[[dict], dict]) -> Callable[[dict], dict]:
+        if subcommand in _TOOLS:
+            raise RuntimeError(f"duplicate registration: {subcommand}")
         _TOOLS[subcommand] = fn
         return fn
     return _wrap
@@ -33,7 +37,8 @@ def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
     if len(argv) != 1:
-        result = {"errors": [make_validation_error("expected exactly one subcommand argument")]}
+        msg = f"expected exactly one subcommand argument, got {len(argv)}: {argv}"
+        result = {"errors": [make_validation_error(msg)]}
         print(json.dumps(result))
         return 0
 
@@ -58,7 +63,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = handler(payload)
     except Exception as e:
-        from pyxel_mcp._harnesses._common.error_capture import make_error, ErrorPhase
+        # TODO(phase 2): SCRIPT_IMPORT is misleading for handler-internal bugs
+        # (vs actual user-script import failures). Reassess once tools start
+        # using `script_loader.load_script_module` so the script-import catch
+        # can be scoped tightly inside the handler. (See review on commit ef9c730.)
         result = {"errors": [make_error(ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=True)]}
 
     print(json.dumps(result))
