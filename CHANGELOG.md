@@ -1,5 +1,17 @@
 # Change Log
 
+## 0.11.0
+
+- Add top-level `ok: bool` to every tool response for uniform error checks
+- Rename `screen_grid` snapshot output `bbox` to `region` (dict shape)
+- Rename `inspect_tilemap` output `bounding_box` to `region`
+- Standardize region geometry as `{x, y, w, h}` dict across all tools
+- Keep `screen_grid` input field `bbox: [x, y, w, h]` (list, ergonomic)
+- Extract `run_to_preloop` context manager for script-loading inspect tools
+- Replace `_TOOLS` decorator dispatch with a 9-line lazy-built dict
+- BREAKING: agents reading `snapshot["bbox"]` must rename to `snapshot["region"]`
+- BREAKING: agents reading `result["bounding_box"]` from inspect_tilemap must rename to `result["region"]`
+
 ## 0.10.0
 
 - Redesign tool surface from 16 to 9 tools

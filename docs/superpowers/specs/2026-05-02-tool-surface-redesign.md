@@ -231,6 +231,8 @@ ToolError = {
 
 Tool calls return successfully (HTTP 200 / MCP success) even when errors occur during execution; the agent inspects `errors` to decide.
 
+**Universal `ok: bool` field (added in 0.11.0):** Every tool's return shape also includes a top-level `ok: bool`. The general definition is `ok == (len(errors) == 0)` — the response can be acted upon. Some tools refine this with tool-specific success criteria documented in their respective sections (e.g., `run` requires `exit_status in {"ok", "stalled"}`; `validate` requires no `error`-severity issues). Agents writing generic per-tool result handlers can use `if not result["ok"]: handle(result["errors"])` as a uniform predicate across all 9 tools. Domain-specific informational fields (`verdict`, `trap_warning`, `identical`, `size_match`) do NOT affect `ok` — they are decision inputs the agent inspects after the response shape is confirmed valid.
+
 **Validation errors (`phase: "validation"`):** When tool input is malformed (unknown button name, conflicting `frame`/`frames` fields, `frames=0`, out-of-range `start_frame`, mismatched `output` vs `output_pattern`, unrecognized `{...}` tokens in `output_pattern`, etc.), the harness returns immediately with `errors=[{"phase": "validation", "message": "...", "path": <script path>, ...}]` and no other side effects (no subprocess work past argument parsing, no snapshots emitted, no files written). The MCP call still succeeds at the protocol level. This unifies the error-reporting surface: agents always inspect the same `errors` field regardless of failure stage.
 
 ### 5.5 Output path conventions
@@ -427,10 +429,12 @@ Input (multi-frame): {
 Output: {
     "frame": int,
     "kind": "screen_grid",
-    "bbox": [x, y, w, h],
+    "region": {"x": int, "y": int, "w": int, "h": int},    # see "region naming" note below
     "grid": list[list[int]],    # row-major, palette indices 0-15 (default palette; extended palette mutation is OOS for v0.9.3 per §4.3)
 }
 ```
+
+**Region naming (input `bbox`, output `region`):** The input field is `bbox` (a flat list `[x, y, w, h]` — ergonomic for callers writing JSON literals) but the output emits `region` (a dict `{x, y, w, h}` — consistent with `inspect_image`, `inspect_tilemap`, and `compare_frames`). This asymmetry is intentional: writers benefit from the compact list form, but downstream consumers benefit from a uniform dict shape they can read across all tools without per-tool special-casing. Agents MUST read `snapshot["region"]` from screen_grid outputs (the field was renamed from `bbox` in 0.11.0).
 
 #### 6.4.3 `state`
 
@@ -533,6 +537,7 @@ Output: {
 
 ```python
 {
+    "ok": bool,                           # universal per §5.4 — see semantics below
     "snapshots": list[SnapshotResult],    # see ordering rules below
     "assertions": list[Assertion],        # parsed from script stdout; see §6.7
     "exit_status": "ok" | "invalid" | "crashed" | "timeout" | "stalled",
@@ -543,6 +548,8 @@ Output: {
     "errors": list[ToolError],            # per §5.4
 }
 ```
+
+**`ok` semantics (run-specific):** `ok = (len(errors) == 0) and exit_status in {"ok", "stalled"}`. A stalled run is `ok=True` because the loop completed without crashing — the agent receives diagnostic snapshots, log, and assertions, and can decide whether the stall is acceptable. Crashes (`"crashed"`), invalid payloads (`"invalid"`), and timeouts (`"timeout"`) are `ok=False`. Agents writing generic per-tool result handlers can use `if not result["ok"]:` as a single uniform predicate across all 9 tools.
 
 **`exit_status` decision rules:**
 
@@ -708,6 +715,7 @@ Returns the palette state at the pre-loop checkpoint (§5.7).
 
 ```python
 Output: {
+    "ok": bool,                              # universal per §5.4
     "colors": dict[int, str],                # idx → "#RRGGBB"
     "extended_palette": bool,                # was pyxel.colors.append called
     "palette_size": int,                     # count after extension
@@ -756,6 +764,7 @@ Input: {
 }
 
 Output: {
+    "ok": bool,                    # universal per §5.4
     "image_index": int,
     "bank_size": [int, int],       # [width, height] of the bank
     "region": {"x": int, "y": int, "w": int, "h": int},
@@ -802,6 +811,7 @@ Input: {
 }
 
 Output: {
+    "ok": bool,                      # universal per §5.4
     "image_index": int,
     "regions": list[{
         "region": {"x": int, "y": int, "w": int, "h": int},
@@ -841,12 +851,13 @@ Input: {
 }
 
 Output: {
+    "ok": bool,                          # universal per §5.4
     "tilemap_index": int,
     "size": [int, int],
     "imgsrc": int,                       # which image bank tilemap draws from
     "tiles": list[list[[int, int]]] | None,  # 2D array of (u, v) tile coords; null if too large
     "usage": dict[str, int],             # "u,v" → tile count
-    "bounding_box": {"x": int, "y": int, "w": int, "h": int} | None,  # non-(0,0) region
+    "region": {"x": int, "y": int, "w": int, "h": int} | None,  # bounding box of non-(0,0) tiles
     "trap_warning": bool,                # (0,0) tile is non-empty in source bank
     "rendered": str | None,
     "warnings": list[str],
@@ -854,7 +865,9 @@ Output: {
 }
 ```
 
-**Large tilemap handling:** Same as `inspect_image` — if `size[0] * size[1] > 4096`, `tiles` is `None`. The agent uses `usage`, `bounding_box`, and `render_path` for visualization.
+**Region field rename:** The bounding-box field was named `bounding_box` in 0.10.0 and earlier; renamed to `region` in 0.11.0 to match the shape used by `screen_grid` snapshots, `inspect_image`, and `compare_frames`. Agents reading `result["bounding_box"]` must update to `result["region"]`.
+
+**Large tilemap handling:** Same as `inspect_image` — if `size[0] * size[1] > 4096`, `tiles` is `None`. The agent uses `usage`, `region`, and `render_path` for visualization.
 
 **Trap warning:** True if the tile at source-bank coordinates (0, 0) has any non-transparent pixels. Pyxel tilemap cells default to (0, 0); a non-empty (0, 0) tile floods the entire tilemap.
 
@@ -901,7 +914,8 @@ No-script discovery tool.
 
 ```python
 Output: {
-    "pyxel_mcp_version": str,             # "0.9.3"
+    "ok": bool,                           # universal per §5.4
+    "pyxel_mcp_version": str,             # "0.11.0"
     "pyxel_version": str,                 # e.g., "2.9.4"
     "python_version": str,                # e.g., "3.14.0"
     "stubs_path": str,                    # absolute path to pyxel.pyi
@@ -918,6 +932,7 @@ Output: {
         "default_palette": "pyxel://palette/default",
         "examples": "pyxel://examples/<name>",         # template URI
         "run_snapshots_schema": "pyxel://run-snapshots-schema",
+        "anti_patterns": "pyxel://anti-patterns",
     },
     "errors": list[ToolError],                        # universal per §5.4
 }
@@ -937,6 +952,7 @@ Input: {
 }
 
 Output: {
+    "ok": bool,                           # universal per §5.4
     "path": str,                          # absolute path written
     "duration_seconds": float,
     "sample_rate": int,                   # 22050 for Pyxel default
@@ -976,6 +992,7 @@ Input: {
 }
 
 Output: {
+    "ok": bool,                           # universal per §5.4
     "identical": bool,                    # true iff zero pixel differences
     "size_match": bool,                   # are PNG dimensions equal
     "size_a": [int, int],
