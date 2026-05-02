@@ -27,6 +27,9 @@
 - Remove phantom `stall_detection` parameter (was never wired to harness)
 - Expand `run` docstring with inline snapshot/input grammar (was 1 line)
 - Resolve tilemap.imgsrc when assigned via `tm.image=Image` (no longer crashes)
+- Add `verdict` field to inspect_palette and inspect_image responses
+- Add `pyxel://anti-patterns` MCP resource (8th URI)
+- Implement `stall_window_frames` opt-in stall detection on run
 
 ## 0.9.2
 
