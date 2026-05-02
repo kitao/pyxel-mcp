@@ -111,6 +111,33 @@ def test_log_includes_stderr():
     assert "stderr message" in result["log"]
 
 
+# --- Inputs ---
+
+def test_inputs_drive_state():
+    result = run_tool({
+        "script": str(SCRIPTS / "btn_responder.py"),
+        "frames": 10,
+        "inputs": [{"frame": 0, "buttons": ["KEY_RIGHT"]}],
+        "snapshots": [{"frame": 9, "kind": "state", "attrs": ["x"]}],
+    })
+    # Right held for 10 frames → x should be 10 (one increment per update)
+    assert result["snapshots"][0]["values"]["x"] == 10
+
+
+def test_input_release_stops_movement():
+    result = run_tool({
+        "script": str(SCRIPTS / "btn_responder.py"),
+        "frames": 10,
+        "inputs": [
+            {"frame": 0, "buttons": ["KEY_RIGHT"]},
+            {"frame": 5, "buttons": []},
+        ],
+        "snapshots": [{"frame": 9, "kind": "state", "attrs": ["x"]}],
+    })
+    # x should increment for frames 0-4 (5 increments), held at 5 onwards
+    assert result["snapshots"][0]["values"]["x"] == 5
+
+
 # --- Snapshot integration tests ---
 
 def test_run_with_screen_image_snapshot(tmp_path):

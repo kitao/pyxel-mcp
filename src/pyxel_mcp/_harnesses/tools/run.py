@@ -14,6 +14,7 @@ from PIL import Image
 from pyxel_mcp._harnesses._common.error_capture import (
     make_error, make_validation_error, ErrorPhase,
 )
+from pyxel_mcp._harnesses._common.input_scheduler import InputScheduler, ValidationError
 from pyxel_mcp._harnesses._common.pyxel_patcher import headless_pyxel, RunNotCalledError
 from pyxel_mcp._harnesses._common.script_loader import resolve_script_path, load_script_module
 from pyxel_mcp._harnesses._common.snapshot_kinds import (
@@ -49,7 +50,7 @@ _VALID_SNAPSHOT_KINDS = {"screen_image", "screen_grid", "state", "layout", "vide
 
 
 def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
-    """Validate payload and return (script_path, frames, random_seed, snapshots).
+    """Validate payload and return (script_path, frames, random_seed, snapshots, scheduler).
 
     Raises _ValidationFailed with a ToolError dict on any invalid input.
     """
@@ -120,7 +121,15 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
                         f"`snapshots[{i}].frame` must satisfy 0 <= frame < frames ({frames}), got: {frame!r}"
                     ))
 
-    return path, frames, random_seed, snapshots
+    inputs = payload.get("inputs", [])
+    if not isinstance(inputs, list):
+        raise _ValidationFailed(make_validation_error("`inputs` must be a list"))
+    try:
+        scheduler = InputScheduler(inputs)
+    except ValidationError as e:
+        raise _ValidationFailed(make_validation_error(str(e)))
+
+    return path, frames, random_seed, snapshots, scheduler
 
 
 def _capture_screen_as_pil() -> Image.Image:
@@ -177,7 +186,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     raised, so callers always receive a well-formed result dict.
     """
     try:
-        path, frames, random_seed, snapshots = _validate(payload)
+        path, frames, random_seed, snapshots, scheduler = _validate(payload)
     except _ValidationFailed as vf:
         return _empty_result(exit_status="invalid", errors=[vf.err])
 
@@ -246,8 +255,13 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                 for f in range(frames):
                     try:
                         pyxel.frame_count = f
+                        scheduler.advance_to_frame(f)
+                        scheduler.apply_to_pyxel()
                         state.update_callback()
                         state.draw_callback()
+                        # flip() advances Pyxel's internal input ring so that
+                        # set_btn(key, False) takes effect in the next frame.
+                        pyxel.flip()
                         frame_count = f + 1
                     except Exception as e:
                         errors.append(make_error(
