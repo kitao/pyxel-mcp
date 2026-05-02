@@ -44,3 +44,36 @@ def test_missing_asset_reports_asset_load():
     result = run_tool({"script": str(SCRIPTS / "missing_asset.py"), "frames": 1})
     assert result["exit_status"] == "crashed"
     assert result["errors"][0]["phase"] == "asset_load"
+
+
+def test_no_pyxel_run_reports_script_import():
+    """Script that calls pyxel.init but never pyxel.run should crash via
+    RunNotCalledError → script_import phase."""
+    result = run_tool({"script": str(SCRIPTS / "no_pyxel_run.py"), "frames": 1})
+    assert result["exit_status"] == "crashed"
+    assert result["errors"][0]["phase"] == "script_import"
+
+
+def test_no_main_guard_script_runs():
+    """Script that instantiates App() at top level (no `__main__` guard) should
+    still load and complete normally."""
+    result = run_tool({"script": str(SCRIPTS / "no_main_guard.py"), "frames": 2})
+    assert result["exit_status"] == "ok"
+    assert result["frame_count"] == 2
+
+
+def test_crash_at_first_frame():
+    """update() raising on the very first call must report frame=0,
+    frame_count=0, exit_status=crashed."""
+    result = run_tool({"script": str(SCRIPTS / "crashing_first_frame.py"), "frames": 5})
+    assert result["exit_status"] == "crashed"
+    assert result["frame_count"] == 0
+    assert result["errors"][0]["phase"] == "game_loop"
+    assert result["errors"][0]["frame"] == 0
+
+
+def test_negative_random_seed_is_validation_error():
+    """random_seed must be non-negative int."""
+    result = run_tool({"script": str(SCRIPTS / "minimal.py"), "frames": 1, "random_seed": -1})
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"

@@ -63,6 +63,11 @@ def _is_asset_load_error(tb_text: str) -> bool:
     Pyxel 2.9.4 raises a generic Exception with message "Failed to open file
     '<path>'". Python FileNotFoundError and "could not open" are kept as
     additional guards for forward compatibility.
+
+    Caveat: this is a string-match heuristic — a user script that raises a
+    custom exception whose message happens to contain these phrases will be
+    misclassified as asset_load. Acceptable for v0.9.3 since Pyxel doesn't
+    expose typed exceptions; revisit if a typed asset-error API ships.
     """
     lower = tb_text.lower()
     return (
@@ -96,8 +101,9 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         try:
             load_script_module(path)
         except FileNotFoundError as e:
+            # Asset path is in the exception message; we don't know it here.
             errors.append(make_error(
-                ErrorPhase.ASSET_LOAD, str(e), path=str(path), capture_traceback=True,
+                ErrorPhase.ASSET_LOAD, str(e), capture_traceback=True,
             ))
             exit_status = "crashed"
         except Exception as e:
@@ -121,15 +127,15 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                 ))
                 exit_status = "crashed"
 
-        # Phase 2: pre-loop checkpoint — seed RNG if requested
-        if not errors and random_seed is not None:
-            import pyxel
-            pyxel.rseed(random_seed)
-            seeded = True
-
-        # Phase 3: drive the update/draw loop
         if not errors:
             import pyxel
+
+            # Phase 2: pre-loop checkpoint — seed RNG if requested
+            if random_seed is not None:
+                pyxel.rseed(random_seed)
+                seeded = True
+
+            # Phase 3: drive the update/draw loop
             for f in range(frames):
                 try:
                     pyxel.frame_count = f
