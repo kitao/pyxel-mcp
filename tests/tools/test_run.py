@@ -121,6 +121,8 @@ def test_inputs_drive_state():
         "snapshots": [{"frame": 9, "kind": "state", "attrs": ["x"]}],
     })
     # Right held for 10 frames → x should be 10 (one increment per update)
+    assert result["exit_status"] == "ok"
+    assert result["errors"] == []
     assert result["snapshots"][0]["values"]["x"] == 10
 
 
@@ -135,6 +137,8 @@ def test_input_release_stops_movement():
         "snapshots": [{"frame": 9, "kind": "state", "attrs": ["x"]}],
     })
     # x should increment for frames 0-4 (5 increments), held at 5 onwards
+    assert result["exit_status"] == "ok"
+    assert result["errors"] == []
     assert result["snapshots"][0]["values"]["x"] == 5
 
 

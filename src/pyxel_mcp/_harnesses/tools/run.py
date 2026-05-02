@@ -259,8 +259,9 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                         scheduler.apply_to_pyxel()
                         state.update_callback()
                         state.draw_callback()
-                        # flip() advances Pyxel's internal input ring so that
-                        # set_btn(key, False) takes effect in the next frame.
+                        # flip() commits this frame's input state so the next
+                        # apply_to_pyxel() writes set_btn(K, False) onto a fresh
+                        # slate. Without it, Pyxel's binary holds the prior True.
                         pyxel.flip()
                         frame_count = f + 1
                     except Exception as e:
