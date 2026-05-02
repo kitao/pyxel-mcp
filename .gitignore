@@ -7,3 +7,4 @@ build/
 .mcpregistry_*
 uv.lock
 .worktrees/
+tests/fixtures/images/*.png

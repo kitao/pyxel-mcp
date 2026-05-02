@@ -32,7 +32,7 @@ def _import_tool_modules() -> None:
         validate as _v, pyxel_info as _i, run as _r,
         inspect_palette as _ip, inspect_image as _ii,
         inspect_animation as _ia, inspect_tilemap as _it,
-        render_audio as _ra,
+        render_audio as _ra, compare_frames as _cf,
     )
     register("validate")(_v.run)
     register("pyxel_info")(_i.run)
@@ -42,6 +42,7 @@ def _import_tool_modules() -> None:
     register("inspect_animation")(_ia.run)
     register("inspect_tilemap")(_it.run)
     register("render_audio")(_ra.run)
+    register("compare_frames")(_cf.run)
 
 
 def main(argv: list[str] | None = None) -> int:
