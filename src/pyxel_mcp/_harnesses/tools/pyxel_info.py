@@ -66,6 +66,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
             "default_palette": "pyxel://palette/default",
             "examples": "pyxel://examples/<name>",
             "run_snapshots_schema": "pyxel://run-snapshots-schema",
+            "anti_patterns": "pyxel://anti-patterns",
         },
         "errors": errors,
     }

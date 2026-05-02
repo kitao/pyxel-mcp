@@ -22,6 +22,7 @@ _EXPECTED_FIXED_URIS = {
     "pyxel://pyxres-format",
     "pyxel://palette/default",
     "pyxel://run-snapshots-schema",
+    "pyxel://anti-patterns",
 }
 
 _DOC_SLUGS = ("api-reference", "user-guide", "mml-commands", "pyxres-format")
@@ -61,6 +62,7 @@ async def test_pyxel_info_uris_are_registered():
         info["resources"]["pyxres_format"],
         info["resources"]["default_palette"],
         info["resources"]["run_snapshots_schema"],
+        info["resources"]["anti_patterns"],
     }
     assert advertised == _EXPECTED_FIXED_URIS
 
@@ -71,13 +73,32 @@ async def test_pyxel_info_uris_are_registered():
     assert not missing, f"pyxel_info advertises URIs that aren't registered: {missing}"
 
     # examples are advertised as a template `pyxel://examples/<name>` — verify at
-    # least one concrete example resource exists, satisfying the 7th category.
+    # least one concrete example resource exists, satisfying the 8th category.
     assert any(uri.startswith("pyxel://examples/") for uri in registered), \
         "no example resources registered"
 
-    # 7 distinct categories total: 4 docs + palette + examples + run-snapshots-schema.
+    # 8 distinct categories total: 4 docs + palette + examples + run-snapshots-schema + anti-patterns.
     categories = _EXPECTED_FIXED_URIS | {"pyxel://examples/<any>"}
-    assert len(categories) >= 7
+    assert len(categories) >= 8
+
+
+async def test_anti_patterns_resource_reads_nonempty():
+    """The anti-patterns resource returns a markdown table covering every
+    detector category surfaced by `validate`."""
+    result = await mcp.read_resource("pyxel://anti-patterns")
+    blobs = list(result)
+    assert blobs and blobs[0].content
+    text = blobs[0].content
+    # Header + table columns
+    assert "Pyxel anti-patterns" in text
+    assert "Category" in text and "Severity" in text
+    # Every detector category from validate.py must have a row.
+    for cat in (
+        "missing_colkey", "update_in_draw", "tilemap_zero_zero",
+        "assets_in_update", "iter_modify", "btn_one_shot",
+        "palette_animation", "cls_missing", "degree_radian_mix",
+    ):
+        assert cat in text, f"anti-patterns table is missing row for {cat!r}"
 
 
 async def test_palette_resource_reads_nonempty():

@@ -171,6 +171,9 @@ handled automatically.
   (`screen_image`, `screen_grid`, `state`, `layout`, `video`) and the
   multi-frame range syntax. Read this before constructing complex snapshot
   lists.
+- **`pyxel://anti-patterns`** — Catalog of detector categories surfaced by
+  `validate`, with severity, rationale, and canonical fix per category. Read
+  when an issue's `category` string is unfamiliar.
 - **`pyxel-skill` repo** (https://github.com/kitao/pyxel-skill) — Production
   workflow that uses pyxel-mcp tools end-to-end: visual target → decomposition
   → scaffold → asset generation → task execution → quality gate.

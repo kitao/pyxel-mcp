@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pyxel_mcp._resources import docs, examples, palette
+from pyxel_mcp._resources import anti_patterns, docs, examples, palette
 
 
 def _register_run_snapshots_schema(mcp) -> None:
@@ -26,3 +26,4 @@ def register_resources(mcp) -> None:
     palette.register(mcp)
     examples.register(mcp)
     docs.register(mcp)
+    anti_patterns.register(mcp)
