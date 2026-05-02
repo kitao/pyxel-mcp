@@ -182,3 +182,95 @@ def test_invalid_snapshot_kind_is_validation_error():
     })
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
+
+
+# --- Frame-bounds validation tests ---
+
+def test_snapshot_frame_out_of_bounds_is_validation_error():
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"frame": 99, "kind": "state"}],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+
+
+def test_snapshot_negative_frame_is_validation_error():
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"frame": -1, "kind": "state"}],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+
+
+def test_snapshot_frame_at_last_valid_index_passes():
+    """frame == frames - 1 must be accepted (last valid index)."""
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"frame": 4, "kind": "state"}],
+    })
+    assert result["exit_status"] == "ok"
+
+
+def test_snapshot_frame_equal_to_frames_is_validation_error():
+    """frame == frames is out of range (0-based, strictly < frames)."""
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"frame": 5, "kind": "state"}],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+
+
+def test_video_end_frame_exceeds_run_frames(tmp_path):
+    out = tmp_path / "play.gif"
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"kind": "video", "start_frame": 0, "end_frame": 99,
+                       "fps": 30, "output": str(out)}],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+
+
+def test_video_start_geq_end_is_validation_error(tmp_path):
+    out = tmp_path / "play.gif"
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"kind": "video", "start_frame": 3, "end_frame": 3,
+                       "fps": 30, "output": str(out)}],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+
+
+def test_video_negative_start_frame_is_validation_error(tmp_path):
+    """start_frame < 0 must be rejected."""
+    out = tmp_path / "play.gif"
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"kind": "video", "start_frame": -1, "end_frame": 5,
+                       "fps": 30, "output": str(out)}],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+
+
+def test_video_full_range_passes(tmp_path):
+    """start_frame=0, end_frame=frames must pass (end_frame <= frames is allowed)."""
+    out = tmp_path / "play.gif"
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"kind": "video", "start_frame": 0, "end_frame": 5,
+                       "fps": 30, "output": str(out)}],
+    })
+    assert result["exit_status"] == "ok"

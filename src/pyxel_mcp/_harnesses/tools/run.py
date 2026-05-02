@@ -96,6 +96,29 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
                 raise _ValidationFailed(make_validation_error(
                     f"`snapshots[{i}]` video output extension must be .gif or .mp4, got: {ext or '(none)'}"
                 ))
+            # Validate video frame range (spec §6.4.5).
+            start = snap.get("start_frame")
+            end = snap.get("end_frame")
+            if not isinstance(start, int) or start < 0:
+                raise _ValidationFailed(make_validation_error(
+                    f"`snapshots[{i}].start_frame` must be int >= 0"
+                ))
+            if not isinstance(end, int) or end > frames:
+                raise _ValidationFailed(make_validation_error(
+                    f"`snapshots[{i}].end_frame` must be int <= frames ({frames})"
+                ))
+            if start >= end:
+                raise _ValidationFailed(make_validation_error(
+                    f"`snapshots[{i}]` start_frame ({start}) must be < end_frame ({end})"
+                ))
+        else:
+            # Single-frame kinds: validate bounds when `frame` is present.
+            frame = snap.get("frame")
+            if frame is not None:
+                if not isinstance(frame, int) or frame < 0 or frame >= frames:
+                    raise _ValidationFailed(make_validation_error(
+                        f"`snapshots[{i}].frame` must satisfy 0 <= frame < frames ({frames}), got: {frame!r}"
+                    ))
 
     return path, frames, random_seed, snapshots
 
