@@ -25,10 +25,10 @@ The redesign is successful when:
 ## 2. Non-goals
 
 - **Backward compatibility with current 16-tool surface.** The MCP server is consumed by AI agents, not humans; agents adapt to new tool descriptions. Old tool names will be removed, not deprecated.
-- **External asset generation** (Gemini/Grok image gen, Tripo3D 3D, etc.). Pyxel sprites are hex-string palette-indexed pixel data; AI image generation does not produce well-aligned output for this format. This is a deliberate scope difference from `htdt/godogen`.
-- **Conditional / interactive run loop.** `run` is stateless and deterministic: agent specifies an input schedule and snapshot schedule upfront, gets all observations back. Iterative verification is achieved by chaining multiple `run` calls (cheap because Pyxel headless runs at `fps=1_000_000`).
+- **External asset generation** (Gemini/Grok image gen, Tripo3D 3D, etc.). Two reasons combine: (a) **engine-shape:** Pyxel sprites are hex-string palette-indexed pixel data — AI image gen produces RGB/RGBA output that requires lossy palette quantization, and quantization to Pyxel's 16-color default routinely shifts hues (e.g., Arne16 green → Pyxel brown). (b) **project policy:** AI-driven sprite design quality is empirically unreliable for game art at this resolution — the project's stance (as of 0.9.3) is that sprites are written by hand or via in-script Python literals, not generated. Either reason alone would justify exclusion; both together make it a firm non-goal for this version.
+- **Closed-loop / conditional `run` execution.** `run` is stateless and deterministic: the agent specifies an input schedule and snapshot schedule upfront and gets all observations back. The agent CANNOT, within a single `run` invocation, read intermediate state and adjust subsequent inputs. This is a **deliberate scope decision**, not an engine-shape limitation — Pyxel itself does not prevent closed-loop steering, and a future version could expose it via a callback-style API. The 0.9.3 design choice is: iterative verification is achieved by chaining multiple `run` calls (cheap because Pyxel headless runs at `fps=1_000_000`), trading per-call closed-loop convenience for invocation-level determinism and simpler tool surface. Where godogen recommends closed-loop steering for tasks like "navigate to waypoint", the pyxel-skill workflow expects either (a) the script implements the steering internally and the agent verifies via `state` snapshots / `assertions`, or (b) the agent uses chained `run` calls with refined input schedules.
 - **Stateful pyxel-mcp server.** Each tool invocation spawns a fresh subprocess. State leaks between calls are prevented by process boundaries, not by reset logic.
-- **Animation / live audio capture during a run.** Mid-run dynamic palette / image / tilemap / audio-channel state is out of v0.9.3 scope. Static inspectors operate on post-`_build_assets()` state. Live-during-game observation is a future enhancement (`run` snapshot kinds for these are reserved namespace).
+- **Animation / live audio capture during a run.** Mid-run dynamic palette / image / tilemap / audio-channel state is out of v0.9.3 scope. Static inspectors operate at the pre-loop checkpoint (defined in §5.7). Live-during-game observation is a future enhancement (`run` snapshot kinds for these are reserved namespace).
 - **MP4 as primary video output.** Pyxel's native screencast emits GIF; the redesign uses GIF as the default `video` snapshot output. MP4 is supported via post-process when ffmpeg is available; absent ffmpeg, falls back to GIF cleanly. (godogen mandates MP4; we accept this engine-shape difference as a Pyxel-native tradeoff.)
 
 ## 3. Background
@@ -98,7 +98,7 @@ Artifact analyzer (1):
 
 **Why not consolidate further to a single `run` primitive that swallows static inspection too?**
 
-Static inspectors operate on post-`_build_assets()` state. Forcing them through `run` would mean either:
+Static inspectors operate at the pre-loop checkpoint (§5.7). Forcing them through `run` would mean either:
 (a) running the game loop for 0 frames just to read a palette (wasteful and conceptually confused), or
 (b) adding a `frames=0` / `static_only` mode to `run` (special-cases the primitive).
 
@@ -121,35 +121,35 @@ Same reasoning as `inspect_image` vs `inspect_animation`: distinct output destin
 ### 4.3 Cross-axis matrix
 
 ```
-                    │ no input     │ with input         │ static
-────────────────────┼──────────────┼────────────────────┼─────────────────
-screen as PNG       │ run+snap{    │ run(inputs=...)    │ inspect_image(
-                    │   screen_im} │   +snap{screen_im} │   render_path=)
-────────────────────┼──────────────┼────────────────────┼─────────────────
-screen as grid      │ run+snap{    │ run(inputs=...)    │ inspect_image
-                    │   screen_grd}│   +snap{screen_grd}│   (returns pixels)
-────────────────────┼──────────────┼────────────────────┼─────────────────
-App state attrs     │ run+snap{    │ run(inputs=...)    │ (no static state;
-                    │   state}     │   +snap{state}     │  use Read on src)
-────────────────────┼──────────────┼────────────────────┼─────────────────
-layout analysis     │ run+snap{    │ run(inputs=...)    │ (uses screen ⇒
-                    │   layout}    │   +snap{layout}    │  same as static
-                    │              │                    │  inspect_image
-                    │              │                    │  + analyze)
-────────────────────┼──────────────┼────────────────────┼─────────────────
-multi-frame video   │ run+snap{    │ run(inputs=...)    │ (n/a — dynamic
-                    │   video}     │   +snap{video}     │  by definition)
-────────────────────┼──────────────┼────────────────────┼─────────────────
-palette             │ (n/a — dynamic palette mutation v0.9.3 OOS)│ inspect_palette
-────────────────────┼──────────────┼────────────────────┼─────────────────
-image bank pixels   │ (n/a — dynamic bank mutation v0.9.3 OOS)   │ inspect_image
-────────────────────┼──────────────┼────────────────────┼─────────────────
-sprite anim pairs   │ (n/a — animation analysis is static)       │ inspect_animation
-────────────────────┼──────────────┼────────────────────┼─────────────────
-tilemap             │ (n/a — dynamic tilemap mutation v0.9.3 OOS)│ inspect_tilemap
-────────────────────┼──────────────┼────────────────────┼─────────────────
-audio render        │ (live audio capture v0.9.3 OOS)            │ render_audio
-                    │                                            │ (per slot)
+                    │ no input             │ with input                  │ static
+────────────────────┼──────────────────────┼─────────────────────────────┼───────────────────────
+screen as PNG       │ run + snap{          │ run(inputs=...)             │ inspect_image(
+                    │   kind: screen_image}│   + snap{kind: screen_image}│   render_path=)
+────────────────────┼──────────────────────┼─────────────────────────────┼───────────────────────
+screen as grid      │ run + snap{          │ run(inputs=...)             │ inspect_image
+                    │   kind: screen_grid} │   + snap{kind: screen_grid} │   (returns pixels)
+────────────────────┼──────────────────────┼─────────────────────────────┼───────────────────────
+App state attrs     │ run + snap{          │ run(inputs=...)             │ (no static state;
+                    │   kind: state}       │   + snap{kind: state}       │  use Read on src)
+────────────────────┼──────────────────────┼─────────────────────────────┼───────────────────────
+layout analysis     │ run + snap{          │ run(inputs=...)             │ (uses screen ⇒
+                    │   kind: layout}      │   + snap{kind: layout}      │  same as static
+                    │                      │                             │  inspect_image
+                    │                      │                             │  + analyze)
+────────────────────┼──────────────────────┼─────────────────────────────┼───────────────────────
+multi-frame video   │ run + snap{          │ run(inputs=...)             │ (n/a — dynamic
+                    │   kind: video}       │   + snap{kind: video}       │  by definition)
+────────────────────┼──────────────────────┼─────────────────────────────┼───────────────────────
+palette             │ (n/a — dynamic palette mutation v0.9.3 OOS)        │ inspect_palette
+────────────────────┼──────────────────────┼─────────────────────────────┼───────────────────────
+image bank pixels   │ (n/a — dynamic bank mutation v0.9.3 OOS)           │ inspect_image
+────────────────────┼──────────────────────┼─────────────────────────────┼───────────────────────
+sprite anim pairs   │ (n/a — animation analysis is static)               │ inspect_animation
+────────────────────┼──────────────────────┼─────────────────────────────┼───────────────────────
+tilemap             │ (n/a — dynamic tilemap mutation v0.9.3 OOS)        │ inspect_tilemap
+────────────────────┼──────────────────────┼─────────────────────────────┼───────────────────────
+audio render        │ (live audio capture v0.9.3 OOS)                    │ render_audio
+                    │                                                    │ (per slot)
 ```
 
 This matrix is the spec at a glance: every axis is either covered by `run` (with or without `inputs`), by a static inspector, or explicitly out-of-scope for v0.9.3.
@@ -206,14 +206,14 @@ These are invariants every tool implementation must satisfy. They are stated as 
 **Why:** Verification predicates (especially gate checks #5 and #6 for win/lose paths) require reproducibility. Without it, flaky verification undermines the gate's authority.
 
 **Implementation:**
-- The harness calls `pyxel.rseed(random_seed)` after `_build_assets()` returns and before `pyxel.run()` starts, if `random_seed` is given.
+- The harness calls `pyxel.rseed(random_seed)` at the pre-loop checkpoint (§5.7), if `random_seed` is given.
 - If `random_seed=None`, the harness leaves the script's RNG behavior unchanged (it may or may not be deterministic depending on the script).
 - The return value includes a `seeded: bool` field indicating whether `rseed` was injected.
 - For `inspect_*` static tools, no run loop occurs, so RNG is not relevant; `seeded` is omitted.
 
 ### 5.4 External asset load failure handling
 
-**Constraint:** When a script's `_build_assets()` calls `pyxel.images[N].load("file")`, `pyxel.tilemaps[N].load("file.tmx")`, or `Sound.pcm("file.wav")` and the file is missing/malformed, the harness MUST catch the exception and return a structured error.
+**Constraint:** When the script (during init or any pre-loop asset-loading code, per §5.7) calls `pyxel.images[N].load("file")`, `pyxel.tilemaps[N].load("file.tmx")`, or `Sound.pcm("file.wav")` and the file is missing/malformed, the harness MUST catch the exception and return a structured error.
 
 **Why:** Asset load failures are a common real-world scenario (path typo, missing file). Agents need a structured signal, not a raw Python traceback.
 
@@ -221,15 +221,17 @@ These are invariants every tool implementation must satisfy. They are stated as 
 
 ```python
 ToolError = {
-    "phase": "asset_load" | "script_import" | "build_assets" | "game_loop" | "snapshot",
+    "phase": "validation" | "script_import" | "asset_load" | "build_assets" | "game_loop" | "snapshot",
     "message": str,
-    "path": str | None,    # for asset_load
-    "frame": int | None,   # for game_loop, snapshot
-    "traceback": str | None,
+    "path": str | None,    # populated for asset_load (the failing asset path) and validation/script_import (the script path); None otherwise
+    "frame": int | None,   # populated for game_loop, snapshot; None otherwise
+    "traceback": str | None,  # populated for runtime exceptions (script_import, asset_load, build_assets, game_loop, snapshot); None for validation
 }
 ```
 
 Tool calls return successfully (HTTP 200 / MCP success) even when errors occur during execution; the agent inspects `errors` to decide.
+
+**Validation errors (`phase: "validation"`):** When tool input is malformed (unknown button name, conflicting `frame`/`frames` fields, `frames=0`, out-of-range `start_frame`, mismatched `output` vs `output_pattern`, unrecognized `{...}` tokens in `output_pattern`, etc.), the harness returns immediately with `errors=[{"phase": "validation", "message": "...", "path": <script path>, ...}]` and no other side effects (no subprocess work past argument parsing, no snapshots emitted, no files written). The MCP call still succeeds at the protocol level. This unifies the error-reporting surface: agents always inspect the same `errors` field regardless of failure stage.
 
 ### 5.5 Output path conventions
 
@@ -240,6 +242,8 @@ Tool calls return successfully (HTTP 200 / MCP success) even when errors occur d
 **Implementation:** The harness uses `pathlib.Path.mkdir(parents=True, exist_ok=True)` on the parent before writing.
 
 **Frame numbering:** When tools auto-generate filenames from a `output_pattern: "frames/{frame}.png"` template, the `{frame}` field is zero-padded to **5 digits** (`frames/00030.png`). 5 digits supports up to 99999 frames; Pyxel runs at 30 fps so this covers ~55 minutes of capture, far beyond any realistic test scenario.
+
+**Template syntax:** `{frame}` is the only supported template token. It always expands to a 5-digit zero-padded integer. Custom Python format specifiers like `{frame:03d}` or `{frame:.2f}` are NOT recognized — `output_pattern` substitution uses fixed `{frame}` → 5-digit zero-padded mapping, not Python's `str.format`. A pattern containing unrecognized tokens raises a validation error.
 
 ### 5.6 Two distinct MCP context surfaces
 
@@ -257,6 +261,25 @@ The MCP protocol exposes pyxel-mcp to the agent via three layers, each with its 
 
 **Implementation:** Layer A docstrings are short, written in the tool registration code (`server.py`). Layer B is `instructions.md`, loaded via `FastMCP(instructions=Path("instructions.md").read_text())`. Layer C resources are served via FastMCP `@mcp.resource()` decorators reading from `_resources/`.
 
+### 5.7 The "pre-loop checkpoint" and "App instance"
+
+Several tools operate on Pyxel state at a moment defined as the **pre-loop checkpoint**: the harness has imported the script (which executed `pyxel.init()` and any module-level or `App.__init__` asset-loading statements), captured the `update` and `draw` callbacks the script passed to `pyxel.run(...)`, and is about to begin its own injected run loop. **No `update` or `draw` callback has yet been invoked at this point.**
+
+**Why a named checkpoint:** Pyxel does not standardize a `_build_assets()` hook or any other init-vs-loop boundary. Scripts vary: some put assets in `App.__init__`, some in a custom helper called from `__init__`, some at module level before instantiating `App()`. The harness's intercept of `pyxel.run` is the only universal anchor across these styles. Wherever this spec referred to "post-`_build_assets()`" or similar pyxel-skill-internal terms in earlier drafts, it now means **the pre-loop checkpoint defined here**.
+
+**App instance identification:** The harness inspects the `update` callback captured at the pre-loop checkpoint:
+
+- If `update` is a bound method (has `__self__`), the **App instance** is `update.__self__`. The `state` snapshot reads attributes from this object.
+- If `update` is a bare function, there is no App instance. The `state` snapshot returns module-level globals from the script's module, and emits a warning: `"no App class detected; reading module globals"`.
+- If `pyxel.run` is never called by the script (no game loop), the harness raises a `script_import`-phase error.
+
+**Tools using the checkpoint:**
+
+- `inspect_palette` / `inspect_image` / `inspect_animation` / `inspect_tilemap` — read static state at this point and exit (no game loop runs)
+- `run` — `pyxel.rseed(random_seed)` injected here when supplied; App instance captured for any `state` snapshots in the request
+
+**Implementation:** The harness monkey-patches `pyxel.run`. The patched function performs (a) any pre-loop tool action (snapshot inspection or `rseed` injection), then (b) drives the harness's own loop using the captured `update`/`draw` callbacks.
+
 ## 6. The `run` primitive
 
 ### 6.1 Signature
@@ -264,13 +287,16 @@ The MCP protocol exposes pyxel-mcp to the agent via three layers, each with its 
 ```python
 run(
     script: str,                          # absolute or cwd-relative path to .py
-    frames: int,                          # how many game frames to advance
+    frames: int,                          # how many game frames to advance (>= 1)
     inputs: list[InputEvent] = [],        # scheduled input events
     snapshots: list[Snapshot] = [],       # what to capture and when
-    random_seed: int | None = None,       # if given, pyxel.rseed(this) post-build
+    random_seed: int | None = None,       # if given, pyxel.rseed(this) at pre-loop checkpoint
+    stall_detection: bool = False,        # see §6.5 stall semantics; opt-in (per-frame hash overhead)
     timeout: int = 10,                    # max wall-clock seconds for the subprocess
 ) -> RunResult
 ```
+
+**Parameter validation:** `frames >= 1` is required (validation error otherwise — for "does the script import without crashing" smoke-testing, use `run(script, frames=1, snapshots=[])` and inspect `exit_status`/`errors`). `timeout >= 1` is required. `random_seed` if supplied must be a non-negative int (Pyxel's `rseed` accepts `int >= 0`).
 
 ### 6.2 Frame execution model
 
@@ -279,8 +305,8 @@ For each frame `F` in `[0, frames)`:
 1. Set `pyxel.frame_count = F` (incremented to the new frame's value before logic runs, matching Pyxel's normal loop).
 2. Apply any `InputEvent` with `frame == F`. The harness updates the held button set, axis values, and mouse position from the event.
 3. Recompute `btnp` / `btnr` deltas against the previous frame's button state.
-4. Run `pyxel.update()` — the script's update logic responds to current inputs.
-5. Run `pyxel.draw()` — the script renders this frame.
+4. Call the script's `update` callback (the function passed as the first argument to `pyxel.run`) — the script's update logic responds to current inputs.
+5. Call the script's `draw` callback (the second argument to `pyxel.run`) — the script renders this frame.
 6. **For single-frame snapshots** (`screen_image`, `screen_grid`, `state`, `layout`) with `frame == F`: capture and produce a `SnapshotResult` immediately.
 7. **For `video` snapshots** whose `[start_frame, end_frame)` range contains F: write the post-draw frame to a temp PNG. The video is encoded into the final output file only after the run completes (step 8 below). This is accumulation, not per-frame capture.
 
@@ -296,7 +322,7 @@ For each frame `F` in `[0, frames)`:
 {
     "frame": int,                                    # at which frame to apply
     "buttons": list[str] | None,                     # held button set (state replacement)
-    "axes": dict[str, int] | None,                   # held analog axis values
+    "axes": dict[str, float] | None,                 # held analog axis values, normalized to [-1.0, 1.0]
     "mouse_pos": [int, int] | None,                  # mouse position (game pixels)
 }
 ```
@@ -323,7 +349,11 @@ The same distinction applies to `axes` (omit / `null` = no change; `{}` = all ax
 
 **Button name namespace.** Strings match Pyxel's constant names: `"KEY_SPACE"`, `"KEY_LEFT"`, `"MOUSE_BUTTON_LEFT"`, `"GAMEPAD1_BUTTON_A"`, etc. Axes: `"GAMEPAD1_AXIS_LEFTX"`, etc. The harness translates strings to Pyxel int constants via `getattr(pyxel, name)`. Unknown names raise a validation error at tool call time.
 
+**One event per frame.** The `inputs` list MUST NOT contain two `InputEvent` entries with the same `frame` value. A 1-frame input state (any combination of held buttons, axis values, and mouse position) is fully expressible in a single `InputEvent` — multiple events at the same frame would be redundant and ambiguous. Duplicates are a validation error.
+
 ### 6.4 Snapshot kinds (5)
+
+**Common frame-bounds validation (applies to all snapshot kinds with a `frame` or `frames` field):** Every resolved frame value MUST satisfy `0 <= frame < frames` (where `frames` is the `run` parameter). For multi-frame snapshots, this applies to every element of the resolved frame list. Out-of-bounds values are a validation error (§5.4 `phase: "validation"`); the harness does NOT silently drop them. The `video` snapshot has its own explicit bounds (`start_frame >= 0, end_frame <= frames, start_frame < end_frame`) per §6.4.5.
 
 #### 6.4.1 `screen_image`
 
@@ -374,7 +404,7 @@ Output: {
     "frame": int,
     "kind": "screen_grid",
     "bbox": [x, y, w, h],
-    "grid": list[list[int]],    # row-major, palette indices 0-255
+    "grid": list[list[int]],    # row-major, palette indices 0-15 (default palette; extended palette mutation is OOS for v0.9.3 per §4.3)
 }
 ```
 
@@ -386,7 +416,7 @@ Reads `App` instance attributes at the end of frame F.
 Input: {
     "frame": int,
     "kind": "state",
-    "attrs": list[str] | [],    # dotted paths; empty = top-level scalar attrs only
+    "attrs": list[str] | None,    # dotted paths; null/omitted = default (top-level scalar attrs); [] = explicit empty (returns no attrs)
 }
 
 Output: {
@@ -400,7 +430,8 @@ Output: {
 **Attr path syntax:**
 - Dotted: `"player.x"` → `getattr(getattr(app, "player"), "x")`.
 - Indexed: `"barrels[0].y"` → `app.barrels[0].y`.
-- Empty list `[]` returns App's top-level scalar/string/int/float/bool attrs only (no recursion into nested objects, no list/dict expansion).
+- `attrs: None` (or field omitted): returns the App's top-level **scalar primitives** only — `int`, `float`, `str`, `bool`, `None`. Lists, dicts, and custom objects are skipped (no recursion). To inspect collections explicitly, name them in `attrs`.
+- `attrs: []` (explicit empty list): returns `values: {}` (no attrs read). Useful when a `state` snapshot is requested for its side effect of pinning a frame timing without reading anything.
 - **Aggregate functions are NOT supported.** `len(barrels)` is not expressible. The agent must either inspect the list itself (which serializes if JSON-friendly) or have the script mirror `len(barrels)` into a top-level attr like `app.barrel_count`. This limitation is documented in the `pyxel-skill` `task-execution.md` knowledge.
 
 **Value serialization:** Primitives (int, float, str, bool, None) pass through. Lists of primitives serialize as JSON arrays. Dicts of primitives serialize as JSON objects. Custom objects are represented as their `repr()` truncated to 200 chars with a `"<truncated>"` marker. Numpy arrays serialize as nested lists.
@@ -468,6 +499,7 @@ Output: {
 ```python
 {
     "snapshots": list[SnapshotResult],    # see ordering rules below
+    "assertions": list[Assertion],        # parsed from script stdout; see §6.7
     "exit_status": "ok" | "crashed" | "timeout" | "stalled",
     "frame_count": int,                   # actual frames executed (may be less than `frames` on crash)
     "elapsed_seconds": float,             # wall-clock harness time
@@ -476,6 +508,22 @@ Output: {
     "errors": list[ToolError],            # per §5.4
 }
 ```
+
+**`exit_status` decision rules:**
+
+| Condition                                                     | `exit_status` | `errors[].phase`                        | `frame_count`             |
+|---------------------------------------------------------------|---------------|-----------------------------------------|---------------------------|
+| Normal completion (loop reached `frames`)                     | `"ok"`        | empty (warnings allowed)                | == requested `frames`     |
+| Tool input invalid (unknown button, `frames=0`, conflicting fields, out-of-range, etc.) | `"ok"` | `"validation"` (single entry)         | 0                         |
+| Script raises during import                                   | `"crashed"`   | `"script_import"`                       | 0                         |
+| Asset file missing/malformed during init or pre-loop          | `"crashed"`   | `"asset_load"`                          | 0                         |
+| Other init-time exception (constructor logic, etc.)           | `"crashed"`   | `"build_assets"`                        | 0                         |
+| `update`/`draw` callback raises at frame F                    | `"crashed"`   | `"game_loop"` (with `frame=F`)          | F                         |
+| Snapshot capture itself raises at frame F                     | `"crashed"`   | `"snapshot"` (with `frame=F`)           | F                         |
+| Wall-clock elapsed > `timeout`                                | `"timeout"`   | empty (timeout is meta-level)           | last completed frame      |
+| `stall_detection=True` and 60 consecutive frames identical    | `"stalled"`   | empty                                   | last frame in stall window |
+
+`exit_status` is informational; the authoritative failure signal is `len(errors) > 0`. An agent that only checks `errors` gets correct behavior in all cases. `exit_status` exists for quick triage (`"crashed"` vs `"timeout"` vs `"stalled"` distinguishes failure mode without parsing).
 
 **Snapshot ordering:**
 - The output `snapshots` list preserves the **input order** of the input `snapshots` list.
@@ -500,7 +548,7 @@ For high-frequency snapshots (e.g., capture every frame's state), specifying 720
 
 ```python
 {"frames": [30, 60, 120, 240], "kind": "state", "attrs": ["player.x"]}                # explicit list
-{"frames": "0:720", "kind": "screen_image", "output_pattern": "frames/{frame:05d}.png"}  # range
+{"frames": "0:720", "kind": "screen_image", "output_pattern": "frames/{frame}.png"}      # range
 {"frames": "0:720:10", "kind": "state", "attrs": ["player.y"]}                          # every 10
 {"frames": "all", "kind": "screen_grid"}                                                # all frames
 ```
@@ -520,7 +568,44 @@ For `layout` snapshots, multi-frame mode is supported and produces N analysis re
 
 `kind: "video"` does **not** accept `frames` — it has its own `start_frame` / `end_frame` fields (§6.4.5).
 
-### 6.7 Example: DK win-path verification in 1 call
+**List normalization:** When `frames` is an explicit list (e.g., `[60, 30, 30]`), the harness sorts ascending and deduplicates before resolving snapshots. A warning is emitted if either operation changed the list (`"frames list was sorted and/or deduplicated"`). Range strings (`"0:720"`, `"all"`) are inherently ordered and unique, so no warning fires.
+
+### 6.7 Console assertions
+
+Scripts may report verification outcomes by writing structured lines to stdout. The harness parses these and populates `RunResult.assertions`:
+
+**Convention:** A line matching the regex `^ASSERT (PASS|FAIL): (\S+)(?: \| (.*))?$` is captured as one `Assertion`:
+
+```python
+Assertion = {
+    "name": str,           # the captured \S+ group
+    "passed": bool,        # True for PASS, False for FAIL
+    "message": str | None, # the captured optional " | <message>" suffix; None if absent
+    "frame": int | None,   # frame_count at time of capture (None if printed during init/pre-loop)
+}
+```
+
+**Why a stdout convention:** Pyxel scripts already print to stdout for debugging. A line-based convention requires no API changes to Pyxel, no harness ABI for the script to call, and works across script structures (class-based or function-based). The convention is symmetric with godogen's `ASSERT PASS/FAIL` regime, which is the source of inspiration.
+
+**Examples (in script):**
+
+```python
+def update():
+    if app.player.x == expected_x:
+        print(f"ASSERT PASS: player_reaches_waypoint")
+    else:
+        print(f"ASSERT FAIL: player_reaches_waypoint | expected x={expected_x}, got x={app.player.x}")
+```
+
+**Boundary with `state` snapshots:** `assertions` are scripted self-checks (the script knows what's correct). `state` snapshots are agent-driven readouts (the agent decides what's correct). Both are reported in `RunResult`; agents may use either or both.
+
+**Failure reporting:** A script that prints `ASSERT FAIL: ...` does NOT cause `exit_status="crashed"`. The script continues running. The agent inspects `assertions[].passed` to decide overall pass/fail. To abort the run on first failure, the script may `raise` after printing — that triggers `exit_status="crashed"` via the `game_loop` phase.
+
+**Duplicate names:** If the same `name` appears multiple times across frames (e.g., a per-frame assertion in `update()`), each occurrence yields a separate `Assertion` entry. The agent can group by `name` and check `all(a.passed for a in matching)`.
+
+**Non-matching `print` output:** Lines that don't match the assertion regex are unaffected — they go to `RunResult.log` as normal stdout.
+
+### 6.8 Example: DK win-path verification in 1 call
 
 ```python
 run(
@@ -565,7 +650,7 @@ All from one deterministic execution. Compared to the current 16-tool surface, t
 
 ### 7.1 `inspect_palette(script)`
 
-Returns the palette state after `_build_assets()` runs.
+Returns the palette state at the pre-loop checkpoint (§5.7).
 
 ```python
 Output: {
@@ -644,12 +729,12 @@ Input: {
 
 Output: {
     "image_index": int,
-    "frames": list[{
+    "regions": list[{
         "region": {"x": int, "y": int, "w": int, "h": int},
         "color_count": dict[int, int],
         "fill_ratio": float,
     }],
-    "palette_consistency": float,    # 0-1, |intersect(frame_palettes)| / |union(frame_palettes)|
+    "palette_consistency": float,    # 0-1, |intersect(region_palettes)| / |union(region_palettes)|
     "silhouette_stability": float,   # 0-1, mean Jaccard of consecutive fill masks
     "frame_diffs": list[{
         "from": int, "to": int, "diff_ratio": float,
@@ -672,7 +757,7 @@ These are pinned in spec so quality-gate check #4 (paired-frame diff in 5–50%)
 
 ### 7.4 `inspect_tilemap(script, tilemap, render_path)`
 
-Reads `pyxel.tilemaps[tilemap]` after `_build_assets()`.
+Reads `pyxel.tilemaps[tilemap]` at the pre-loop checkpoint (§5.7).
 
 ```python
 Input: {
@@ -815,16 +900,16 @@ Output: {
     "size_match": bool,                   # are PNG dimensions equal
     "size_a": [int, int],
     "size_b": [int, int],
-    "changed_pixels": int,                # 0 if size mismatch (see below)
-    "total_pixels": int,
-    "ratio": float,                       # changed / total, 0.0 if size mismatch
+    "changed_pixels": int | None,         # null when size_match is false
+    "total_pixels": int | None,           # null when size_match is false
+    "ratio": float | None,                # changed / total; null when size_match is false
     "region": {"x": int, "y": int, "w": int, "h": int} | None,    # bounding box of changes
     "warnings": list[str],
     "errors": list[ToolError],
 }
 ```
 
-**Size mismatch:** When `size_a != size_b`, the tool returns `size_match: false`, `identical: false`, `changed_pixels: 0`, `ratio: 0.0`, `region: None`, and emits a warning "size mismatch; pixel comparison skipped". The agent decides whether to treat this as a regression (probably yes) or as expected (e.g., resolution change between attempts). The tool does not crop, scale, or center-align.
+**Size mismatch:** When `size_a != size_b`, the tool returns `size_match: false`, `identical: false`, `changed_pixels: None`, `total_pixels: None`, `ratio: None`, `region: None`, and emits a warning "size mismatch; pixel comparison skipped". Agents MUST check `size_match` (or `identical`) before reading numeric comparison fields, since `None` would break naïve `ratio < threshold` comparisons. The tool does not crop, scale, or center-align — the agent decides whether to treat the mismatch as a regression (probably yes) or as expected (e.g., resolution change between attempts).
 
 ## 10. Migration impact on `pyxel-skill`
 
@@ -851,6 +936,31 @@ Output: {
 **Total: 3 heavy + 2 medium + 5 small + 5 minimal/none.** The `task-execution.md`, `quality-gate.md`, and `test-harness.md` rewrites are the substantial part.
 
 The pyxel-skill design itself (7 stages, 4 state files, anti-shortcut rules, gate, hooks, knowledge files) is unchanged. The redesign only affects how stages call `pyxel-mcp` tools.
+
+### 10.1 Old → new tool/snapshot mapping (reference)
+
+For implementers writing the pyxel-skill stage-file rewrites, this table shows the 1-to-1 (or 1-to-N) mapping from the 0.9.2 surface to the 0.9.3 surface:
+
+| Old (0.9.2)         | New (0.9.3)                                                              |
+|---------------------|--------------------------------------------------------------------------|
+| `pyxel_info`        | `pyxel_info` (unchanged)                                                  |
+| `validate_script`   | `validate`                                                                |
+| `run_and_capture`   | `run(snapshots=[{frame, kind: "screen_image", output}])`                  |
+| `play_and_capture`  | `run(inputs=..., snapshots=[{frame, kind: "screen_image", output}])`      |
+| `capture_frames`    | `run(snapshots=[{frames, kind: "screen_image", output_pattern}])`         |
+| `record_gameplay`   | `run(snapshots=[{kind: "video", start_frame, end_frame, fps, output}])`   |
+| `inspect_state`     | `run(snapshots=[{frame, kind: "state", attrs}])`                          |
+| `inspect_screen`    | `run(snapshots=[{frame, kind: "screen_grid", bbox}])`                     |
+| `inspect_layout`    | `run(snapshots=[{frame, kind: "layout"}])`                                |
+| `inspect_palette`   | `inspect_palette` (signature unchanged; response evolved)                 |
+| `inspect_bank`      | `inspect_image(image, render_path=...)` (full bank, no x/y/w/h)           |
+| `inspect_sprite`    | `inspect_image(image, x, y, w, h)` (region)                               |
+| `inspect_animation` | `inspect_animation` (signature unchanged; output `frames` → `regions`)    |
+| `inspect_tilemap`   | `inspect_tilemap` (signature unchanged; response evolved)                 |
+| `compare_frames`    | `compare_frames` (signature unchanged; size-mismatch fields → `None`)     |
+| `render_audio`      | `render_audio` (input shape: `target` union; response unchanged)          |
+
+Six of the 16 old tools collapse into `run`, which is the central simplification of the redesign.
 
 ## 11. Implementation strategy
 
@@ -985,7 +1095,7 @@ Phase 9  pyxel-skill v0.1.0+ tag (post-PyPI publish)
 ## 13. Open questions and risks
 
 1. **Pyxel 2.9 mouse-position API.** The spec assumes Pyxel 2.9+ exposes a way to set `mouse_x` / `mouse_y` (either a `set_mouse_pos` API or direct module-attribute assignment). Verify against current Pyxel source before implementing `mouse_pos` in InputEvent. If the API does not exist, harness implementation may need to monkey-patch `pyxel._mouse_x` etc.
-2. **Pyxel `set_btnv` argument-range convention.** §6.3 accepts axis values matching SDL gamepad ranges (typically `-32768..32767` for sticks, `0..32767` for triggers). Verify Pyxel's actual `set_btnv` signature accepts the same int range; if Pyxel normalizes to floats `-1.0..1.0`, the harness must convert before calling.
+2. **Pyxel `set_btnv` argument-range convention.** §6.3 normalizes the agent-facing axis values to `-1.0..1.0` floats. The harness converts to whatever range Pyxel's actual `set_btnv` expects (verify against the installed Pyxel version during implementation). If Pyxel uses int `-32768..32767`, scale by 32767. If Pyxel itself uses floats, pass through.
 3. **`stall_detection` overhead.** Computing a state hash every frame is non-trivial. Default-off keeps the common path fast; enabling it for long-path verification incurs ~5-15% slowdown depending on state size. Acceptable; document.
 4. **`ffmpeg` availability assumption.** Pyxel-skill tests on macOS in development; ffmpeg is typically installed via brew. CI environments (when added) need ffmpeg in their image. Headless servers may not have it; the GIF fallback is the safety net.
 5. **Validation iteration count.** The redesign aims to make DK validation pass in 1-2 iterations vs the current 4+. This is an expectation, not a guarantee. If the redesigned surface still requires many iterations, additional design refinement may be needed before PyPI publish.
