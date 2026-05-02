@@ -28,10 +28,10 @@ def register(subcommand: str):
 
 def _import_tool_modules() -> None:
     """Import all tool modules so their @register decorators run."""
-    from pyxel_mcp._harnesses.tools import validate as _v
+    from pyxel_mcp._harnesses.tools import validate as _v, pyxel_info as _i, run as _r
     register("validate")(_v.run)
-    from pyxel_mcp._harnesses.tools import pyxel_info as _pi
-    register("pyxel_info")(_pi.run)
+    register("pyxel_info")(_i.run)
+    register("run")(_r.run)
 
 
 def main(argv: list[str] | None = None) -> int:
