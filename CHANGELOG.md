@@ -26,6 +26,7 @@
 - Seed Python stdlib random in addition to pyxel.rseed for full run determinism
 - Remove phantom `stall_detection` parameter (was never wired to harness)
 - Expand `run` docstring with inline snapshot/input grammar (was 1 line)
+- Resolve tilemap.imgsrc when assigned via `tm.image=Image` (no longer crashes)
 
 ## 0.9.2
 
