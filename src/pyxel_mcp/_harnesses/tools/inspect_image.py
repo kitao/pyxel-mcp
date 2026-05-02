@@ -14,7 +14,8 @@ def _empty(error: dict) -> dict:
         "region": {"x": 0, "y": 0, "w": 0, "h": 0},
         "pixels": None, "color_count": {}, "fill_ratio": 0.0,
         "symmetry": None, "edge_density": None,
-        "warnings": [], "rendered": None, "errors": [error],
+        "warnings": [], "rendered": None, "verdict": None,
+        "errors": [error],
     }
 
 

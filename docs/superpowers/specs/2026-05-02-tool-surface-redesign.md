@@ -720,6 +720,7 @@ Output: {
     "contrast_warnings": list[{
         "a": int, "b": int, "ratio": float, "message": str,
     }],
+    "verdict": "pass" | "warn" | "fail" | None,    # rolled-up judgment; null on extended palette
     "errors": list[ToolError],
 }
 ```
@@ -729,6 +730,15 @@ Output: {
 **Hierarchy on extended palette:** When `pyxel.colors.append(...)` has been called and `palette_size > 16`, the 3-layer hierarchy analysis is skipped (`hierarchy: None`). Quality-gate check #8 (`Hierarchy score: 2/2`) is documented as not applicable for extended palettes; pyxel-skill convention is to use the default 16-color palette.
 
 **Contrast analysis:** WCAG 2.0 contrast ratio computed for all pairs of colors used in the palette (as detected by reading the palette state). Warnings emitted for ratios < 3.0 between commonly co-located indices (e.g., a foreground color paired with the background color). Threshold and pair-detection algorithm match the existing `_common/format.py` implementation, ported verbatim.
+
+**Verdict semantics:** The `verdict` field rolls up `hierarchy.score` and `len(contrast_warnings)` into a single judgment so callers do not need to re-derive thresholds:
+
+- `"pass"` — `hierarchy.score == 2` AND `len(contrast_warnings) <= 1`
+- `"warn"` — `hierarchy.score == 2` AND `1 < len(contrast_warnings) <= 5`
+- `"fail"` — `hierarchy.score < 2` OR `len(contrast_warnings) > 5`
+- `null` — extended palette (`hierarchy is None`); no judgment is meaningful
+
+Standalone-mcp callers should branch on `verdict` rather than re-implementing the threshold logic. The underlying `hierarchy` and `contrast_warnings` fields remain available for fine-grained inspection or alternative rule sets.
 
 ### 7.2 `inspect_image(script, image, x, y, w, h, render_path)`
 
@@ -756,11 +766,21 @@ Output: {
     "edge_density": float | None,         # outline density on perimeter
     "warnings": list[str],                # e.g., "fill_ratio outside [0.15, 0.95]"
     "rendered": str | None,               # absolute path if render_path given
+    "verdict": "pass" | "warn" | "fail" | None,   # null when pixels=None (full-bank scan)
     "errors": list[ToolError],
 }
 ```
 
 **Bank size handling:** Default `w=h=None` means "the actual size of `pyxel.images[image]`". If the user passes explicit `w`/`h` that exceed the bank's bounds, the region is clamped and a warning is emitted. If the bank index is out of range (`image >= len(pyxel.images)` or `image < 0`), `errors` contains a `validation` phase entry — the script imported successfully and assets loaded; the input parameter is the issue. The same rule applies to `inspect_tilemap` for invalid tilemap indices.
+
+**Verdict semantics:** The `verdict` field rolls up `fill_ratio` and `len(color_count)` into a single judgment for the single-region case. The same threshold logic that pyxel-skill's quality-gate previously hard-coded is now centralized here:
+
+- `"pass"` — `0.15 <= fill_ratio <= 0.95` AND `len(color_count) >= 3`
+- `"warn"` — `fill_ratio` outside `[0.15, 0.95]` by less than `0.05`, OR `len(color_count) == 2` with `fill_ratio` in band
+- `"fail"` — otherwise
+- `null` — full-bank scan (`pixels is None`); fill_ratio over a 65k-pixel bank is meaningless as a sprite metric, so no judgment is rendered
+
+Standalone-mcp callers should branch on `verdict` for sprite quality decisions; full-bank scans continue to expose aggregate `color_count` for ad-hoc inspection.
 
 **Large region pixel return:** If `w * h > 4096`, `pixels` is set to `None` to avoid bloating JSON. The agent must use `render_path` to visualize large regions. `color_count`, `fill_ratio`, etc. are still computed.
 

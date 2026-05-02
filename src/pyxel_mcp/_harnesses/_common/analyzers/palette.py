@@ -111,19 +111,48 @@ def _detect_close_pairs(
     return out
 
 
+def _palette_verdict(
+    hierarchy: dict[str, Any] | None,
+    contrast_warnings: list[dict[str, Any]],
+) -> str | None:
+    """Roll up hierarchy.score and contrast_warning count into a single verdict.
+
+    Returns None for extended palettes (hierarchy is None — analysis n/a).
+    Otherwise:
+      - "pass" : hierarchy.score == 2 AND len(warnings) <= 1
+      - "warn" : hierarchy.score == 2 AND 1 < len(warnings) <= 5
+      - "fail" : hierarchy.score < 2 OR len(warnings) > 5
+
+    Thresholds mirror what pyxel-skill's quality-gate previously hard-coded —
+    moving them here lets standalone-mcp callers consume the judgment directly.
+    """
+    if hierarchy is None:
+        return None
+    score = hierarchy.get("score", 0)
+    n = len(contrast_warnings)
+    if score < 2 or n > 5:
+        return "fail"
+    if n <= 1:
+        return "pass"
+    return "warn"
+
+
 def analyze_palette() -> dict[str, Any]:
     import pyxel
     colors = list(pyxel.colors)
     extended = len(colors) > 16
     used, co_located = _scan_image_banks()
+    hierarchy = None if extended else _hierarchy_score(colors)
+    contrast_warnings = _detect_close_pairs(colors, co_located)
     info: dict[str, Any] = {
         "colors": {i: _hex(c) for i, c in enumerate(colors)},
         "extended_palette": extended,
         "palette_size": len(colors),
         "used_indices": sorted(used),
         "co_located_pairs": sorted(co_located),
-        "hierarchy": None if extended else _hierarchy_score(colors),
-        "contrast_warnings": _detect_close_pairs(colors, co_located),
+        "hierarchy": hierarchy,
+        "contrast_warnings": contrast_warnings,
+        "verdict": _palette_verdict(hierarchy, contrast_warnings),
         "errors": [],
     }
     return info
