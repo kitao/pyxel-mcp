@@ -10,6 +10,11 @@ from pyxel_mcp._harnesses._common.script_loader import resolve_script_path
 
 _SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}
 
+# Pixel-emitting pyxel APIs — any call to these renders pixels (spec §8.1 cls_missing)
+_PIXEL_EMIT_APIS = frozenset(
+    ["blt", "bltm", "pset", "line", "rect", "rectb", "circ", "circb", "tri", "trib", "text"]
+)
+
 
 def _make_issue(
     severity: str, line: int, col: int | None, category: str, message: str
@@ -29,13 +34,17 @@ def _walk_excluding_scopes(node: ast.AST):
             yield from _walk_excluding_scopes(child)
 
 
-def _detect_syntax(source: str) -> list[dict[str, Any]]:
-    """Return a single 'syntax' issue if ast.parse fails; else empty list."""
+def _detect_syntax(source: str) -> tuple[list[dict[str, Any]], ast.AST | None]:
+    """Parse source and return (issues, tree).
+
+    Returns a single 'syntax' issue and None tree on parse failure;
+    returns empty issues and the parsed tree on success.
+    """
     try:
-        ast.parse(source)
-        return []
+        tree = ast.parse(source)
+        return [], tree
     except SyntaxError as e:
-        return [_make_issue("error", e.lineno or 0, e.offset, "syntax", str(e))]
+        return [_make_issue("error", e.lineno or 0, e.offset, "syntax", str(e))], None
 
 
 def _detect_missing_colkey(tree: ast.AST) -> list[dict[str, Any]]:
@@ -89,19 +98,35 @@ def _detect_update_in_draw(tree: ast.AST) -> list[dict[str, Any]]:
 
 
 def _detect_tilemap_zero_zero(tree: ast.AST) -> list[dict[str, Any]]:
-    """tilemaps[N].set(...) whose tile-data list contains a reference to source-bank (0, 0).
+    """pyxel.tilemaps[N].set(...) whose tile-data list references source-bank (0,0).
 
-    Heuristic: look for `.set(x, y, [...])` calls whose tile-data list contains
-    a string element matching '0000' or '0102'.  The '0102' pattern matches the
-    canonical fixture; '0000' catches blank-tile floods.  This is intentionally
-    crude — a more exact detector is deferred to Task 2.2.
+    Constrained to pyxel.tilemaps[...].set(...) calls to avoid false positives
+    from unrelated .set() calls (e.g., pyxel.images[0].set()).
+    Heuristic: flag if the data list contains a string with '0000' or '0102'.
     """
     issues: list[dict[str, Any]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         func = node.func
+        # Must be <expr>.set(...)
         if not (isinstance(func, ast.Attribute) and func.attr == "set"):
+            continue
+        # The receiver must be pyxel.tilemaps[N] or tilemaps[N]
+        receiver = func.value
+        if not isinstance(receiver, ast.Subscript):
+            continue
+        subscript_value = receiver.value
+        is_tilemaps = (
+            (isinstance(subscript_value, ast.Name) and subscript_value.id == "tilemaps")
+            or (
+                isinstance(subscript_value, ast.Attribute)
+                and subscript_value.attr == "tilemaps"
+                and isinstance(subscript_value.value, ast.Name)
+                and subscript_value.value.id == "pyxel"
+            )
+        )
+        if not is_tilemaps:
             continue
         for arg in node.args:
             if isinstance(arg, ast.List):
@@ -115,6 +140,320 @@ def _detect_tilemap_zero_zero(tree: ast.AST) -> list[dict[str, Any]]:
                             ))
                             break
     return issues
+
+
+def _detect_assets_in_update(tree: ast.AST) -> list[dict[str, Any]]:
+    """pyxel.images[N].set/load or pyxel.tilemaps[N].set called inside update() or draw().
+
+    Asset loading is expensive and should happen in __init__, not the game loop.
+    Uses _walk_excluding_scopes to stay in the lexical body of the method.
+    """
+    _ASSET_CONTAINERS = frozenset(["images", "tilemaps"])
+    _ASSET_METHODS = frozenset(["set", "load"])
+
+    issues: list[dict[str, Any]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef) or node.name not in ("update", "draw"):
+            continue
+        for child in _walk_excluding_scopes(node):
+            if not isinstance(child, ast.Call):
+                continue
+            func = child.func
+            # Pattern: <something>.set(...) or <something>.load(...)
+            if not (isinstance(func, ast.Attribute) and func.attr in _ASSET_METHODS):
+                continue
+            # Receiver must be images[N] or tilemaps[N] (with or without `pyxel.` prefix)
+            receiver = func.value
+            if not isinstance(receiver, ast.Subscript):
+                continue
+            sub_val = receiver.value
+            is_asset = (
+                (isinstance(sub_val, ast.Name) and sub_val.id in _ASSET_CONTAINERS)
+                or (
+                    isinstance(sub_val, ast.Attribute)
+                    and sub_val.attr in _ASSET_CONTAINERS
+                    and isinstance(sub_val.value, ast.Name)
+                    and sub_val.value.id == "pyxel"
+                )
+            )
+            if is_asset:
+                issues.append(_make_issue(
+                    "warning", child.lineno, child.col_offset,
+                    "anti_pattern.assets_in_update",
+                    f"asset load/set inside {node.name}() runs every frame — move to __init__()",
+                ))
+    return issues
+
+
+def _iter_node_key(node: ast.expr) -> str | None:
+    """Return a stable string key for an iterable expression, or None if not trackable.
+
+    Supports:
+    - bare Name:             `lst`          → "lst"
+    - attribute access:      `self.bullets` → "self.bullets"
+
+    Calls (range/enumerate/etc.) return None so they are not tracked.
+    """
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+        return f"{node.value.id}.{node.attr}"
+    return None
+
+
+def _call_receiver_key(node: ast.Call) -> str | None:
+    """Return the key for the object a Call is invoked on, matching _iter_node_key."""
+    func = node.func
+    if not isinstance(func, ast.Attribute):
+        return None
+    receiver = func.value
+    if isinstance(receiver, ast.Name):
+        return receiver.id
+    if isinstance(receiver, ast.Attribute) and isinstance(receiver.value, ast.Name):
+        return f"{receiver.value.id}.{receiver.attr}"
+    return None
+
+
+def _detect_iter_modify(tree: ast.AST) -> list[dict[str, Any]]:
+    """List modified (append/remove/pop/insert/clear/extend) while being iterated.
+
+    Detects `for x in lst:` / `for x in self.lst:` bodies that call
+    lst.<mutating_method>(...) on the same object being iterated.
+
+    Only fires when the iterable is a bare Name or a one-level attribute
+    (e.g. self.bullets). Calls to range()/enumerate()/etc. return None from
+    _iter_node_key and are not tracked.
+
+    Heuristic: does not follow aliasing (a = lst; for x in a: lst.remove(x)).
+    """
+    _MUTATING = frozenset(["append", "remove", "pop", "insert", "clear", "extend"])
+
+    issues: list[dict[str, Any]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.For):
+            continue
+        list_key = _iter_node_key(node.iter)
+        if list_key is None:
+            continue
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call):
+                continue
+            func = child.func
+            if not isinstance(func, ast.Attribute):
+                continue
+            if func.attr not in _MUTATING:
+                continue
+            receiver_key = _call_receiver_key(child)
+            if receiver_key == list_key:
+                issues.append(_make_issue(
+                    "warning", child.lineno, child.col_offset,
+                    "anti_pattern.iter_modify",
+                    f"'{list_key}.{func.attr}()' called while iterating '{list_key}' — use a copy or collect indices",
+                ))
+    return issues
+
+
+def _detect_btn_one_shot(tree: ast.AST) -> list[dict[str, Any]]:
+    """pyxel.btn(K) inside an `if` that triggers a one-shot action.
+
+    Heuristic (info severity): flag `if pyxel.btn(...):` blocks whose body
+    contains pyxel.play() — a sound trigger that should fire only once per
+    press. btn() re-fires every frame the key is held; btnp() fires once.
+
+    This is intentionally conservative to minimise false positives. Only
+    `pyxel.play(...)` inside the if-body is used as the signal; general
+    btn()-guarded code is not flagged.
+    """
+    issues: list[dict[str, Any]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        # Check if the test is pyxel.btn(...)
+        test = node.test
+        if not (
+            isinstance(test, ast.Call)
+            and isinstance(test.func, ast.Attribute)
+            and isinstance(test.func.value, ast.Name)
+            and test.func.value.id == "pyxel"
+            and test.func.attr == "btn"
+        ):
+            continue
+        # Check if any statement in the body calls pyxel.play(...)
+        for stmt in ast.walk(ast.Module(body=node.body, type_ignores=[])):
+            if not isinstance(stmt, ast.Call):
+                continue
+            func = stmt.func
+            if (
+                isinstance(func, ast.Attribute)
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "pyxel"
+                and func.attr == "play"
+            ):
+                issues.append(_make_issue(
+                    "info", test.lineno, test.col_offset,
+                    "anti_pattern.btn_one_shot",
+                    "pyxel.btn() fires every frame the key is held — use btnp() for one-shot actions like sounds or state changes",
+                ))
+                break  # one issue per if-block
+    return issues
+
+
+def _detect_palette_animation(tree: ast.AST) -> list[dict[str, Any]]:
+    """pyxel.colors[N] = X inside a For or While loop body.
+
+    Palette mutation per frame inside a loop is a performance trap.
+    Uses _walk_excluding_scopes inside the loop body to avoid false positives
+    from nested function definitions.
+    """
+    issues: list[dict[str, Any]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.For, ast.While)):
+            continue
+        for child in _walk_excluding_scopes(node):
+            if not isinstance(child, ast.Assign):
+                continue
+            for target in child.targets:
+                if not isinstance(target, ast.Subscript):
+                    continue
+                sub_val = target.value
+                is_colors = (
+                    (isinstance(sub_val, ast.Name) and sub_val.id == "colors")
+                    or (
+                        isinstance(sub_val, ast.Attribute)
+                        and sub_val.attr == "colors"
+                        and isinstance(sub_val.value, ast.Name)
+                        and sub_val.value.id == "pyxel"
+                    )
+                )
+                if is_colors:
+                    issues.append(_make_issue(
+                        "warning", child.lineno, child.col_offset,
+                        "anti_pattern.palette_animation",
+                        "pyxel.colors[N] = X inside a loop — palette mutation per frame is expensive; prefer pal() for per-draw remapping",
+                    ))
+    return issues
+
+
+def _detect_cls_missing(tree: ast.AST) -> list[dict[str, Any]]:
+    """draw() contains a pixel-emitting API call before any pyxel.cls() call.
+
+    Traverses each `draw` method's body in order. Flags the method if a
+    pixel-emitting call (blt, bltm, pset, line, rect, rectb, circ, circb,
+    tri, trib, text) appears before the first cls() call.
+
+    Permitted before cls(): assignments, conditional return, pal/dither calls,
+    and any other non-pixel-emitting statements.
+
+    Note: helper-method inlining (one-level deep) is not implemented in v0.9.3.
+    Only direct pixel-emitting calls in the draw body are checked.
+    """
+    issues: list[dict[str, Any]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef) or node.name != "draw":
+            continue
+        _check_draw_body(node, issues)
+    return issues
+
+
+def _check_draw_body(func_node: ast.FunctionDef, issues: list[dict[str, Any]]) -> None:
+    """Scan draw() body statements in order; flag the first pixel-emitting call
+    that appears before any cls() call.
+    """
+    for stmt in func_node.body:
+        # Walk this single statement (excluding nested scopes) to find pyxel calls
+        for child in _walk_or_single(stmt):
+            if not isinstance(child, ast.Call):
+                continue
+            func = child.func
+            if not (
+                isinstance(func, ast.Attribute)
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "pyxel"
+            ):
+                continue
+            api = func.attr
+            if api == "cls":
+                # cls() found — everything from here is fine
+                return
+            if api in _PIXEL_EMIT_APIS:
+                issues.append(_make_issue(
+                    "warning", child.lineno, child.col_offset,
+                    "anti_pattern.cls_missing",
+                    f"pyxel.{api}() called before pyxel.cls() in draw() — screen will accumulate ghost trails",
+                ))
+                return  # report once per draw()
+
+
+def _walk_or_single(node: ast.AST):
+    """Yield node and all descendants, excluding nested scopes."""
+    yield node
+    if not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        yield from _walk_excluding_scopes(node)
+
+
+def _detect_degree_radian_mix(tree: ast.AST) -> list[dict[str, Any]]:
+    """math.sin/cos and pyxel.sin/cos used in the same module.
+
+    math trig functions take radians; pyxel trig functions take degrees.
+    Mixing them is a silent numerical bug. Both sets of call sites are flagged
+    when co-occurrence is detected.
+    """
+    _MATH_TRIG = frozenset(["sin", "cos", "tan", "asin", "acos", "atan", "atan2"])
+    _PYXEL_TRIG = frozenset(["sin", "cos"])
+
+    math_calls: list[ast.Call] = []
+    pyxel_calls: list[ast.Call] = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not isinstance(func, ast.Attribute):
+            continue
+        if (
+            isinstance(func.value, ast.Name)
+            and func.value.id == "math"
+            and func.attr in _MATH_TRIG
+        ):
+            math_calls.append(node)
+        elif (
+            isinstance(func.value, ast.Name)
+            and func.value.id == "pyxel"
+            and func.attr in _PYXEL_TRIG
+        ):
+            pyxel_calls.append(node)
+
+    if not (math_calls and pyxel_calls):
+        return []
+
+    issues: list[dict[str, Any]] = []
+    for call in math_calls:
+        issues.append(_make_issue(
+            "warning", call.lineno, call.col_offset,
+            "anti_pattern.degree_radian_mix",
+            f"math.{call.func.attr}() takes radians but pyxel trig takes degrees — mixing causes silent numerical errors",
+        ))
+    for call in pyxel_calls:
+        issues.append(_make_issue(
+            "warning", call.lineno, call.col_offset,
+            "anti_pattern.degree_radian_mix",
+            f"pyxel.{call.func.attr}() takes degrees but math trig takes radians — mixing causes silent numerical errors",
+        ))
+    return issues
+
+
+# Registry of all AST-based detectors; run() iterates this list.
+_DETECTORS = [
+    _detect_missing_colkey,
+    _detect_update_in_draw,
+    _detect_tilemap_zero_zero,
+    _detect_assets_in_update,
+    _detect_iter_modify,
+    _detect_btn_one_shot,
+    _detect_palette_animation,
+    _detect_cls_missing,
+    _detect_degree_radian_mix,
+]
 
 
 def run(payload: dict[str, Any]) -> dict[str, Any]:
@@ -146,15 +485,13 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         }
     issues: list[dict[str, Any]] = []
 
-    syntax_issues = _detect_syntax(source)
+    syntax_issues, tree = _detect_syntax(source)
     if syntax_issues:
         # Skip AST-based detectors when syntax is broken.
         issues.extend(syntax_issues)
     else:
-        tree = ast.parse(source)
-        issues.extend(_detect_missing_colkey(tree))
-        issues.extend(_detect_update_in_draw(tree))
-        issues.extend(_detect_tilemap_zero_zero(tree))
+        for detector in _DETECTORS:
+            issues.extend(detector(tree))
 
     issues.sort(key=lambda i: (i["line"], _SEVERITY_ORDER.get(i["severity"], 99)))
     has_errors = any(i["severity"] == "error" for i in issues)
