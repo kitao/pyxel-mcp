@@ -77,3 +77,15 @@ def test_negative_random_seed_is_validation_error():
     result = run_tool({"script": str(SCRIPTS / "minimal.py"), "frames": 1, "random_seed": -1})
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
+
+
+def test_timeout_default_is_10():
+    """Default timeout should be 10 (informational only — enforcement is at server)."""
+    result = run_tool({"script": str(SCRIPTS / "minimal.py"), "frames": 1})
+    assert result["exit_status"] == "ok"
+
+
+def test_timeout_must_be_positive():
+    result = run_tool({"script": str(SCRIPTS / "minimal.py"), "frames": 1, "timeout": 0})
+    assert result["exit_status"] == "invalid"
+    assert "timeout" in result["errors"][0]["message"].lower()

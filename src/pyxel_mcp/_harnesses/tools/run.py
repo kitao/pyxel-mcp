@@ -53,6 +53,11 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
     if random_seed is not None and (not isinstance(random_seed, int) or random_seed < 0):
         raise _ValidationFailed(make_validation_error("`random_seed` must be non-negative int"))
 
+    timeout = payload.get("timeout", 10)
+    if not isinstance(timeout, int) or timeout < 1:
+        raise _ValidationFailed(make_validation_error("`timeout` must be int >= 1"))
+    # timeout is informational at this layer; server enforces wall-clock kill.
+
     return path, frames, random_seed
 
 
