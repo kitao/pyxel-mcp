@@ -6,7 +6,7 @@ returns the full set, not just a template.
 
 import os
 
-from pyxel_mcp._common.pyxel_env import pyxel_dir
+from pyxel_mcp._resources._pyxel_env import pyxel_dir
 
 
 def _examples_dir():

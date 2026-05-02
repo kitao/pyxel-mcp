@@ -381,10 +381,16 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
 
             if not errors:
                 import pyxel
+                import random as _random
 
-                # Phase 2: pre-loop checkpoint — seed RNG if requested
+                # Phase 2: pre-loop checkpoint — seed RNG if requested.
+                # Seed BOTH Pyxel's internal RNG (used by pyxel.rndi/rndf etc.)
+                # and Python's stdlib random — user scripts often reach for
+                # random.randint / random.choice. Without seeding the latter,
+                # spawn timing and particle scatter drift between attempts.
                 if random_seed is not None:
                     pyxel.rseed(random_seed)
+                    _random.seed(random_seed)
                     seeded = True
 
                 # Phase 3: drive the update/draw loop

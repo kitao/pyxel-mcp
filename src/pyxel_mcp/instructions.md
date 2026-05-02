@@ -9,7 +9,7 @@ leak between calls.
 
 ## Tools at a glance
 
-**`run(script, frames, inputs=[], snapshots=[], random_seed=None, stall_detection=False, timeout=10)`**
+**`run(script, frames, inputs=[], snapshots=[], random_seed=None, timeout=10)`**
 Drive the script through `frames` game frames. Collects snapshots
 (`screen_image`, `screen_grid`, `state`, `layout`, `video`) and console
 assertions. Returns `exit_status`, `snapshots`, `assertions`, and `errors`.

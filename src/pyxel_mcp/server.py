@@ -8,6 +8,8 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
+from pyxel_mcp._resources import register_resources
+
 
 # Read instructions if present; placeholder if not yet rewritten (Task 9.2 will).
 _INSTRUCTIONS_PATH = Path(__file__).parent / "instructions.md"
@@ -17,12 +19,7 @@ except FileNotFoundError:
     _INSTRUCTIONS = "pyxel-mcp 0.9.3 — instructions pending."
 
 mcp = FastMCP(name="pyxel", instructions=_INSTRUCTIONS)
-
-
-@mcp.resource("pyxel://run-snapshots-schema")
-def run_snapshots_schema() -> str:
-    """Full snapshot schema reference for the run tool's snapshots parameter."""
-    return (Path(__file__).parent / "_resources" / "run-snapshots-schema.md").read_text()
+register_resources(mcp)
 
 
 def _dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> dict[str, Any]:
@@ -63,14 +60,31 @@ def run(
     inputs: list[dict] | None = None,
     snapshots: list[dict] | None = None,
     random_seed: int | None = None,
-    stall_detection: bool = False,
     timeout: int = 10,
 ) -> dict:
-    """Drive the script through `frames` game frames; collect snapshots + assertions."""
+    """Drive the script through `frames` headless Pyxel frames, applying
+    scheduled `inputs` and collecting `snapshots`.
+
+    Snapshot kinds (see `pyxel://run-snapshots-schema` for full grammar):
+    - `{"frame": F, "kind": "screen_image", "output": "out.png", "scale": 1}`
+    - `{"frame": F, "kind": "screen_grid", "bbox": [x, y, w, h]}` — palette idx 2D array
+    - `{"frame": F, "kind": "state", "attrs": ["player.x", "scene"]}` — dotted-path App attrs
+    - `{"frame": F, "kind": "layout"}` — text/region balance metrics
+    - `{"kind": "video", "start_frame": A, "end_frame": B, "fps": 30, "output": "clip.gif"}`
+    Multi-frame: `{"frames": [10, 20, 30]}` or `{"frames": "10..50:5"}` plus `output_pattern`
+    with the `{frame}` token for screen_image batches.
+
+    Inputs schedule: list of `{"frame": F, "buttons": ["KEY_SPACE"], "axes": {...}, "mouse_pos": [x, y]}`.
+    Held-until-next-row semantics; `"buttons": []` releases all.
+
+    `random_seed` (non-negative int) seeds both `pyxel.rseed` and Python's stdlib
+    random at the pre-loop checkpoint for deterministic replays. `timeout` is the
+    wall-clock cap (seconds) on the run subprocess.
+    """
     payload = {
         "script": script, "frames": frames,
         "inputs": inputs or [], "snapshots": snapshots or [],
-        "random_seed": random_seed, "stall_detection": stall_detection,
+        "random_seed": random_seed,
         "timeout": timeout,
     }
     return _dispatch("run", payload, timeout=timeout + 5)

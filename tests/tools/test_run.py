@@ -21,6 +21,27 @@ def test_random_seed_default_is_unseeded():
     assert result["seeded"] is False
 
 
+def test_random_seed_seeds_python_stdlib_random():
+    """random_seed must seed Python's stdlib random module — user scripts
+    routinely call random.randint / random.choice for spawn timing and
+    particle scatter. Without seeding stdlib random, two runs with the
+    same random_seed would diverge.
+    """
+    args = {
+        "script": str(SCRIPTS / "python_random_user.py"),
+        "frames": 5,
+        "random_seed": 42,
+        "snapshots": [{"frame": 4, "kind": "state", "attrs": ["samples"]}],
+    }
+    r1 = run_tool(args)
+    r2 = run_tool(args)
+    assert r1["exit_status"] == "ok" and r2["exit_status"] == "ok"
+    v1 = r1["snapshots"][0]["values"]["samples"]
+    v2 = r2["snapshots"][0]["values"]["samples"]
+    assert v1 == v2, f"stdlib random not seeded: run-1 {v1} != run-2 {v2}"
+    assert len(v1) == 5
+
+
 def test_frames_zero_is_validation_error():
     result = run_tool({"script": str(SCRIPTS / "minimal.py"), "frames": 0})
     assert result["exit_status"] == "invalid"

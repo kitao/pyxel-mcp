@@ -1,6 +1,26 @@
 """Pyxel default palette as a markdown reference resource."""
 
-from pyxel_mcp._common.palette import PALETTE
+# Canonical Pyxel default palette: idx → (name, RGB).
+# RGB values match `pyxel.colors` at runtime (Pyxel 2.9.4); names follow the
+# common-use vocabulary used elsewhere in pyxel-mcp instructions/analysis.
+PALETTE: dict[int, tuple[str, tuple[int, int, int]]] = {
+    0: ("black", (0, 0, 0)),
+    1: ("navy", (43, 51, 95)),
+    2: ("purple", (126, 32, 114)),
+    3: ("green", (25, 149, 156)),
+    4: ("brown", (139, 72, 82)),
+    5: ("darkblue", (57, 92, 152)),
+    6: ("lightblue", (169, 193, 255)),
+    7: ("white", (238, 238, 238)),
+    8: ("red", (212, 24, 108)),
+    9: ("orange", (211, 132, 65)),
+    10: ("yellow", (233, 195, 91)),
+    11: ("lightgreen", (112, 198, 169)),
+    12: ("cyan", (118, 150, 222)),
+    13: ("lavender", (163, 163, 163)),
+    14: ("pink", (255, 151, 152)),
+    15: ("peach", (237, 199, 176)),
+}
 
 # Common-use hints — informed by 142-game analysis (see instructions.md).
 _USE_HINTS = {

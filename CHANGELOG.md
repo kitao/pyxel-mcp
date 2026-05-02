@@ -22,6 +22,10 @@
 - Add Python 3.14 classifier
 - Override Pyxel internal fps in headless harness for fast-forward runs
 - Filter inspect_palette contrast warnings to co-located pixel pairs
+- Restore _resources registration: 7 URIs (api-reference, user-guide, mml-commands, pyxres-format, palette/default, examples/<name>, run-snapshots-schema) all live
+- Seed Python stdlib random in addition to pyxel.rseed for full run determinism
+- Remove phantom `stall_detection` parameter (was never wired to harness)
+- Expand `run` docstring with inline snapshot/input grammar (was 1 line)
 
 ## 0.9.2
 
