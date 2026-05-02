@@ -9,9 +9,8 @@ import wave
 from pathlib import Path
 from typing import Any
 
-from pyxel_mcp._harnesses._common.error_capture import make_validation_error, make_error, ErrorPhase
-from pyxel_mcp._harnesses._common.pyxel_patcher import headless_pyxel, RunNotCalledError
-from pyxel_mcp._harnesses._common.script_loader import resolve_script_path, load_script_module
+from pyxel_mcp._harnesses._common.error_capture import make_validation_error
+from pyxel_mcp._harnesses._common.preloop import PreloopFailed, run_to_preloop
 
 # Note name lookup table (C0 = MIDI 0 in Pyxel)
 _NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -25,6 +24,7 @@ _EFFECT_NAMES = {0: "n", 1: "s", 2: "v", 3: "f"}
 
 def _empty(error: dict) -> dict:
     return {
+        "ok": False,
         "path": None,
         "duration_seconds": 0.0,
         "sample_rate": 0,
@@ -138,11 +138,12 @@ def _validate_target(target: Any) -> tuple[str | None, int | None, dict | None]:
 
 
 def run(payload: dict[str, Any]) -> dict[str, Any]:
-    # --- Validate basic fields ---
-    script = payload.get("script")
-    if not isinstance(script, str):
-        return _empty(make_validation_error("missing or non-str `script`"))
+    """Render a sound or music slot to WAV at the pre-loop checkpoint.
 
+    Result includes `ok: bool` — True iff `len(errors) == 0`. Empty-slot
+    warnings (e.g., "sound slot 1 is empty") do not affect `ok`.
+    """
+    # --- Validate basic fields (script-independent shape checks happen first) ---
     target = payload.get("target")
     kind, slot, target_error = _validate_target(target)
     if target_error is not None:
@@ -152,90 +153,81 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(output_path, str):
         return _empty(make_validation_error("missing or non-str `output_path`"))
 
-    try:
-        path = resolve_script_path(script)
-    except FileNotFoundError as e:
-        return _empty(make_validation_error(str(e), path=script))
-
     # --- Run script to pre-loop checkpoint ---
-    with headless_pyxel() as state:
-        try:
-            load_script_module(path)
-            state.require_run_called()
-        except RunNotCalledError as e:
-            return _empty(make_error(ErrorPhase.SCRIPT_IMPORT, str(e)))
-        except Exception as e:
-            return _empty(make_error(ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=True))
+    try:
+        with run_to_preloop(payload, empty_factory=_empty):
+            import pyxel
 
-        import pyxel
+            # --- Validate slot index range ---
+            if kind == "sound":
+                if slot >= len(pyxel.sounds):
+                    return _empty(make_validation_error(
+                        f"sound slot {slot} out of range [0, {len(pyxel.sounds)})"
+                    ))
+                audio_obj = pyxel.sounds[slot]
+            else:  # music
+                if slot >= len(pyxel.musics):
+                    return _empty(make_validation_error(
+                        f"music slot {slot} out of range [0, {len(pyxel.musics)})"
+                    ))
+                audio_obj = pyxel.musics[slot]
 
-        # --- Validate slot index range ---
-        if kind == "sound":
-            if slot >= len(pyxel.sounds):
-                return _empty(make_validation_error(
-                    f"sound slot {slot} out of range [0, {len(pyxel.sounds)})"
-                ))
-            audio_obj = pyxel.sounds[slot]
-        else:  # music
-            if slot >= len(pyxel.musics):
-                return _empty(make_validation_error(
-                    f"music slot {slot} out of range [0, {len(pyxel.musics)})"
-                ))
-            audio_obj = pyxel.musics[slot]
+            # --- Detect empty slot ---
+            warnings: list[str] = []
+            is_empty_slot = False
 
-        # --- Detect empty slot ---
-        warnings: list[str] = []
-        is_empty_slot = False
-
-        if kind == "sound":
-            notes_raw = list(audio_obj.notes)
-            if not notes_raw or all(n < 0 for n in notes_raw):
-                is_empty_slot = True
-                warnings.append(f"sound slot {slot} is empty / not populated")
-        else:
-            # Music: check if all constituent channel lists are empty
-            seqs = audio_obj.seqs if hasattr(audio_obj, "seqs") else getattr(audio_obj, "snds_list", [])
-            has_content = any(len(list(ch)) > 0 for ch in seqs)
-            if not has_content:
-                is_empty_slot = True
-                warnings.append(f"music slot {slot} is empty / not populated")
-
-        # --- Determine duration and write WAV ---
-        if kind == "sound":
-            if hasattr(audio_obj, "total_sec"):
-                duration_hint = audio_obj.total_sec()
-                if duration_hint <= 0:
-                    duration_hint = 1.0  # fallback for empty slot
+            if kind == "sound":
+                notes_raw = list(audio_obj.notes)
+                if not notes_raw or all(n < 0 for n in notes_raw):
+                    is_empty_slot = True
+                    warnings.append(f"sound slot {slot} is empty / not populated")
             else:
-                # Approximate: len(notes) * speed / sample_rate
-                n_notes = max(len(list(audio_obj.notes)), 1)
-                duration_hint = n_notes * audio_obj.speed / 22050
-        else:
-            duration_hint = 10.0  # conservative default for music
+                # Music: check if all constituent channel lists are empty
+                seqs = audio_obj.seqs if hasattr(audio_obj, "seqs") else getattr(audio_obj, "snds_list", [])
+                has_content = any(len(list(ch)) > 0 for ch in seqs)
+                if not has_content:
+                    is_empty_slot = True
+                    warnings.append(f"music slot {slot} is empty / not populated")
 
-        out_path = str(Path(output_path).resolve())
-        audio_obj.save(out_path, duration_hint)
+            # --- Determine duration and write WAV ---
+            if kind == "sound":
+                if hasattr(audio_obj, "total_sec"):
+                    duration_hint = audio_obj.total_sec()
+                    if duration_hint <= 0:
+                        duration_hint = 1.0  # fallback for empty slot
+                else:
+                    # Approximate: len(notes) * speed / sample_rate
+                    n_notes = max(len(list(audio_obj.notes)), 1)
+                    duration_hint = n_notes * audio_obj.speed / 22050
+            else:
+                duration_hint = 10.0  # conservative default for music
 
-        # --- Read WAV metadata ---
-        sample_rate, channels, duration_seconds, peak_amplitude = _read_wav_metadata(out_path)
+            out_path = str(Path(output_path).resolve())
+            audio_obj.save(out_path, duration_hint)
 
-        # --- Build notes list (sound only) ---
-        if kind == "sound" and not is_empty_slot:
-            notes = _build_notes(audio_obj)
-        else:
-            notes = []
+            # --- Read WAV metadata ---
+            sample_rate, channels, duration_seconds, peak_amplitude = _read_wav_metadata(out_path)
 
-        # Empty-slot override
-        if is_empty_slot:
-            peak_amplitude = 0.0
+            # --- Build notes list (sound only) ---
+            if kind == "sound" and not is_empty_slot:
+                notes = _build_notes(audio_obj)
+            else:
+                notes = []
 
-        return {
-            "path": out_path,
-            "duration_seconds": duration_seconds,
-            "sample_rate": sample_rate,
-            "channels": channels,
-            "peak_amplitude": peak_amplitude,
-            "notes": notes,
-            "warnings": warnings,
-            "errors": [],
-        }
+            # Empty-slot override
+            if is_empty_slot:
+                peak_amplitude = 0.0
+
+            return {
+                "ok": True,
+                "path": out_path,
+                "duration_seconds": duration_seconds,
+                "sample_rate": sample_rate,
+                "channels": channels,
+                "peak_amplitude": peak_amplitude,
+                "notes": notes,
+                "warnings": warnings,
+                "errors": [],
+            }
+    except PreloopFailed as f:
+        return f.result

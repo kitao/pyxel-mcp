@@ -468,7 +468,11 @@ _DETECTORS = [
 
 
 def run(payload: dict[str, Any]) -> dict[str, Any]:
-    """Entry point called by main.py dispatch loop."""
+    """Static analysis on script source — entry point called by dispatch loop.
+
+    Result includes `ok: bool` — True iff zero `error`-severity issues AND
+    `len(errors) == 0`. Warning / info severity issues do not affect `ok`.
+    """
     script = payload.get("script")
     if not isinstance(script, str):
         return {
@@ -519,5 +523,5 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     issues = deduped
 
     issues.sort(key=lambda i: (i["line"], _SEVERITY_ORDER.get(i["severity"], 99)))
-    has_errors = any(i["severity"] == "error" for i in issues)
-    return {"ok": not has_errors, "issues": issues, "errors": []}
+    has_error_issues = any(i["severity"] == "error" for i in issues)
+    return {"ok": not has_error_issues, "issues": issues, "errors": []}

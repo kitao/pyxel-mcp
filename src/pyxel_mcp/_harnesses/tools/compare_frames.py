@@ -15,6 +15,7 @@ from pyxel_mcp._harnesses._common.error_capture import make_validation_error
 
 def _error_result(error: dict) -> dict:
     return {
+        "ok": False,
         "identical": False,
         "size_match": False,
         "size_a": None,
@@ -29,6 +30,13 @@ def _error_result(error: dict) -> dict:
 
 
 def run(payload: dict[str, Any]) -> dict[str, Any]:
+    """Pixel-wise diff between two PNG paths.
+
+    Result includes `ok: bool` — True iff `len(errors) == 0`. Mismatched
+    sizes (`size_match: False`) and pixel differences (`identical: False`)
+    are informational and do not affect `ok` — agents inspect those fields
+    explicitly.
+    """
     a = payload.get("frame_a")
     b = payload.get("frame_b")
 
@@ -58,6 +66,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
 
     if img_a.size != img_b.size:
         return {
+            "ok": True,
             "identical": False,
             "size_match": False,
             "size_a": size_a,
@@ -81,6 +90,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
 
     if changed_pixels == 0:
         return {
+            "ok": True,
             "identical": True,
             "size_match": True,
             "size_a": size_a,
@@ -105,6 +115,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
     return {
+        "ok": True,
         "identical": False,
         "size_match": True,
         "size_a": size_a,

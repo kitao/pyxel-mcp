@@ -42,6 +42,8 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     report it through the `errors` channel rather than letting the exception
     bubble to main.py's catch-all (which would mislabel the phase as
     `script_import` — pyxel_info has no script context).
+
+    Result includes `ok: bool` — True iff `len(errors) == 0`.
     """
     errors: list[dict[str, Any]] = []
     try:
@@ -52,9 +54,15 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         examples = []
         errors.append(make_validation_error(f"pyxel module import failed: {e}"))
 
+    # Resolve versions eagerly — _safe_version may append to `errors`, so compute
+    # `ok` after both calls have completed.
+    pyxel_mcp_version = _safe_version("pyxel-mcp", errors)
+    pyxel_version = _safe_version("pyxel", errors)
+
     return {
-        "pyxel_mcp_version": _safe_version("pyxel-mcp", errors),
-        "pyxel_version": _safe_version("pyxel", errors),
+        "ok": len(errors) == 0,
+        "pyxel_mcp_version": pyxel_mcp_version,
+        "pyxel_version": pyxel_version,
         "python_version": sys.version.split()[0],
         "stubs_path": stubs,
         "examples": examples,

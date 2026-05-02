@@ -34,7 +34,9 @@ class _ValidationFailed(Exception):
 
 
 def _empty_result(*, exit_status: str = "ok", errors: list | None = None) -> dict:
+    errs = errors or []
     return {
+        "ok": _is_ok(exit_status, errs),
         "snapshots": [],
         "assertions": [],
         "exit_status": exit_status,
@@ -42,8 +44,18 @@ def _empty_result(*, exit_status: str = "ok", errors: list | None = None) -> dic
         "elapsed_seconds": 0.0,
         "log": "",
         "seeded": False,
-        "errors": errors or [],
+        "errors": errs,
     }
+
+
+def _is_ok(exit_status: str, errors: list) -> bool:
+    """run is ok iff no errors AND exit_status reflects a non-failure outcome.
+
+    "stalled" is treated as ok=True because the run completed without crashing —
+    the agent gets diagnostic data (snapshots, log) and can decide whether the
+    stall is acceptable. Crashes / invalid payloads / timeouts are ok=False.
+    """
+    return len(errors) == 0 and exit_status in {"ok", "stalled"}
 
 
 _VALID_SNAPSHOT_KINDS = {"screen_image", "screen_grid", "state", "layout", "video"}
@@ -337,6 +349,10 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     then drives the update/draw loop for the requested number of frames.
     Errors are caught per-phase and reported in the `errors` list rather than
     raised, so callers always receive a well-formed result dict.
+
+    The result includes `ok: bool` — True iff `len(errors) == 0` AND
+    `exit_status in {"ok", "stalled"}` (a stalled run still produces diagnostic
+    data the agent can act on; crashes / invalid / timeouts are False).
     """
     try:
         (
@@ -521,6 +537,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
 
     elapsed = time.monotonic() - started
     return {
+        "ok": _is_ok(exit_status, errors),
         "snapshots": snapshot_results,
         "assertions": _parse_assertions(log_text),
         "exit_status": exit_status,
