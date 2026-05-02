@@ -1,63 +1,59 @@
 # pyxel-mcp
 
-MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for Python. Enables AI to autonomously run, verify, and iterate on retro game programs.
+MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for Python. Gives AI agents the verbs to **run, observe, and verify** Pyxel programs without launching a window — headless, deterministic, gate-able.
 
-## Features
+## Tools (9)
 
-### Run & Capture
+### Dynamic driver
 
-- **`run_and_capture`** — Run a Pyxel script and capture a screenshot after N frames
-- **`capture_frames`** — Capture screenshots at multiple frame points for animation verification
-- **`record_gameplay`** — Record N frames as a GIF for animation/transition verification
-- **`play_and_capture`** — Play a game by sending simulated input and capture screenshots
+- **`run`** — Drive a script through N frames headless. Schedule input events (`set_btn` / `set_btnv` / `set_mouse_pos`) per frame; collect snapshots at chosen frames; parse `ASSERT PASS|FAIL` lines; seed RNG. Snapshot kinds: `screen_image` (PNG), `screen_grid` (palette-index 2D array), `state` (dotted-path attrs of the App instance), `layout` (text/region balance metrics), `video` (GIF/MP4 of a frame range). Multi-frame syntax (`{"frames": [10, 20, 30]}` or `"10..50:5"`) for cheap N-frame batches.
 
-### Inspect & Debug
+### Static inspectors
 
-- **`validate_script`** — Validate a Pyxel script without running it
-- **`inspect_state`** — Read game object attributes at specific frames for debugging
-- **`inspect_screen`** — Capture screen as a compact color index grid
-- **`compare_frames`** — Compare screenshots at two frames and report pixel differences
+- **`inspect_palette`** — `pyxel.colors` analysis: 3-layer hierarchy (bg/env/interactive), WCAG contrast warnings filtered to **co-located pairs** (only colors actually adjacent in image-bank pixels), used-indices set.
+- **`inspect_image`** — Image-bank region pixel data + identity metrics (`color_count`, `fill_ratio`, `symmetry`).
+- **`inspect_animation`** — Cross-region Jaccard / per-pair diff metrics for paired sprite frames (walk1↔walk2 etc.).
+- **`inspect_tilemap`** — Tilemap usage map + (0,0)-tile trap detection (catches the Pyxel footgun where empty tilemap cells render as whatever sprite happens to be at bank origin).
 
-### Visual Analysis
+### Audit / discovery / audio
 
-- **`inspect_sprite`** — Inspect sprite pixel data from a Pyxel image bank
-- **`inspect_layout`** — Analyze screen layout, text alignment, and visual balance
-- **`inspect_palette`** — Analyze color usage and contrast in a Pyxel screenshot
-- **`inspect_bank`** — Visualize an entire Pyxel image bank as a single screenshot
-- **`inspect_tilemap`** — Inspect tilemap content, tile usage, and layout
-- **`inspect_animation`** — Check sprite sheet consistency across animation frames
+- **`validate`** — Static analysis: syntax + 10 anti-pattern detectors (`cls_missing`, `palette_animation`, `tilemap_zero_zero`, `update_in_draw`, `iter_modify`, …).
+- **`pyxel_info`** — Versions (pyxel-mcp / Pyxel / Python), examples list, resource URIs.
+- **`render_audio`** — Render a `pyxel.sounds[N]` or `pyxel.musics[N]` slot to WAV; return `notes`, `peak_amplitude`, `warnings`.
 
-### Audio
+### Frame analyzer
 
-- **`render_audio`** — Render a Pyxel sound or music to WAV and return waveform analysis
+- **`compare_frames`** — Pixel-wise diff of two PNGs: `identical`, `diff_ratio`, bounding box of changes.
 
-### Resources (Pyxel reference)
+## Resources
 
-In addition to tools, the server exposes Pyxel reference content as MCP Resources:
+- `pyxel://run-snapshots-schema` — Full schema for the `run` tool's `snapshots` parameter (5 kinds × multi-frame syntax). Read once; reuse the patterns.
+- `pyxel://api-reference`, `pyxel://user-guide`, `pyxel://mml-commands`, `pyxres://pyxres-format` — live-fetched official Pyxel docs (24h cache).
+- `pyxel://palette/default` — 16-color default palette table with hex/RGB/use hints.
+- `pyxel://examples/<name>` — Pyxel's bundled example scripts (`02_jump_game`, `09_shooter`, …).
 
-- `pyxel://api-reference`, `pyxel://user-guide`, `pyxel://mml-commands`, `pyxel://pyxres-format` — official Pyxel docs
-- `pyxel://examples/<name>` — official Pyxel examples (e.g. `02_jump_game`)
-- `pyxel://palette/default` — 16-color palette with use hints
+In Claude Code, reference them with `@pyxel:examples/02_jump_game`, `@pyxel:run-snapshots-schema`.
 
-In Claude Code, reference them with `@pyxel:examples/02_jump_game` etc.
+## Why this exists
 
-### Utility
+LLM agents writing Pyxel code without verification produce shortcut games — placeholder rectangles, stalled play loops, missing assets, or scripts that pass syntax checks but render a black screen. `pyxel-mcp` is the verb library that lets an agent **see** what its code does:
 
-- **`pyxel_info`** — Get Pyxel installation info: package location, examples path, and API stubs path
+- **Headless + fast-forward.** A 600-frame run takes < 1 second. The harness overrides Pyxel's internal fps so `flip()` doesn't pace real-time.
+- **Subprocess isolation.** Each tool call is a fresh Python subprocess. No leaked Pyxel state between calls; deterministic with `random_seed=`.
+- **Structured output.** Every tool returns JSON with a consistent error shape; agents can chain calls and predicate on observed values, not on stdout strings.
+- **Pyxel-specific footguns caught structurally.** The (0,0) tilemap trap, draw-without-cls ghost trails, palette animation in update, run-outside-init — all detected by `validate` and `inspect_*` rather than waiting for a screenshot to look wrong.
 
-## Getting Started
+Pair this with [`pyxel-skill`](https://github.com/kitao/pyxel-skill) for end-to-end "make me a Donkey Kong" workflows, or use the verbs standalone for any Pyxel CI/QA pipeline.
 
-Just ask your AI agent (e.g. Claude Code) to create a Pyxel game. The agent will automatically discover and set up pyxel-mcp from the [MCP Registry](https://registry.modelcontextprotocol.io/).
-
-## Manual Installation
-
-1. Install the package:
+## Install
 
 ```bash
 pip install pyxel-mcp
+# or use uvx for ephemeral runs
+uvx pyxel-mcp --version
 ```
 
-2. Register `pyxel-mcp` as an MCP server in your AI agent. For Claude Code, add to your project's `.mcp.json`:
+Register as an MCP server. For Claude Code, add to `.mcp.json`:
 
 ```json
 {
@@ -70,9 +66,11 @@ pip install pyxel-mcp
 }
 ```
 
+Pyxel ≥ 2.9.4 required (the harness depends on `set_btn` / `set_btnv` / `set_mouse_pos` and `screen.save` APIs).
+
 ## MCP Registry
 
-mcp-name: io.github.kitao/pyxel-mcp
+`mcp-name: io.github.kitao/pyxel-mcp`
 
 ## License
 
