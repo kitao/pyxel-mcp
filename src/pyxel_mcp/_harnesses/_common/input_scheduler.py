@@ -30,13 +30,6 @@ class InputScheduler:
         self._held_axes: dict[str, float] = {}
         self._mouse_pos: tuple[int, int] = (0, 0)
         self._next_event_idx = 0
-        # Pre-compute the union of all button names across events. apply_to_pyxel
-        # iterates this set each frame to clear buttons no longer held (Pyxel has
-        # no release-all API). Cached because the set is invariant over the run.
-        self._all_button_names: set[str] = set()
-        for ev in self.events:
-            if "buttons" in ev and ev["buttons"]:
-                self._all_button_names.update(ev["buttons"])
 
     def _validate(self, events: list[InputEvent]) -> None:
         seen_frames: set[int] = set()
