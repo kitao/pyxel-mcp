@@ -441,6 +441,25 @@ def test_output_pattern_unknown_token_validation_error(tmp_path):
     assert result["errors"][0]["phase"] == "validation"
 
 
+# --- Console assertions ---
+
+def test_assertions_parsed():
+    result = run_tool({"script": str(SCRIPTS / "assert_passing.py"), "frames": 5})
+    assert result["exit_status"] == "ok"
+    assert result["errors"] == []
+    assert len(result["assertions"]) == 2
+    a, b = result["assertions"]
+    assert a["passed"] is True and a["name"] == "midpoint_reached"
+    assert b["passed"] is False and b["name"] == "hp_check" and b["message"] == "expected 100, got 50"
+
+
+def test_assertions_in_log_verbatim():
+    result = run_tool({"script": str(SCRIPTS / "assert_passing.py"), "frames": 5})
+    assert result["exit_status"] == "ok"
+    assert result["errors"] == []
+    assert "ASSERT PASS: midpoint_reached" in result["log"]
+
+
 # --- Frame-bounds validation tests ---
 
 def test_snapshot_frame_out_of_bounds_is_validation_error():

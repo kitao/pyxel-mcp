@@ -50,6 +50,25 @@ def _empty_result(*, exit_status: str = "ok", errors: list | None = None) -> dic
 
 _VALID_SNAPSHOT_KINDS = {"screen_image", "screen_grid", "state", "layout", "video"}
 
+ASSERT_RE = re.compile(r"^ASSERT (PASS|FAIL): (\S+)(?:\s*\|\s*(.*))?$", re.MULTILINE)
+
+
+def _parse_assertions(log: str) -> list[dict]:
+    """Parse ASSERT lines from script output into structured assertion dicts.
+
+    Each matching line yields one entry. Lines are retained in log verbatim.
+    frame is always None in v0.9.3 (interleaved capture deferred).
+    """
+    out = []
+    for m in ASSERT_RE.finditer(log):
+        out.append({
+            "name": m.group(2),
+            "passed": m.group(1) == "PASS",
+            "message": m.group(3) or None,
+            "frame": None,
+        })
+    return out
+
 
 def _substitute_output_pattern(pattern: str, frame: int) -> str:
     """Replace {frame} with 5-digit zero-padded integer; reject other tokens.
@@ -423,7 +442,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     elapsed = time.monotonic() - started
     return {
         "snapshots": snapshot_results,
-        "assertions": [],
+        "assertions": _parse_assertions(log_text),
         "exit_status": exit_status,
         "frame_count": frame_count,
         "elapsed_seconds": elapsed,
