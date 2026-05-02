@@ -272,6 +272,52 @@ def test_invalid_snapshot_kind_is_validation_error():
     assert result["errors"][0]["phase"] == "validation"
 
 
+# --- Multi-frame snapshots ---
+
+def test_multi_frame_screen_image(tmp_path):
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 10,
+        "snapshots": [{
+            "frames": "0:10:2",
+            "kind": "screen_image",
+            "output_pattern": str(tmp_path / "f-{frame}.png"),
+        }],
+    })
+    assert result["exit_status"] == "ok"
+    assert result["errors"] == []
+    assert len(result["snapshots"]) == 5
+    for r in result["snapshots"]:
+        assert (tmp_path / f"f-{r['frame']:05d}.png").exists()
+
+
+def test_multi_frame_state():
+    result = run_tool({
+        "script": str(SCRIPTS / "stateful_app.py"),
+        "frames": 5,
+        "snapshots": [{"frames": [1, 3], "kind": "state", "attrs": ["counter"]}],
+    })
+    assert result["exit_status"] == "ok"
+    assert result["errors"] == []
+    assert len(result["snapshots"]) == 2
+    assert result["snapshots"][0]["frame"] == 1
+    assert result["snapshots"][1]["frame"] == 3
+
+
+def test_explicit_list_dedupe_warning():
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 10,
+        "snapshots": [{"frames": [3, 1, 3], "kind": "state"}],
+    })
+    assert result["exit_status"] == "ok"
+    assert result["errors"] == []
+    # Dedupe + sort → [1, 3]
+    assert len(result["snapshots"]) == 2
+    # Warning must appear in log
+    assert "sorted" in result["log"].lower()
+
+
 # --- Frame-bounds validation tests ---
 
 def test_snapshot_frame_out_of_bounds_is_validation_error():

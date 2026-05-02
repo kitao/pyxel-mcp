@@ -16,6 +16,7 @@ from pyxel_mcp._harnesses._common.error_capture import (
 )
 from pyxel_mcp._harnesses._common.input_scheduler import InputScheduler, ValidationError
 from pyxel_mcp._harnesses._common.pyxel_patcher import headless_pyxel, RunNotCalledError
+from pyxel_mcp._harnesses._common.range_parser import resolve_frames as _resolve_frames, RangeError
 from pyxel_mcp._harnesses._common.script_loader import resolve_script_path, load_script_module
 from pyxel_mcp._harnesses._common.snapshot_kinds import (
     screen_image as _si_kind,
@@ -49,8 +50,86 @@ def _empty_result(*, exit_status: str = "ok", errors: list | None = None) -> dic
 _VALID_SNAPSHOT_KINDS = {"screen_image", "screen_grid", "state", "layout", "video"}
 
 
+def _expand_multi_frame_snapshots(
+    snaps: list[dict],
+    total_frames: int,
+) -> tuple[list[dict], list[str]]:
+    """Expand any multi-frame snapshot (using `frames`) into N single-frame dicts.
+
+    Returns (expanded_snaps, pending_warnings).
+    Raises _ValidationFailed if any snapshot has structural errors.
+    """
+    expanded: list[dict] = []
+    warnings: list[str] = []
+
+    for i, snap in enumerate(snaps):
+        has_frame = "frame" in snap
+        has_frames = "frames" in snap
+        has_output = "output" in snap
+        has_pattern = "output_pattern" in snap
+
+        # Mutual exclusivity: frame + frames
+        if has_frame and has_frames:
+            raise _ValidationFailed(make_validation_error(
+                f"`snapshots[{i}]` must not have both `frame` and `frames`"
+            ))
+
+        # Mutual exclusivity: output + output_pattern
+        if has_output and has_pattern:
+            raise _ValidationFailed(make_validation_error(
+                f"`snapshots[{i}]` must not have both `output` and `output_pattern`"
+            ))
+
+        kind = snap.get("kind")
+
+        if not has_frames:
+            # Single-frame snapshot (or video): pass through unchanged.
+            expanded.append(snap)
+            continue
+
+        # Multi-frame snapshot
+        if kind == "video":
+            raise _ValidationFailed(make_validation_error(
+                f"`snapshots[{i}]` video kind does not support `frames`; use `start_frame`/`end_frame`"
+            ))
+
+        # screen_image multi-frame requires output_pattern (not output)
+        if kind == "screen_image":
+            if not has_pattern:
+                raise _ValidationFailed(make_validation_error(
+                    f"`snapshots[{i}]` multi-frame screen_image requires `output_pattern`"
+                ))
+            if "{frame}" not in snap["output_pattern"]:
+                raise _ValidationFailed(make_validation_error(
+                    f"`snapshots[{i}].output_pattern` must contain {{frame}} token"
+                ))
+
+        # Resolve frames list
+        try:
+            resolved, was_normalized = _resolve_frames(snap["frames"], total_frames=total_frames)
+        except RangeError as e:
+            raise _ValidationFailed(make_validation_error(
+                f"`snapshots[{i}].frames` error: {e}"
+            ))
+
+        if was_normalized:
+            warnings.append(
+                f"snapshots[{i}]: frames list was sorted and/or deduplicated"
+            )
+
+        # Build one derived snapshot per resolved frame
+        for f in resolved:
+            derived = {k: v for k, v in snap.items() if k not in ("frames", "output_pattern")}
+            derived["frame"] = f
+            if kind == "screen_image":
+                derived["output"] = snap["output_pattern"].replace("{frame}", f"{f:05d}")
+            expanded.append(derived)
+
+    return expanded, warnings
+
+
 def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
-    """Validate payload and return (script_path, frames, random_seed, snapshots, scheduler).
+    """Validate payload and return (script_path, frames, random_seed, snapshots, scheduler, warnings).
 
     Raises _ValidationFailed with a ToolError dict on any invalid input.
     """
@@ -76,10 +155,12 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
         raise _ValidationFailed(make_validation_error("`timeout` must be int >= 1"))
     # timeout is informational at this layer; server enforces wall-clock kill.
 
-    snapshots = payload.get("snapshots", [])
-    if not isinstance(snapshots, list):
+    raw_snapshots = payload.get("snapshots", [])
+    if not isinstance(raw_snapshots, list):
         raise _ValidationFailed(make_validation_error("`snapshots` must be a list"))
-    for i, snap in enumerate(snapshots):
+
+    # First pass: shape validation (kind, video range/extension)
+    for i, snap in enumerate(raw_snapshots):
         if not isinstance(snap, dict):
             raise _ValidationFailed(make_validation_error(
                 f"`snapshots[{i}]` must be a dict"
@@ -112,8 +193,14 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
                 raise _ValidationFailed(make_validation_error(
                     f"`snapshots[{i}]` start_frame ({start}) must be < end_frame ({end})"
                 ))
-        else:
-            # Single-frame kinds: validate bounds when `frame` is present.
+
+    # Pre-expansion: resolve `frames` lists into single-frame snapshots
+    snapshots, pending_warnings = _expand_multi_frame_snapshots(raw_snapshots, frames)
+
+    # Second pass: frame-bound validation on expanded single-frame snapshots
+    for i, snap in enumerate(snapshots):
+        kind = snap.get("kind")
+        if kind != "video":
             frame = snap.get("frame")
             if frame is not None:
                 if not isinstance(frame, int) or frame < 0 or frame >= frames:
@@ -129,7 +216,7 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
     except ValidationError as e:
         raise _ValidationFailed(make_validation_error(str(e)))
 
-    return path, frames, random_seed, snapshots, scheduler
+    return path, frames, random_seed, snapshots, scheduler, pending_warnings
 
 
 def _capture_screen_as_pil() -> Image.Image:
@@ -186,7 +273,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     raised, so callers always receive a well-formed result dict.
     """
     try:
-        path, frames, random_seed, snapshots, scheduler = _validate(payload)
+        path, frames, random_seed, snapshots, scheduler, pending_warnings = _validate(payload)
     except _ValidationFailed as vf:
         return _empty_result(exit_status="invalid", errors=[vf.err])
 
@@ -212,6 +299,10 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     log_buf = StringIO()
     with headless_pyxel() as state:
         with contextlib.redirect_stdout(log_buf), contextlib.redirect_stderr(log_buf):
+            # Write any validation warnings collected during pre-expansion
+            for w in pending_warnings:
+                log_buf.write(f"[pyxel-mcp] warning: {w}\n")
+
             # Phase 1: import script (pyxel.run is intercepted by headless_pyxel)
             imported_module = None
             try:
