@@ -59,3 +59,20 @@ def test_axes_normalization_range():
     """Axes must be in [-1.0, 1.0]; out of range -> validation error."""
     with pytest.raises(ValidationError, match="axes value"):
         InputScheduler([{"frame": 0, "axes": {"GAMEPAD1_AXIS_LEFTX": 2.0}}])
+
+
+def test_axes_explicit_empty_resets():
+    """Symmetric to test_buttons_explicit_empty_releases: axes: {} clears all."""
+    sched = InputScheduler([
+        {"frame": 5, "axes": {"GAMEPAD1_AXIS_LEFTX": 1.0}},
+        {"frame": 8, "axes": {}},
+    ])
+    sched.advance_to_frame(8)
+    assert sched.held_axes() == {}
+
+
+def test_rejects_unknown_axis_name():
+    """Symmetric to test_rejects_unknown_button_name."""
+    events = [{"frame": 0, "axes": {"GAMEPAD1_AXIS_NONEXISTENT": 0.5}}]
+    with pytest.raises(ValidationError, match="unknown axis"):
+        InputScheduler(events)

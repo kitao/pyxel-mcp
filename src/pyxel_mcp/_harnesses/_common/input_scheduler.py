@@ -1,6 +1,6 @@
 """Scheduled input application (spec §6.3)."""
 from __future__ import annotations
-from typing import Any, TypedDict
+from typing import TypedDict
 
 
 class ValidationError(ValueError):
@@ -24,6 +24,13 @@ class InputScheduler:
         self._held_axes: dict[str, float] = {}
         self._mouse_pos: tuple[int, int] = (0, 0)
         self._next_event_idx = 0
+        # Pre-compute the union of all button names across events. apply_to_pyxel
+        # iterates this set each frame to clear buttons no longer held (Pyxel has
+        # no release-all API). Cached because the set is invariant over the run.
+        self._all_button_names: set[str] = set()
+        for ev in self.events:
+            if "buttons" in ev and ev["buttons"]:
+                self._all_button_names.update(ev["buttons"])
 
     def _validate(self, events: list[InputEvent]) -> None:
         seen_frames: set[int] = set()
@@ -44,7 +51,7 @@ class InputScheduler:
                 if not isinstance(ev["axes"], dict):
                     raise ValidationError(f"axes must be dict, got {type(ev['axes'])}")
                 for name, value in ev["axes"].items():
-                    self._verify_pyxel_constant(name, "axes")
+                    self._verify_pyxel_constant(name, "axis")
                     if not isinstance(value, (int, float)) or not (-1.0 <= float(value) <= 1.0):
                         raise ValidationError(f"axes value out of [-1.0, 1.0]: {name}={value}")
 
@@ -89,14 +96,7 @@ class InputScheduler:
         """
         import pyxel
 
-        # Collect all button names referenced across all events so we can clear
-        # buttons that are no longer held (Pyxel has no release-all API).
-        all_button_names: set[str] = set()
-        for ev in self.events:
-            if "buttons" in ev and ev["buttons"]:
-                all_button_names.update(ev["buttons"])
-
-        for name in all_button_names:
+        for name in self._all_button_names:
             pyxel.set_btn(getattr(pyxel, name), name in self._held_buttons)
 
         # Axes: scale [-1.0, 1.0] → int range -32768..32767 (Pyxel set_btnv convention).
