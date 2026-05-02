@@ -77,3 +77,29 @@ def test_invalid_index_via_tool():
     from tests.conftest import SCRIPTS
     result = tool_run({"script": str(SCRIPTS / "minimal.py"), "tilemap": 999})
     assert result["errors"][0]["phase"] == "validation"
+
+
+# --- performance regression guard --------------------------------------------
+
+
+def test_analyze_tilemap_full_scan_under_500ms():
+    """Full 256x256 = 65k cell scan must complete fast post-vectorization.
+
+    Pre-fix: nested pget loops over 65k cells; post-fix: numpy ops on
+    data_ptr() snapshots.
+    """
+    import time
+    # Place some content so usage/bbox paths run.
+    for tx in range(0, 32):
+        for ty in range(0, 32):
+            pyxel.tilemaps[0].pset(tx, ty, (tx % 8, ty % 8))
+    try:
+        t0 = time.monotonic()
+        result = analyze_tilemap(tilemap=0)
+        elapsed = time.monotonic() - t0
+        assert elapsed < 0.5, (
+            f"analyze_tilemap full scan took {elapsed*1000:.1f}ms (limit 500ms)"
+        )
+        assert result["bounding_box"] is not None
+    finally:
+        pyxel.tilemaps[0].cls((0, 0))
