@@ -18,7 +18,8 @@ def resolve_frames(
     """Resolve a frames input to a sorted, deduplicated list of frame indices.
 
     Returns (resolved_frames, was_normalized) where `was_normalized` is True if
-    the explicit list required sort/dedup.
+    the explicit list required sort/dedup. Range strings and "all" always
+    return False — they are inherently ordered and unique.
     """
     if isinstance(frames, list):
         if not frames:

@@ -15,18 +15,21 @@ def test_explicit_list_sorted_and_dedup():
 
 # Range strings
 def test_range_string_basic():
-    out, _ = resolve_frames("0:5", total_frames=100)
+    out, normalized = resolve_frames("0:5", total_frames=100)
     assert out == [0, 1, 2, 3, 4]
+    assert normalized is False
 
 
 def test_range_string_with_step():
-    out, _ = resolve_frames("0:10:2", total_frames=100)
+    out, normalized = resolve_frames("0:10:2", total_frames=100)
     assert out == [0, 2, 4, 6, 8]
+    assert normalized is False
 
 
 def test_range_string_all():
-    out, _ = resolve_frames("all", total_frames=5)
+    out, normalized = resolve_frames("all", total_frames=5)
     assert out == [0, 1, 2, 3, 4]
+    assert normalized is False
 
 
 # Invalid input
