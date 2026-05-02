@@ -15,6 +15,17 @@ _PIXEL_EMIT_APIS = frozenset(
     ["blt", "bltm", "pset", "line", "rect", "rectb", "circ", "circb", "tri", "trib", "text"]
 )
 
+# assets_in_update detector
+_ASSET_CONTAINERS = frozenset(["images", "tilemaps"])
+_ASSET_METHODS = frozenset(["set", "load"])
+
+# iter_modify detector — list-mutating method names
+_LIST_MUTATING = frozenset(["append", "remove", "pop", "insert", "clear", "extend"])
+
+# degree_radian_mix detector — trig function names
+_MATH_TRIG = frozenset(["sin", "cos", "tan", "asin", "acos", "atan", "atan2"])
+_PYXEL_TRIG = frozenset(["sin", "cos"])
+
 
 def _make_issue(
     severity: str, line: int, col: int | None, category: str, message: str
@@ -148,9 +159,6 @@ def _detect_assets_in_update(tree: ast.AST) -> list[dict[str, Any]]:
     Asset loading is expensive and should happen in __init__, not the game loop.
     Uses _walk_excluding_scopes to stay in the lexical body of the method.
     """
-    _ASSET_CONTAINERS = frozenset(["images", "tilemaps"])
-    _ASSET_METHODS = frozenset(["set", "load"])
-
     issues: list[dict[str, Any]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef) or node.name not in ("update", "draw"):
@@ -225,9 +233,10 @@ def _detect_iter_modify(tree: ast.AST) -> list[dict[str, Any]]:
     _iter_node_key and are not tracked.
 
     Heuristic: does not follow aliasing (a = lst; for x in a: lst.remove(x)).
+    Uses _walk_excluding_scopes so nested for loops over the same list don't
+    cause duplicate reports, and a nested def inside the loop body doesn't
+    falsely fire (the nested def runs in its own scope, not during iteration).
     """
-    _MUTATING = frozenset(["append", "remove", "pop", "insert", "clear", "extend"])
-
     issues: list[dict[str, Any]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.For):
@@ -235,13 +244,13 @@ def _detect_iter_modify(tree: ast.AST) -> list[dict[str, Any]]:
         list_key = _iter_node_key(node.iter)
         if list_key is None:
             continue
-        for child in ast.walk(node):
+        for child in _walk_excluding_scopes(node):
             if not isinstance(child, ast.Call):
                 continue
             func = child.func
             if not isinstance(func, ast.Attribute):
                 continue
-            if func.attr not in _MUTATING:
+            if func.attr not in _LIST_MUTATING:
                 continue
             receiver_key = _call_receiver_key(child)
             if receiver_key == list_key:
@@ -299,20 +308,25 @@ def _detect_btn_one_shot(tree: ast.AST) -> list[dict[str, Any]]:
 
 
 def _detect_palette_animation(tree: ast.AST) -> list[dict[str, Any]]:
-    """pyxel.colors[N] = X inside a For or While loop body.
+    """pyxel.colors[N] = X (or augmented-assignment) inside a For or While loop body.
 
     Palette mutation per frame inside a loop is a performance trap.
     Uses _walk_excluding_scopes inside the loop body to avoid false positives
-    from nested function definitions.
+    from nested function definitions. Handles AugAssign (`|=`, `^=`, etc.)
+    consistently with _detect_update_in_draw.
     """
     issues: list[dict[str, Any]] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.For, ast.While)):
             continue
         for child in _walk_excluding_scopes(node):
-            if not isinstance(child, ast.Assign):
+            if isinstance(child, ast.Assign):
+                targets = child.targets
+            elif isinstance(child, ast.AugAssign):
+                targets = [child.target]
+            else:
                 continue
-            for target in child.targets:
+            for target in targets:
                 if not isinstance(target, ast.Subscript):
                     continue
                 sub_val = target.value
@@ -398,9 +412,6 @@ def _detect_degree_radian_mix(tree: ast.AST) -> list[dict[str, Any]]:
     Mixing them is a silent numerical bug. Both sets of call sites are flagged
     when co-occurrence is detected.
     """
-    _MATH_TRIG = frozenset(["sin", "cos", "tan", "asin", "acos", "atan", "atan2"])
-    _PYXEL_TRIG = frozenset(["sin", "cos"])
-
     math_calls: list[ast.Call] = []
     pyxel_calls: list[ast.Call] = []
 
@@ -492,6 +503,20 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     else:
         for detector in _DETECTORS:
             issues.extend(detector(tree))
+
+    # Dedup by (line, col, category): nested AST traversals (e.g., a `for` loop
+    # whose body contains another `for` over the same list) can have a detector
+    # report the same site multiple times. Same-site different-category is kept
+    # because two distinct anti-patterns at one location are both signal.
+    seen: set[tuple[int, int | None, str]] = set()
+    deduped: list[dict[str, Any]] = []
+    for issue in issues:
+        key = (issue["line"], issue["col"], issue["category"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(issue)
+    issues = deduped
 
     issues.sort(key=lambda i: (i["line"], _SEVERITY_ORDER.get(i["severity"], 99)))
     has_errors = any(i["severity"] == "error" for i in issues)

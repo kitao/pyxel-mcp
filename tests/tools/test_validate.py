@@ -142,10 +142,83 @@ def test_assets_in_draw_detected():
         src.unlink()
 
 
+def test_assets_in_init_not_flagged():
+    """pyxel.images[N].set inside __init__ is the correct place — must not fire."""
+    src = SCRIPTS / "_assets_in_init_tmp.py"
+    src.write_text(
+        "import pyxel\n"
+        "class App:\n"
+        "    def __init__(self):\n"
+        "        pyxel.init(64,64)\n"
+        "        pyxel.images[0].set(0, 0, ['0000'])\n"
+        "        pyxel.run(self.update, self.draw)\n"
+        "    def update(self): pass\n"
+        "    def draw(self): pyxel.cls(0)\n"
+    )
+    try:
+        result = validate_run({"script": str(src)})
+        cats = [i["category"] for i in result["issues"]]
+        assert "anti_pattern.assets_in_update" not in cats
+    finally:
+        src.unlink()
+
+
 def test_iter_modify_detected():
     result = validate_run({"script": str(SCRIPTS / "anti_iter_modify.py")})
     cats = [i["category"] for i in result["issues"]]
     assert "anti_pattern.iter_modify" in cats
+
+
+def test_iter_modify_different_list_not_flagged():
+    """`for x in lst_a: lst_b.remove(x)` mutates a different list — must not fire."""
+    src = SCRIPTS / "_iter_modify_diff_tmp.py"
+    src.write_text(
+        "import pyxel\n"
+        "class App:\n"
+        "    def __init__(self):\n"
+        "        self.src = [1,2,3]\n"
+        "        self.dst = [1,2,3]\n"
+        "        pyxel.init(64,64)\n"
+        "        pyxel.run(self.update, self.draw)\n"
+        "    def update(self):\n"
+        "        for x in self.src:\n"
+        "            self.dst.remove(x)\n"
+        "    def draw(self): pyxel.cls(0)\n"
+    )
+    try:
+        result = validate_run({"script": str(src)})
+        cats = [i["category"] for i in result["issues"]]
+        assert "anti_pattern.iter_modify" not in cats
+    finally:
+        src.unlink()
+
+
+def test_iter_modify_nested_for_no_duplicate():
+    """Nested for over the same list shouldn't double-report a single mutation."""
+    src = SCRIPTS / "_iter_modify_nested_tmp.py"
+    src.write_text(
+        "import pyxel\n"
+        "class App:\n"
+        "    def __init__(self):\n"
+        "        self.lst = [1,2,3]\n"
+        "        pyxel.init(64,64)\n"
+        "        pyxel.run(self.update, self.draw)\n"
+        "    def update(self):\n"
+        "        for x in self.lst:\n"
+        "            for y in self.lst:\n"
+        "                self.lst.remove(y)\n"
+        "    def draw(self): pyxel.cls(0)\n"
+    )
+    try:
+        result = validate_run({"script": str(src)})
+        iter_issues = [i for i in result["issues"] if i["category"] == "anti_pattern.iter_modify"]
+        # Inner mutation matches both inner and outer for; with _walk_excluding_scopes
+        # we expect each mutation reported once per for that *directly* contains it.
+        # Outer `for x` directly contains inner `for y`, which directly contains the
+        # remove. So only the inner for sees it directly.
+        assert len(iter_issues) == 1
+    finally:
+        src.unlink()
 
 
 def test_iter_range_not_flagged():
