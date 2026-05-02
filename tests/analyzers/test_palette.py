@@ -66,3 +66,93 @@ def test_contrast_warnings_for_close_colors():
     assert isinstance(info["contrast_warnings"], list)
     for w in info["contrast_warnings"]:
         assert w["ratio"] <= 3.0  # rounded value; underlying ratio is < 3.0
+
+
+def test_used_indices_field_present():
+    """analyze_palette returns used_indices as a sorted list of int."""
+    info = analyze_palette()
+    assert "used_indices" in info
+    assert isinstance(info["used_indices"], list)
+    assert all(isinstance(i, int) for i in info["used_indices"])
+    assert info["used_indices"] == sorted(info["used_indices"])
+
+
+def test_contrast_warnings_filtered_to_used_indices():
+    """When only a few indices appear in image banks, contrast_warnings must
+    not reference unused indices."""
+    import pyxel
+    # Write a single 1x1 pixel of color 8 (red) into bank 0 (0,0). Other banks
+    # are all-zero (default). Index 0 is excluded by convention; index 8 is
+    # the only used non-zero index → no pairs → no warnings.
+    pyxel.images[0].pset(0, 0, 8)
+    try:
+        info = analyze_palette()
+        assert info["used_indices"] == [8], (
+            f"expected used={{8}}, got {info['used_indices']}"
+        )
+        assert info["contrast_warnings"] == [], (
+            f"expected no warnings with single used index, got "
+            f"{len(info['contrast_warnings'])}"
+        )
+    finally:
+        pyxel.images[0].pset(0, 0, 0)
+
+
+def test_contrast_warnings_only_among_used_pairs():
+    """With two used indices, at most one pair can be flagged — never pairs
+    that include an unused index."""
+    import pyxel
+    pyxel.images[0].pset(0, 0, 8)   # red
+    pyxel.images[0].pset(1, 0, 14)  # pink (close to red)
+    try:
+        info = analyze_palette()
+        assert sorted(info["used_indices"]) == [8, 14]
+        # All warnings must reference only indices in {8, 14}.
+        for w in info["contrast_warnings"]:
+            assert w["a"] in (8, 14) and w["b"] in (8, 14), (
+                f"warning references unused index: {w}"
+            )
+        # The total warning count is <= C(2, 2) = 1.
+        assert len(info["contrast_warnings"]) <= 1
+    finally:
+        pyxel.images[0].pset(0, 0, 0)
+        pyxel.images[0].pset(1, 0, 0)
+
+
+def test_contrast_warnings_uses_co_located_not_just_used():
+    """Two used indices that never appear adjacent in pixel data must not
+    produce a contrast warning — spec §7.1's "commonly co-located indices"."""
+    import pyxel
+    pyxel.images[0].pset(0, 0, 8)    # red
+    pyxel.images[0].pset(10, 10, 14)  # pink, far away from the red pixel
+    try:
+        info = analyze_palette()
+        assert sorted(info["used_indices"]) == [8, 14]
+        assert info["co_located_pairs"] == [], (
+            f"unexpected co-located pairs: {info['co_located_pairs']}"
+        )
+        assert info["contrast_warnings"] == [], (
+            f"non-adjacent indices were flagged: {info['contrast_warnings']}"
+        )
+    finally:
+        pyxel.images[0].pset(0, 0, 0)
+        pyxel.images[0].pset(10, 10, 0)
+
+
+def test_co_located_pairs_field_is_sorted_tuples():
+    """co_located_pairs is a sorted list of (i, j) with i < j."""
+    import pyxel
+    # Place a 1x2 swatch of (3, 11) — adjacent vertically.
+    pyxel.images[0].pset(5, 5, 3)
+    pyxel.images[0].pset(5, 6, 11)
+    try:
+        info = analyze_palette()
+        pairs = info["co_located_pairs"]
+        assert (3, 11) in pairs or [3, 11] in pairs, (
+            f"expected (3, 11) in pairs, got {pairs}"
+        )
+        for p in pairs:
+            assert p[0] < p[1], f"pair not sorted ascending: {p}"
+    finally:
+        pyxel.images[0].pset(5, 5, 0)
+        pyxel.images[0].pset(5, 6, 0)
