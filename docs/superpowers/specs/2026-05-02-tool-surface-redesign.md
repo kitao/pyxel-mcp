@@ -82,7 +82,7 @@ Dynamic driver (1):
 Static inspectors (4):
   inspect_palette(script)
   inspect_image(script, image, x=0, y=0, w=None, h=None, render_path=None)
-  inspect_animation(script, image, x, y, w, h, frame_count, direction="horizontal")
+  inspect_animation(script, image, x, y, w, h, region_count, direction="horizontal")
   inspect_tilemap(script, tilemap, render_path=None)
 
 Audit / discovery / audio (3):
@@ -296,7 +296,9 @@ run(
 ) -> RunResult
 ```
 
-**Parameter validation:** `frames >= 1` is required (validation error otherwise — for "does the script import without crashing" smoke-testing, use `run(script, frames=1, snapshots=[])` and inspect `exit_status`/`errors`). `timeout >= 1` is required. `random_seed` if supplied must be a non-negative int (Pyxel's `rseed` accepts `int >= 0`).
+**Parameter validation:** `frames >= 1` is required (validation error otherwise). `timeout >= 1` is required. `random_seed` if supplied must be a non-negative int (Pyxel's `rseed` accepts `int >= 0`).
+
+**Smoke testing:** `run(script, frames=N, inputs=[], snapshots=[])` is a valid call. With both `inputs` and `snapshots` empty, the harness imports the script, runs the loop for N frames, and reports `exit_status`, `frame_count`, `log`, and `errors` — no observations beyond execution survival. This is the canonical smoke test (used in place of an explicit "does the script import" tool); pair with `frames=1` for the cheapest variant.
 
 ### 6.2 Frame execution model
 
@@ -353,6 +355,20 @@ The same distinction applies to `axes` (omit / `null` = no change; `{}` = all ax
 
 ### 6.4 Snapshot kinds (5)
 
+**Snapshot type (union):** A `Snapshot` is a tagged union over the 5 kinds defined below. The `kind` field discriminates. Each kind has its own input schema; some support both single-frame and multi-frame variants (see §6.6 for the `frames` selector). Schemas appear in §6.4.1–§6.4.5.
+
+```python
+Snapshot = ScreenImageSnapshot | ScreenGridSnapshot | StateSnapshot | LayoutSnapshot | VideoSnapshot
+```
+
+**SnapshotResult type (union):** The `RunResult.snapshots` list contains `SnapshotResult` entries — also a tagged union over the 5 kinds, with one entry per resolved frame for single-frame snapshots and one entry total for `video`. Each kind's output schema is paired with its input schema in §6.4.1–§6.4.5.
+
+```python
+SnapshotResult = ScreenImageResult | ScreenGridResult | StateResult | LayoutResult | VideoResult
+```
+
+**Multi-frame support summary:** `screen_image`, `screen_grid`, `state`, and `layout` all support both single-frame mode (`frame: int`) and multi-frame mode (`frames: list[int] | str`). `video` has its own range syntax via `start_frame` / `end_frame`. See §6.6 for the multi-frame selector grammar.
+
 **Common frame-bounds validation (applies to all snapshot kinds with a `frame` or `frames` field):** Every resolved frame value MUST satisfy `0 <= frame < frames` (where `frames` is the `run` parameter). For multi-frame snapshots, this applies to every element of the resolved frame list. Out-of-bounds values are a validation error (§5.4 `phase: "validation"`); the harness does NOT silently drop them. The `video` snapshot has its own explicit bounds (`start_frame >= 0, end_frame <= frames, start_frame < end_frame`) per §6.4.5.
 
 #### 6.4.1 `screen_image`
@@ -364,7 +380,7 @@ Input (single-frame form):
 {
     "frame": int,
     "kind": "screen_image",
-    "output": str,          # absolute or run-cwd-relative path; parent dirs auto-created
+    "output": str,          # absolute, or relative to the script's parent directory (per §5.2); parent dirs auto-created
     "scale": int = 1,       # upscaling factor; nearest-neighbor (no smoothing)
 }
 
@@ -389,15 +405,23 @@ Output (per emitted SnapshotResult):
 
 **`output` vs `output_pattern`:** Single-frame snapshots use `output` (a literal path). Multi-frame snapshots (with `frames`) use `output_pattern`, where `{frame}` expands to the 5-digit zero-padded frame number (e.g., `"frames/{frame}.png"` → `"frames/00030.png"`). The two fields are mutually exclusive, matched to single-frame / multi-frame mode respectively. Validation errors otherwise.
 
+**No `bbox` parameter:** Unlike `screen_grid`, `screen_image` always captures the full screen. PNG is intended for visual review by the agent; if a sub-region is needed for analytics, use `screen_grid` with `bbox` (returns palette indices that can be programmatically diffed) or post-process the PNG. Adding `bbox` here would create two ways to get the same crop with different downstream consequences.
+
 #### 6.4.2 `screen_grid`
 
 Captures the rendered screen as an inline 2D array of palette indices.
 
 ```python
-Input: {
+Input (single-frame): {
     "frame": int,
     "kind": "screen_grid",
     "bbox": [x, y, w, h] | None = None,    # default: full screen
+}
+
+Input (multi-frame): {
+    "frames": list[int] | str,    # see §6.6
+    "kind": "screen_grid",
+    "bbox": [x, y, w, h] | None = None,
 }
 
 Output: {
@@ -413,10 +437,16 @@ Output: {
 Reads `App` instance attributes at the end of frame F.
 
 ```python
-Input: {
+Input (single-frame): {
     "frame": int,
     "kind": "state",
     "attrs": list[str] | None,    # dotted paths; null/omitted = default (top-level scalar attrs); [] = explicit empty (returns no attrs)
+}
+
+Input (multi-frame): {
+    "frames": list[int] | str,    # see §6.6
+    "kind": "state",
+    "attrs": list[str] | None,    # same attrs read at each resolved frame
 }
 
 Output: {
@@ -441,8 +471,13 @@ Output: {
 Layout balance analysis at frame F. Same algorithm as the existing `inspect_layout` analysis applied to the captured screen.
 
 ```python
-Input: {
+Input (single-frame): {
     "frame": int,
+    "kind": "layout",
+}
+
+Input (multi-frame): {
+    "frames": list[int] | str,    # see §6.6
     "kind": "layout",
 }
 
@@ -476,8 +511,8 @@ Output: {
     "kind": "video",
     "path": str,             # absolute path of the file actually written
     "format": "gif" | "mp4",
-    "frame_count": int,      # frames actually encoded (see below)
-    "duration_seconds": float,
+    "frames_encoded": int,   # frames actually written into the file (see truncation note below)
+    "duration_seconds": float,  # frames_encoded / fps
     "warnings": list[str],
 }
 ```
@@ -488,7 +523,7 @@ Output: {
 - `.gif`: PIL.Image.save with `append_images=[...]`, `loop=0`, `duration=int(1000/fps)`. No external dependency.
 - `.mp4`: `ffmpeg -framerate {fps} -i {temp_dir}/%05d.png -c:v libx264 -pix_fmt yuv420p -movflags +faststart {output}`. Requires `ffmpeg` on PATH. **If ffmpeg is unavailable, the harness falls back to GIF**: it rewrites `path` to `<output_basename>.gif`, sets `format: "gif"`, and emits a warning `"ffmpeg unavailable; fell back to GIF: <new_path>"`. The agent is expected to handle either format.
 
-**`frame_count` on crash:** This is the number of frames *actually written into the encoded file*. If the run crashed at frame F where `start_frame <= F < end_frame`, only `F - start_frame` frames were accumulated and encoded; `frame_count` reflects that lower number. If `end_frame > actual frames executed`, `frame_count` is also lower than `end_frame - start_frame`. The agent compares `frame_count` against the requested range to detect truncation.
+**Truncation detection:** `frames_encoded` is the number of frames *actually written into the encoded file*. If the run crashed at frame F where `start_frame <= F < end_frame`, only `F - start_frame` frames were accumulated; `frames_encoded` reflects that lower number. If `end_frame > actual frames executed`, `frames_encoded` is also lower than `end_frame - start_frame`. The agent compares `frames_encoded` against the requested range to detect truncation.
 
 **Range validation:** `start_frame >= 0`, `end_frame <= frames`, `start_frame < end_frame`. Violations are validation errors at tool call time.
 
@@ -500,7 +535,7 @@ Output: {
 {
     "snapshots": list[SnapshotResult],    # see ordering rules below
     "assertions": list[Assertion],        # parsed from script stdout; see §6.7
-    "exit_status": "ok" | "crashed" | "timeout" | "stalled",
+    "exit_status": "ok" | "invalid" | "crashed" | "timeout" | "stalled",
     "frame_count": int,                   # actual frames executed (may be less than `frames` on crash)
     "elapsed_seconds": float,             # wall-clock harness time
     "log": str,                           # stdout + stderr from subprocess
@@ -514,16 +549,18 @@ Output: {
 | Condition                                                     | `exit_status` | `errors[].phase`                        | `frame_count`             |
 |---------------------------------------------------------------|---------------|-----------------------------------------|---------------------------|
 | Normal completion (loop reached `frames`)                     | `"ok"`        | empty (warnings allowed)                | == requested `frames`     |
-| Tool input invalid (unknown button, `frames=0`, conflicting fields, out-of-range, etc.) | `"ok"` | `"validation"` (single entry)         | 0                         |
+| Tool input invalid (unknown button, `frames=0`, conflicting fields, out-of-range, etc.) | `"invalid"` | `"validation"` (single entry)        | 0                         |
 | Script raises during import                                   | `"crashed"`   | `"script_import"`                       | 0                         |
 | Asset file missing/malformed during init or pre-loop          | `"crashed"`   | `"asset_load"`                          | 0                         |
 | Other init-time exception (constructor logic, etc.)           | `"crashed"`   | `"build_assets"`                        | 0                         |
 | `update`/`draw` callback raises at frame F                    | `"crashed"`   | `"game_loop"` (with `frame=F`)          | F                         |
 | Snapshot capture itself raises at frame F                     | `"crashed"`   | `"snapshot"` (with `frame=F`)           | F                         |
-| Wall-clock elapsed > `timeout`                                | `"timeout"`   | empty (timeout is meta-level)           | last completed frame      |
+| Wall-clock elapsed > `timeout`                                | `"timeout"`   | empty (timeout is meta-level, not a phase) | last completed frame   |
 | `stall_detection=True` and 60 consecutive frames identical    | `"stalled"`   | empty                                   | last frame in stall window |
 
-`exit_status` is informational; the authoritative failure signal is `len(errors) > 0`. An agent that only checks `errors` gets correct behavior in all cases. `exit_status` exists for quick triage (`"crashed"` vs `"timeout"` vs `"stalled"` distinguishes failure mode without parsing).
+**Triage protocol:** Agents check **both** `exit_status` (failure category) and `errors` (per-phase detail). For `"invalid"` and `"crashed"`, `errors` carries the diagnostic. For `"timeout"` and `"stalled"`, `exit_status` alone signals the failure mode (no per-phase detail applies; the loop didn't crash). For `"ok"`, the run completed and `errors` is empty (warnings may still be present in `RunResult.warnings` or per-snapshot `warnings`). An agent that checks only one signal will miss either timeout/stalled (if checking only `errors`) or diagnostic context (if checking only `exit_status`); both are needed.
+
+`frame_count == 0` covers all cases where the game loop never started (validation, script_import, asset_load, build_assets) — the field is informational rather than a clean "frames executed" count in those cases.
 
 **Snapshot ordering:**
 - The output `snapshots` list preserves the **input order** of the input `snapshots` list.
@@ -540,7 +577,7 @@ Output: {
 
 This list is non-exhaustive and informational; structured failures are reported via `errors` field, not parsed from `log`.
 
-**Stall detection** (`exit_status="stalled"`) is opt-in via `stall_detection: bool = False` parameter (added to `run` signature; not shown above for brevity). When true, the harness computes a hash of `(screen_grid, state)` each frame and sets `stalled` if 60 consecutive frames have identical hash despite scheduled inputs. Default off; agent enables for long-path verification.
+**Stall detection** (`exit_status="stalled"`) is opt-in via the `stall_detection: bool = False` parameter on `run` (§6.1). When true, the harness computes a hash of `(screen_grid, state)` each frame and sets `stalled` if 60 consecutive frames have identical hash despite scheduled inputs. Default off; agent enables for long-path verification.
 
 ### 6.6 Verbose-snapshot reduction
 
@@ -552,6 +589,19 @@ For high-frequency snapshots (e.g., capture every frame's state), specifying 720
 {"frames": "0:720:10", "kind": "state", "attrs": ["player.y"]}                          # every 10
 {"frames": "all", "kind": "screen_grid"}                                                # all frames
 ```
+
+**Range-string grammar:**
+
+```
+range  := "all" | num ":" num [ ":" num ]
+num    := non-negative integer
+```
+
+- `"start:end"` — half-open interval, equivalent to Python's `range(start, end)`. Step defaults to 1.
+- `"start:end:step"` — half-open interval with explicit step ≥ 1.
+- `"all"` — equivalent to `"0:frames"` where `frames` is the `run` parameter.
+- Open-ended forms (`":10"`, `"100:"`, `":"`) are **not supported** (validation error).
+- Constraints: `start >= 0`, `end <= frames` (`run` parameter), `start < end`, `step >= 1`. Violations are validation errors.
 
 **Field consistency between `frame` and `frames` modes:**
 
@@ -604,6 +654,8 @@ def update():
 **Duplicate names:** If the same `name` appears multiple times across frames (e.g., a per-frame assertion in `update()`), each occurrence yields a separate `Assertion` entry. The agent can group by `name` and check `all(a.passed for a in matching)`.
 
 **Non-matching `print` output:** Lines that don't match the assertion regex are unaffected — they go to `RunResult.log` as normal stdout.
+
+**Matching lines are NOT stripped:** `ASSERT PASS/FAIL` lines remain in `RunResult.log` verbatim in addition to being parsed into `assertions`. Both surfaces are agent-readable; the structured form is for predicate-style checks, the log preserves original ordering with surrounding stdout for debugging.
 
 ### 6.8 Example: DK win-path verification in 1 call
 
@@ -706,7 +758,7 @@ Output: {
 }
 ```
 
-**Bank size handling:** Default `w=h=None` means "the actual size of `pyxel.images[image]`". If the user passes explicit `w`/`h` that exceed the bank's bounds, the region is clamped and a warning is emitted. If the bank index does not exist, `errors` contains a `script_import` or `build_assets` phase entry.
+**Bank size handling:** Default `w=h=None` means "the actual size of `pyxel.images[image]`". If the user passes explicit `w`/`h` that exceed the bank's bounds, the region is clamped and a warning is emitted. If the bank index is out of range (`image >= len(pyxel.images)` or `image < 0`), `errors` contains a `validation` phase entry — the script imported successfully and assets loaded; the input parameter is the issue. The same rule applies to `inspect_tilemap` for invalid tilemap indices.
 
 **Large region pixel return:** If `w * h > 4096`, `pixels` is set to `None` to avoid bloating JSON. The agent must use `render_path` to visualize large regions. `color_count`, `fill_ratio`, etc. are still computed.
 
@@ -714,16 +766,16 @@ Output: {
 
 **Symmetry / edge_density:** Computed only when region is small enough to be a sprite (`w * h <= 4096`). For larger regions these analytics are meaningless (whole-bank symmetry is incidental) and are omitted (set to `None`).
 
-### 7.3 `inspect_animation(script, image, x, y, w, h, frame_count, direction)`
+### 7.3 `inspect_animation(script, image, x, y, w, h, region_count, direction)`
 
-Reads `frame_count` adjacent regions starting at `(x, y)`, each `(w, h)`, in the specified direction. Computes cross-frame analytics.
+Reads `region_count` adjacent regions starting at `(x, y)`, each `(w, h)`, in the specified direction. Computes cross-region analytics.
 
 ```python
 Input: {
     "script": str,
     "image": int,
     "x": int, "y": int, "w": int, "h": int,
-    "frame_count": int,                   # >= 2 (see validation below)
+    "region_count": int,                  # >= 2 (see validation below)
     "direction": "horizontal" | "vertical" = "horizontal",
 }
 
@@ -736,7 +788,7 @@ Output: {
     }],
     "palette_consistency": float,    # 0-1, |intersect(region_palettes)| / |union(region_palettes)|
     "silhouette_stability": float,   # 0-1, mean Jaccard of consecutive fill masks
-    "frame_diffs": list[{
+    "region_diffs": list[{
         "from": int, "to": int, "diff_ratio": float,
     }],
     "warnings": list[str],
@@ -744,14 +796,14 @@ Output: {
 }
 ```
 
-**`frame_count >= 2`** is required (validation error otherwise). Single-frame inspection uses `inspect_image`.
+**`region_count >= 2`** is required (validation error otherwise). Single-region inspection uses `inspect_image`.
 
 **Direction:** `"horizontal"` reads regions at `(x, y), (x+w, y), (x+2w, y), ...`. `"vertical"` reads at `(x, y), (x, y+h), (x, y+2h), ...`. Range overflow (any region exceeds bank bounds) is a validation error.
 
-**Cross-frame metric formulas (locked):**
-- `palette_consistency = |∩ frame_i.color_count.keys()| / |∪ frame_i.color_count.keys()|` (Jaccard on palette index sets)
+**Cross-region metric formulas (locked):**
+- `palette_consistency = |∩ region_i.color_count.keys()| / |∪ region_i.color_count.keys()|` (Jaccard on palette index sets)
 - `silhouette_stability = mean(|fill_mask_i ∩ fill_mask_{i+1}| / |fill_mask_i ∪ fill_mask_{i+1}|)` (Jaccard on per-pixel fill masks, averaged across consecutive pairs)
-- `diff_ratio = (sum of pixels where frame_i != frame_{i+1}) / (w * h)` for adjacent pairs
+- `diff_ratio = (sum of pixels where region_i != region_{i+1}) / (w * h)` for adjacent pairs
 
 These are pinned in spec so quality-gate check #4 (paired-frame diff in 5–50%) returns deterministic values regardless of implementation.
 
@@ -775,6 +827,7 @@ Output: {
     "bounding_box": {"x": int, "y": int, "w": int, "h": int} | None,  # non-(0,0) region
     "trap_warning": bool,                # (0,0) tile is non-empty in source bank
     "rendered": str | None,
+    "warnings": list[str],
     "errors": list[ToolError],
 }
 ```
@@ -805,7 +858,7 @@ Output: {
 
 **Issue ordering:** Sorted by `line` ascending, then by severity (`error` > `warning` > `info`).
 
-**Category taxonomy** (closed enum; future categories require spec update):
+**Category taxonomy** (open enum; new categories may be added in patch releases via `anti_pattern.<name>` or via `anti_pattern.other` for low-confidence detectors):
 - `syntax` — Python syntax errors from `ast.parse`
 - `anti_pattern.missing_colkey` — `pyxel.blt(...)` called without `colkey=` keyword
 - `anti_pattern.tilemap_zero_zero` — visible tile placed at source-bank (0, 0)
@@ -814,7 +867,7 @@ Output: {
 - `anti_pattern.iter_modify` — modifying a list while iterating it
 - `anti_pattern.btn_one_shot` — `btn()` used for a one-shot action (should be `btnp()`)
 - `anti_pattern.palette_animation` — palette mutation via index assignment in a loop
-- `anti_pattern.cls_missing` — the first effective drawing operation in `draw()` is not `pyxel.cls(...)`. Variable assignments, conditional `return` statements, and helper-function calls that do not draw are permitted before `cls`. The detector flags `draw()` only if a draw API (`blt`, `bltm`, `pset`, `line`, `rect`, `rectb`, `circ`, `circb`, `tri`, `trib`, `text`, `pal`, `dither`) is invoked before any `cls()` call. Helper methods called from `draw()` are inlined for the analysis up to one level of depth.
+- `anti_pattern.cls_missing` — the first effective pixel-emitting operation in `draw()` is not preceded by `pyxel.cls(...)`. Variable assignments, conditional `return` statements, helper-function calls that do not draw, and state-only APIs (`pal`, `dither`) are permitted before `cls`. The detector flags `draw()` only if a pixel-emitting API (`blt`, `bltm`, `pset`, `line`, `rect`, `rectb`, `circ`, `circb`, `tri`, `trib`, `text`) is invoked before any `cls()` call. Helper methods called from `draw()` are inlined for the analysis up to one level of depth.
 - `anti_pattern.degree_radian_mix` — `math.sin/cos` used alongside `pyxel.sin/cos`
 - `anti_pattern.other` — catch-all for future detectors before they get their own category
 
@@ -841,8 +894,10 @@ Output: {
         "mml_commands": "pyxel://mml-commands",
         "pyxres_format": "pyxel://pyxres-format",
         "default_palette": "pyxel://palette/default",
-        "examples": "pyxel://examples/<name>",   # template URI
+        "examples": "pyxel://examples/<name>",         # template URI
+        "run_snapshots_schema": "pyxel://run-snapshots-schema",
     },
+    "errors": list[ToolError],                        # universal per §5.4
 }
 ```
 
@@ -879,9 +934,12 @@ Output: {
 
 **Live audio capture (during a run) is out of scope for v0.9.3.** Quality-gate check #7 verifies declared sound slots are renderable, not that they triggered at expected frames during gameplay. The latter is reserved for a future `audio_state` snapshot kind in `run`.
 
-### Aside: `target` as union
+**`target` validation rules:**
+- Exactly one of the two keys (`"sound"` or `"music"`) must be present. Both present, neither present, or any other key → validation error.
+- The slot index must be a non-negative integer (`>= 0`). Negative indices or non-int values → validation error.
+- A valid index for a slot that has not been populated by `_build_assets` returns successfully with `peak_amplitude: 0.0`, `notes: []`, and a warning (not an error).
 
-Old API had separate `sound_index` and `music_index` parameters that could in principle both be set, with undefined precedence. The new union enforces exactly one target, eliminating that ambiguity.
+The union form (vs the old separate `sound_index` / `music_index` parameters with undefined precedence when both were set) eliminates ambiguity at the type level.
 
 ## 9. Artifact analyzer
 
@@ -910,6 +968,10 @@ Output: {
 ```
 
 **Size mismatch:** When `size_a != size_b`, the tool returns `size_match: false`, `identical: false`, `changed_pixels: None`, `total_pixels: None`, `ratio: None`, `region: None`, and emits a warning "size mismatch; pixel comparison skipped". Agents MUST check `size_match` (or `identical`) before reading numeric comparison fields, since `None` would break naïve `ratio < threshold` comparisons. The tool does not crop, scale, or center-align — the agent decides whether to treat the mismatch as a regression (probably yes) or as expected (e.g., resolution change between attempts).
+
+**`region: None` cases:** `region` is `None` in two distinct conditions: (a) `identical: true` (no diff bbox to compute), or (b) `size_match: false` (mismatch prevented comparison). The agent disambiguates by reading `identical` and `size_match`.
+
+**Missing input file:** When `frame_a` or `frame_b` does not exist or cannot be decoded as PNG, the tool returns immediately with `errors=[{"phase": "validation", "path": <missing path>, "message": ...}]`. This treats input-file existence as input validation (consistent with §5.4 boundary)—the broader interpretation of `path` for `compare_frames` is "the offending input file path".
 
 ## 10. Migration impact on `pyxel-skill`
 
@@ -955,7 +1017,7 @@ For implementers writing the pyxel-skill stage-file rewrites, this table shows t
 | `inspect_palette`   | `inspect_palette` (signature unchanged; response evolved)                 |
 | `inspect_bank`      | `inspect_image(image, render_path=...)` (full bank, no x/y/w/h)           |
 | `inspect_sprite`    | `inspect_image(image, x, y, w, h)` (region)                               |
-| `inspect_animation` | `inspect_animation` (signature unchanged; output `frames` → `regions`)    |
+| `inspect_animation` | `inspect_animation` (input `frame_count` → `region_count`; output `frames` → `regions`, `frame_diffs` → `region_diffs`) |
 | `inspect_tilemap`   | `inspect_tilemap` (signature unchanged; response evolved)                 |
 | `compare_frames`    | `compare_frames` (signature unchanged; size-mismatch fields → `None`)     |
 | `render_audio`      | `render_audio` (input shape: `target` union; response unchanged)          |
