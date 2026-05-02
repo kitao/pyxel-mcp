@@ -1,6 +1,6 @@
 # Change Log
 
-## 0.9.3
+## 0.10.0
 
 - Redesign tool surface from 16 to 9 tools
 - Add `run` primitive with scheduled inputs and 5 snapshot kinds
