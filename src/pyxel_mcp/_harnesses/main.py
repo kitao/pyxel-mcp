@@ -31,12 +31,14 @@ def _import_tool_modules() -> None:
     from pyxel_mcp._harnesses.tools import (
         validate as _v, pyxel_info as _i, run as _r,
         inspect_palette as _ip, inspect_image as _ii,
+        inspect_animation as _ia,
     )
     register("validate")(_v.run)
     register("pyxel_info")(_i.run)
     register("run")(_r.run)
     register("inspect_palette")(_ip.run)
     register("inspect_image")(_ii.run)
+    register("inspect_animation")(_ia.run)
 
 
 def main(argv: list[str] | None = None) -> int:
