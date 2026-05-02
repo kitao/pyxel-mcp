@@ -2,13 +2,15 @@
 from __future__ import annotations
 from typing import Any
 
+import numpy as np
+
 
 def capture(snapshot: dict[str, Any]) -> dict[str, Any]:
     """Return the screen as a 2D array of palette indices (0-15).
 
-    Reads each pixel via pyxel.screen.pget(x, y).  Optional ``bbox``
-    restricts the region; values extending past the screen edge are clamped
-    and a warning is appended to the result.
+    Reads pyxel.screen.data_ptr() into a numpy array and slices the bbox.
+    Optional ``bbox`` restricts the region; values extending past the
+    screen edge are clamped and a warning is appended to the result.
     """
     import pyxel
     sw, sh = pyxel.width, pyxel.height
@@ -27,10 +29,10 @@ def capture(snapshot: dict[str, Any]) -> dict[str, Any]:
             warnings.append(f"bbox clamped from {bbox} to [{cx}, {cy}, {cw}, {ch}]")
         x, y, w, h = cx, cy, cw, ch
 
-    grid = [
-        [pyxel.screen.pget(px, py) for px in range(x, x + w)]
-        for py in range(y, y + h)
-    ]
+    arr = np.frombuffer(
+        pyxel.screen.data_ptr(), dtype=np.uint8, count=sw * sh,
+    ).reshape((sh, sw))
+    grid = arr[y:y + h, x:x + w].astype(int).tolist()
     return {
         "frame": snapshot["frame"],
         "kind": "screen_grid",

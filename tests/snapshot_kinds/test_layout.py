@@ -50,3 +50,27 @@ def test_center_of_mass_for_centered_blob():
     cx, cy = result["center_of_mass"]
     assert 14 <= cx <= 18
     assert 14 <= cy <= 18
+
+
+# --- performance regression guard --------------------------------------------
+
+
+def test_layout_capture_under_500ms_for_256x256_screen():
+    """Full layout analysis on a 256x256 screen must complete fast.
+
+    Pre-fix: nested pget loops over 65k pixels; post-fix: one np.frombuffer
+    + reshape on screen.data_ptr().
+    """
+    import time
+    import pyxel
+    with headless_pyxel():
+        pyxel.init(256, 256)
+        pyxel.cls(7)
+        pyxel.rect(10, 10, 64, 64, 11)
+        t0 = time.monotonic()
+        result = capture({"frame": 0, "kind": "layout"})
+        elapsed = time.monotonic() - t0
+    assert elapsed < 0.5, (
+        f"layout capture took {elapsed*1000:.1f}ms (limit 500ms)"
+    )
+    assert result["h_balance"] is not None

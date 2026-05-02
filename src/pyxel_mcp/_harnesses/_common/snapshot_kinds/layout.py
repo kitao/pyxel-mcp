@@ -6,12 +6,12 @@ import numpy as np
 
 
 def _read_screen() -> tuple[np.ndarray, int, int]:
+    """Snapshot the screen via data_ptr() (zero-copy, then clone)."""
     import pyxel
     w, h = pyxel.width, pyxel.height
-    arr = np.array(
-        [[pyxel.screen.pget(x, y) for x in range(w)] for y in range(h)],
-        dtype=np.uint8,
-    )
+    arr = np.frombuffer(
+        pyxel.screen.data_ptr(), dtype=np.uint8, count=w * h,
+    ).reshape((h, w)).copy()
     return arr, w, h
 
 
