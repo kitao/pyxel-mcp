@@ -55,7 +55,7 @@ def headless_pyxel():
         # runs in a fresh subprocess — only test processes share module state.
         if pyxel.width > 0:
             return
-        kwargs["headless"] = True
+        kwargs["headless"] = True  # override: headless mode is mandatory in harness context
         saved_init(*args, **kwargs)
 
     pyxel.init = _headless_init
