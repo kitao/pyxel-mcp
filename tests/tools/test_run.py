@@ -113,6 +113,18 @@ def test_log_includes_stderr():
 
 # --- Inputs ---
 
+def _mouse_simulation_supported() -> bool:
+    """Check whether Pyxel exposes either set_mouse_pos or mutable mouse_x/y."""
+    import pyxel
+    if hasattr(pyxel, "set_mouse_pos"):
+        return True
+    try:
+        pyxel.mouse_x = 0  # type: ignore[attr-defined]
+        return True
+    except (AttributeError, TypeError):
+        return False
+
+
 def test_inputs_drive_state():
     result = run_tool({
         "script": str(SCRIPTS / "btn_responder.py"),
@@ -171,6 +183,20 @@ def test_axes_input():
     assert result["exit_status"] == "ok"
     assert result["errors"] == []
     assert result["snapshots"][0]["values"]["last_x_axis"] != 0
+
+
+@pytest.mark.skipif(not _mouse_simulation_supported(), reason="Pyxel version lacks mouse simulation API")
+def test_mouse_pos_input():
+    result = run_tool({
+        "script": str(SCRIPTS / "mouse_responder.py"),
+        "frames": 3,
+        "inputs": [{"frame": 0, "mouse_pos": [42, 17]}],
+        "snapshots": [{"frame": 2, "kind": "state", "attrs": ["last_x", "last_y"]}],
+    })
+    assert result["exit_status"] == "ok"
+    assert result["errors"] == []
+    assert result["snapshots"][0]["values"]["last_x"] == 42
+    assert result["snapshots"][0]["values"]["last_y"] == 17
 
 
 # --- Snapshot integration tests ---
