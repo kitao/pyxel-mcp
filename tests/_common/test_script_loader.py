@@ -22,9 +22,9 @@ def test_resolve_nonexistent_raises(tmp_path):
         resolve_script_path(str(tmp_path / "nope.py"))
 
 
-def test_load_script_chdirs_to_parent(monkeypatch):
+def test_load_script_chdirs_to_parent(monkeypatch, tmp_path):
     """After load, cwd should be the script's parent."""
-    # Use a fixture script with a known parent
+    monkeypatch.chdir(tmp_path)  # restore cwd after test (load_script_module does an unscoped os.chdir)
     abs_path = SCRIPTS / "minimal.py"
     monkeypatch.setattr("pyxel.run", lambda *a, **kw: None)  # neuter pyxel.run for import
     monkeypatch.setattr("pyxel.init", lambda *a, **kw: None)  # neuter pyxel.init
