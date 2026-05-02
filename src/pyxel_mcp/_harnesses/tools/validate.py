@@ -17,6 +17,18 @@ def _make_issue(
     return {"severity": severity, "line": line, "col": col, "category": category, "message": message}
 
 
+def _walk_excluding_scopes(node: ast.AST):
+    """ast.walk variant that does NOT descend into nested scope-introducing nodes
+    (ClassDef, FunctionDef, AsyncFunctionDef, Lambda). Use when an analysis
+    targets statements lexically inside `node` itself, not inside nested
+    methods/classes/closures that happen to share the source span.
+    """
+    for child in ast.iter_child_nodes(node):
+        yield child
+        if not isinstance(child, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            yield from _walk_excluding_scopes(child)
+
+
 def _detect_syntax(source: str) -> list[dict[str, Any]]:
     """Return a single 'syntax' issue if ast.parse fails; else empty list."""
     try:
@@ -46,26 +58,23 @@ def _detect_missing_colkey(tree: ast.AST) -> list[dict[str, Any]]:
 
 
 def _detect_update_in_draw(tree: ast.AST) -> list[dict[str, Any]]:
-    """Assignment or augmented-assignment to self.X inside any method named `draw`."""
+    """Assignment or augmented-assignment to self.X inside any method named `draw`.
+
+    Nested ClassDef / FunctionDef bodies are excluded — `self` in a nested scope
+    refers to a different object, so flagging those would be a false positive.
+    """
     issues: list[dict[str, Any]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef) or node.name != "draw":
             continue
-        for child in ast.walk(node):
+        for child in _walk_excluding_scopes(node):
             if isinstance(child, ast.Assign):
-                for target in child.targets:
-                    if (
-                        isinstance(target, ast.Attribute)
-                        and isinstance(target.value, ast.Name)
-                        and target.value.id == "self"
-                    ):
-                        issues.append(_make_issue(
-                            "warning", child.lineno, child.col_offset,
-                            "anti_pattern.update_in_draw",
-                            f"draw() mutates self.{target.attr} — move to update()",
-                        ))
+                targets = child.targets
             elif isinstance(child, ast.AugAssign):
-                target = child.target
+                targets = [child.target]
+            else:
+                continue
+            for target in targets:
                 if (
                     isinstance(target, ast.Attribute)
                     and isinstance(target.value, ast.Name)
@@ -127,7 +136,14 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
             "errors": [make_validation_error(str(e), path=script)],
         }
 
-    source = path.read_text()
+    try:
+        source = path.read_text()
+    except (UnicodeDecodeError, OSError) as e:
+        return {
+            "ok": False,
+            "issues": [],
+            "errors": [make_validation_error(f"cannot read script: {e}", path=script)],
+        }
     issues: list[dict[str, Any]] = []
 
     syntax_issues = _detect_syntax(source)

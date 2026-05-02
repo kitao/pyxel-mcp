@@ -64,3 +64,46 @@ def test_issues_sorted_by_line_then_severity():
 def test_missing_script_returns_validation_error():
     result = validate_run({"script": "/nonexistent/path.py"})
     assert any(e["phase"] == "validation" for e in result["errors"])
+
+
+def test_nested_class_in_draw_not_flagged():
+    """`self.X = ...` inside a class nested within draw() refers to the inner class's
+    self, not the outer App.self — must not trigger update_in_draw.
+    """
+    src = SCRIPTS / "draw_with_nested_class.py"
+    src.write_text(
+        "import pyxel\n"
+        "class App:\n"
+        "    def __init__(self):\n"
+        "        pyxel.init(64,64)\n"
+        "        pyxel.run(self.update, self.draw)\n"
+        "    def update(self): pass\n"
+        "    def draw(self):\n"
+        "        pyxel.cls(0)\n"
+        "        class Helper:\n"
+        "            def setup(self):\n"
+        "                self.val = 42\n"
+    )
+    try:
+        result = validate_run({"script": str(src)})
+        cats = [i["category"] for i in result["issues"]]
+        assert "anti_pattern.update_in_draw" not in cats
+    finally:
+        src.unlink()
+
+
+def test_non_utf8_script_returns_validation_error():
+    """Non-UTF8 bytes in the script should surface as a validation-phase error
+    (with path populated), not as a script_import-phase error from main.py's
+    catch-all (which would lose the path field).
+    """
+    bad = SCRIPTS / "non_utf8.py"
+    bad.write_bytes(b"\xff\xfe# bad bytes\n")
+    try:
+        result = validate_run({"script": str(bad)})
+        assert result["ok"] is False
+        errs = [e for e in result["errors"] if e["phase"] == "validation"]
+        assert errs, f"expected a validation error, got {result['errors']}"
+        assert errs[0]["path"] == str(bad)
+    finally:
+        bad.unlink()
