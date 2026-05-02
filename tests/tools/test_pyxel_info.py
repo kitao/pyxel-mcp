@@ -13,11 +13,26 @@ def test_versions_look_like_versions():
     result = pyxel_info_run({})
     assert re.match(r"^\d+\.\d+\.\d+", result["pyxel_mcp_version"])
     assert re.match(r"^\d+\.\d+\.\d+", result["pyxel_version"])
+    assert re.match(r"^\d+\.\d+\.\d+", result["python_version"])
 
 
-def test_resources_includes_run_snapshots_schema():
+def test_errors_empty_on_success():
     result = pyxel_info_run({})
-    assert result["resources"]["run_snapshots_schema"] == "pyxel://run-snapshots-schema"
+    assert result["errors"] == []
+
+
+def test_resources_has_all_seven_uris():
+    """Spec §8.2 enumerates 7 resource URIs; verify every one is present and correct."""
+    result = pyxel_info_run({})
+    assert result["resources"] == {
+        "api_reference": "pyxel://api-reference",
+        "user_guide": "pyxel://user-guide",
+        "mml_commands": "pyxel://mml-commands",
+        "pyxres_format": "pyxel://pyxres-format",
+        "default_palette": "pyxel://palette/default",
+        "examples": "pyxel://examples/<name>",
+        "run_snapshots_schema": "pyxel://run-snapshots-schema",
+    }
 
 
 def test_examples_have_paths():

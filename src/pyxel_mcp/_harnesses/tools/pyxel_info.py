@@ -19,6 +19,7 @@ def _examples() -> list[dict[str, Any]]:
     if not examples_dir.is_dir():
         return []
     out = []
+    # top-level *.py only; subdirectory examples (if any future Pyxel ships them) are unsupported
     for path in sorted(examples_dir.glob("*.py")):
         out.append({"name": path.stem, "path": str(path), "description": None})
     return out
