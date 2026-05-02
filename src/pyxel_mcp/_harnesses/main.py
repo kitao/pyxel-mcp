@@ -1,0 +1,69 @@
+"""Subprocess entry point (spec §11.2).
+
+Usage: python -m pyxel_mcp._harnesses.main <subcommand>
+       reads JSON parameters from stdin, writes JSON result to stdout.
+"""
+from __future__ import annotations
+import json
+import sys
+from typing import Callable
+
+from pyxel_mcp._harnesses._common.error_capture import make_validation_error
+
+
+_TOOLS: dict[str, Callable[[dict], dict]] = {}
+
+
+def register(subcommand: str):
+    """Decorator: registers a tool handler under the given subcommand name."""
+    def _wrap(fn: Callable[[dict], dict]) -> Callable[[dict], dict]:
+        _TOOLS[subcommand] = fn
+        return fn
+    return _wrap
+
+
+def _import_tool_modules() -> None:
+    """Import all tool modules so their @register decorators run."""
+    # Subsequent tasks add imports here as tools are implemented.
+    # Each `from pyxel_mcp._harnesses.tools import X` triggers X's @register call.
+    pass
+
+
+def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    if len(argv) != 1:
+        result = {"errors": [make_validation_error("expected exactly one subcommand argument")]}
+        print(json.dumps(result))
+        return 0
+
+    subcommand = argv[0]
+    raw_stdin = sys.stdin.read()
+
+    try:
+        payload = json.loads(raw_stdin) if raw_stdin.strip() else {}
+    except json.JSONDecodeError as e:
+        result = {"errors": [make_validation_error(f"invalid JSON on stdin: {e}")]}
+        print(json.dumps(result))
+        return 0
+
+    _import_tool_modules()
+
+    if subcommand not in _TOOLS:
+        result = {"errors": [make_validation_error(f"unknown subcommand: {subcommand}")]}
+        print(json.dumps(result))
+        return 0
+
+    handler = _TOOLS[subcommand]
+    try:
+        result = handler(payload)
+    except Exception as e:
+        from pyxel_mcp._harnesses._common.error_capture import make_error, ErrorPhase
+        result = {"errors": [make_error(ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=True)]}
+
+    print(json.dumps(result))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
