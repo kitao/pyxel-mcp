@@ -89,3 +89,22 @@ def test_timeout_must_be_positive():
     result = run_tool({"script": str(SCRIPTS / "minimal.py"), "frames": 1, "timeout": 0})
     assert result["exit_status"] == "invalid"
     assert "timeout" in result["errors"][0]["message"].lower()
+
+
+def test_log_captures_print_output():
+    result = run_tool({"script": str(SCRIPTS / "printing.py"), "frames": 3})
+    assert "init message" in result["log"]
+    assert "update at frame 0" in result["log"]
+    assert "update at frame 2" in result["log"]
+
+
+def test_log_empty_when_no_print():
+    """Script that never prints must produce an empty log string."""
+    result = run_tool({"script": str(SCRIPTS / "minimal.py"), "frames": 3})
+    assert result["log"] == ""
+
+
+def test_log_includes_stderr():
+    """Script that writes to sys.stderr must have that text in log."""
+    result = run_tool({"script": str(SCRIPTS / "stderr_printing.py"), "frames": 1})
+    assert "stderr message" in result["log"]

@@ -1,7 +1,9 @@
 """run(script, frames, ...) — dynamic execution driver (spec §6)."""
 from __future__ import annotations
+import contextlib
 import time
 import traceback as _tb
+from io import StringIO
 from typing import Any
 
 from pyxel_mcp._harnesses._common.error_capture import (
@@ -101,59 +103,66 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     frame_count = 0
     exit_status = "ok"
 
+    # Capture stdout+stderr from the user script into log_buf.
+    # The real stdout is reserved for the JSON result written by main.py,
+    # so the redirect must be closed before run() returns.
+    log_buf = StringIO()
     with headless_pyxel() as state:
-        # Phase 1: import script (pyxel.run is intercepted by headless_pyxel)
-        try:
-            load_script_module(path)
-        except FileNotFoundError as e:
-            # Asset path is in the exception message; we don't know it here.
-            errors.append(make_error(
-                ErrorPhase.ASSET_LOAD, str(e), capture_traceback=True,
-            ))
-            exit_status = "crashed"
-        except Exception as e:
-            tb_text = _tb.format_exc()
-            if _is_asset_load_error(tb_text):
+        with contextlib.redirect_stdout(log_buf), contextlib.redirect_stderr(log_buf):
+            # Phase 1: import script (pyxel.run is intercepted by headless_pyxel)
+            try:
+                load_script_module(path)
+            except FileNotFoundError as e:
+                # Asset path is in the exception message; we don't know it here.
                 errors.append(make_error(
                     ErrorPhase.ASSET_LOAD, str(e), capture_traceback=True,
                 ))
-            else:
-                errors.append(make_error(
-                    ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=True,
-                ))
-            exit_status = "crashed"
-
-        if not errors:
-            try:
-                state.require_run_called()
-            except RunNotCalledError as e:
-                errors.append(make_error(
-                    ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=False,
-                ))
+                exit_status = "crashed"
+            except Exception as e:
+                tb_text = _tb.format_exc()
+                if _is_asset_load_error(tb_text):
+                    errors.append(make_error(
+                        ErrorPhase.ASSET_LOAD, str(e), capture_traceback=True,
+                    ))
+                else:
+                    errors.append(make_error(
+                        ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=True,
+                    ))
                 exit_status = "crashed"
 
-        if not errors:
-            import pyxel
-
-            # Phase 2: pre-loop checkpoint — seed RNG if requested
-            if random_seed is not None:
-                pyxel.rseed(random_seed)
-                seeded = True
-
-            # Phase 3: drive the update/draw loop
-            for f in range(frames):
+            if not errors:
                 try:
-                    pyxel.frame_count = f
-                    state.update_callback()
-                    state.draw_callback()
-                    frame_count = f + 1
-                except Exception as e:
+                    state.require_run_called()
+                except RunNotCalledError as e:
                     errors.append(make_error(
-                        ErrorPhase.GAME_LOOP, str(e), frame=f, capture_traceback=True,
+                        ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=False,
                     ))
                     exit_status = "crashed"
-                    frame_count = f
-                    break
+
+            if not errors:
+                import pyxel
+
+                # Phase 2: pre-loop checkpoint — seed RNG if requested
+                if random_seed is not None:
+                    pyxel.rseed(random_seed)
+                    seeded = True
+
+                # Phase 3: drive the update/draw loop
+                for f in range(frames):
+                    try:
+                        pyxel.frame_count = f
+                        state.update_callback()
+                        state.draw_callback()
+                        frame_count = f + 1
+                    except Exception as e:
+                        errors.append(make_error(
+                            ErrorPhase.GAME_LOOP, str(e), frame=f, capture_traceback=True,
+                        ))
+                        exit_status = "crashed"
+                        frame_count = f
+                        break
+    # redirect_stdout/stderr context is now closed — real stdout is restored
+    log_text = log_buf.getvalue()
 
     elapsed = time.monotonic() - started
     return {
@@ -162,7 +171,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         "exit_status": exit_status,
         "frame_count": frame_count,
         "elapsed_seconds": elapsed,
-        "log": "",  # populated in later tasks via stderr capture
+        "log": log_text,
         "seeded": seeded,
         "errors": errors,
     }
