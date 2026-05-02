@@ -35,7 +35,7 @@ def test_basic_tilemap_usage():
     result = analyze_tilemap(tilemap=0)
     # 9 tiles of (1,0) placed
     assert result["usage"].get("1,0", 0) == 9
-    assert result["bounding_box"] == {"x": 5, "y": 5, "w": 3, "h": 3}
+    assert result["region"] == {"x": 5, "y": 5, "w": 3, "h": 3}
     assert result["trap_warning"] is False
 
 
@@ -58,7 +58,7 @@ def test_imgsrc_resolved_when_tilemap_image_assigned():
     try:
         # Should not raise; should treat bank 1 as the source.
         result = analyze_tilemap(tilemap=0)
-        # bounding_box / usage shape unchanged from the int case.
+        # region / usage shape unchanged from the int case.
         assert "trap_warning" in result
         assert result["errors"] == []
     finally:
@@ -100,6 +100,6 @@ def test_analyze_tilemap_full_scan_under_500ms():
         assert elapsed < 0.5, (
             f"analyze_tilemap full scan took {elapsed*1000:.1f}ms (limit 500ms)"
         )
-        assert result["bounding_box"] is not None
+        assert result["region"] is not None
     finally:
         pyxel.tilemaps[0].cls((0, 0))

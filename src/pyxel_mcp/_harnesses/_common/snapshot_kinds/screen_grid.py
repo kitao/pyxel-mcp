@@ -9,8 +9,12 @@ def capture(snapshot: dict[str, Any]) -> dict[str, Any]:
     """Return the screen as a 2D array of palette indices (0-15).
 
     Reads pyxel.screen.data_ptr() into a numpy array and slices the bbox.
-    Optional ``bbox`` restricts the region; values extending past the
-    screen edge are clamped and a warning is appended to the result.
+    Input field ``bbox: [x, y, w, h]`` is the ergonomic list form callers
+    write; the output emits ``region: {x, y, w, h}`` as a dict, matching
+    the shape used by inspect_image / inspect_tilemap / compare_frames so
+    downstream consumers can read region geometry uniformly across tools.
+    Values extending past the screen edge are clamped and a warning is
+    appended.
     """
     import pyxel
     sw, sh = pyxel.width, pyxel.height
@@ -36,7 +40,7 @@ def capture(snapshot: dict[str, Any]) -> dict[str, Any]:
     return {
         "frame": snapshot["frame"],
         "kind": "screen_grid",
-        "bbox": [x, y, w, h],
+        "region": {"x": x, "y": y, "w": w, "h": h},
         "grid": grid,
         "warnings": warnings,
     }

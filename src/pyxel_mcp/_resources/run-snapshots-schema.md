@@ -82,13 +82,17 @@ Useful for verifying exact pixel-level state without image files.
 {
   "kind": "screen_grid",
   "frame": <int>,
-  "bbox": [x, y, w, h],
+  "region": {"x": <int>, "y": <int>, "w": <int>, "h": <int>},
   "grid": [[<palette-index>, ...], ...]
 }
 ```
 
 - `grid`: list of rows, each row a list of palette indices 0–15.
-- `bbox` in output reflects the actual region captured (full screen dimensions if input was null).
+- Input field `bbox` (list `[x, y, w, h]`) is preserved for ergonomic call
+  sites; output emits `region` (dict `{x, y, w, h}`), matching the shape used
+  by `inspect_image`, `inspect_tilemap`, and `compare_frames` so consumers can
+  read region geometry uniformly across tools.
+- `region` in output reflects the actual region captured (full screen dimensions if input `bbox` was null).
 
 ---
 

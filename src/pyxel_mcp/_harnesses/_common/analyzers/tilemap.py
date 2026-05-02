@@ -98,7 +98,7 @@ def analyze_tilemap(
     *,
     render_path: str | None = None,
 ) -> dict[str, Any]:
-    """Analyze a Pyxel tilemap: usage, bounding_box, trap_warning."""
+    """Analyze a Pyxel tilemap: usage, region, trap_warning."""
     import pyxel
 
     tm = pyxel.tilemaps[tilemap]
@@ -122,14 +122,14 @@ def analyze_tilemap(
         ys, xs = np.where(nonzero_mask)
         min_x, max_x = int(xs.min()), int(xs.max())
         min_y, max_y = int(ys.min()), int(ys.max())
-        bounding_box: dict[str, int] | None = {
+        region: dict[str, int] | None = {
             "x": min_x,
             "y": min_y,
             "w": max_x - min_x + 1,
             "h": max_y - min_y + 1,
         }
     else:
-        bounding_box = None
+        region = None
 
     # Build usage dict keyed by "u,v" — exclude (0,0) since it's the
     # implicit background / empty tile.
@@ -157,10 +157,10 @@ def analyze_tilemap(
     rendered = None
     if render_path:
         rp = Path(render_path).resolve()
-        # Limit render to bounding box region (or full tilemap if small)
-        if bounding_box is not None:
-            render_w = bounding_box["x"] + bounding_box["w"]
-            render_h = bounding_box["y"] + bounding_box["h"]
+        # Limit render to bounding region (or full tilemap if small)
+        if region is not None:
+            render_w = region["x"] + region["w"]
+            render_h = region["y"] + region["h"]
             render_w = min(render_w, tm_w)
             render_h = min(render_h, tm_h)
         else:
@@ -175,7 +175,7 @@ def analyze_tilemap(
         "imgsrc": imgsrc,
         "tiles": tiles,
         "usage": usage,
-        "bounding_box": bounding_box,
+        "region": region,
         "trap_warning": trap_warning,
         "rendered": rendered,
         "warnings": [],

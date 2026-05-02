@@ -43,9 +43,10 @@ Jaccard), and per-pair `region_diffs`. Useful for verifying that sprite
 frames share a consistent palette and silhouette.
 
 **`inspect_tilemap(script, tilemap, render_path=None)`**
-Read tilemap N data. Returns tile usage counter, `bounding_box`, and
-`trap_warning` (true when the tilemap uses source tile `(0, 0)` and that
-tile is non-empty — the blank-tile trap).
+Read tilemap N data. Returns tile usage counter, `region` (bounding box of
+non-empty tiles, dict-shape `{x, y, w, h}`), and `trap_warning` (true when
+the tilemap uses source tile `(0, 0)` and that tile is non-empty — the
+blank-tile trap).
 
 **`render_audio(script, target, output_path)`**
 Render a sound or music slot to WAV. `target` is `{"sound": int}` or

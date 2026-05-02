@@ -30,7 +30,7 @@ def test_missing_tilemap_validation():
 
 
 def test_round_trip_tilemap_demo():
-    """tilemap_demo places 9 tiles at (5-7, 5-7) — verify usage and bounding_box."""
+    """tilemap_demo places 9 tiles at (5-7, 5-7) — verify usage and region."""
     result = inspect_tilemap_run({
         "script": str(SCRIPTS / "tilemap_demo.py"),
         "tilemap": 0,
@@ -39,7 +39,7 @@ def test_round_trip_tilemap_demo():
     assert result["tilemap_index"] == 0
     assert result["size"] == [256, 256]
     assert result["usage"].get("1,0", 0) == 9
-    assert result["bounding_box"] == {"x": 5, "y": 5, "w": 3, "h": 3}
+    assert result["region"] == {"x": 5, "y": 5, "w": 3, "h": 3}
     assert result["trap_warning"] is False
     # Full 256x256 tilemap exceeds 4096 — tiles should be None
     assert result["tiles"] is None

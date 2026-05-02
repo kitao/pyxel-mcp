@@ -68,7 +68,9 @@ def run(
 
     Snapshot kinds (see `pyxel://run-snapshots-schema` for full grammar):
     - `{"frame": F, "kind": "screen_image", "output": "out.png", "scale": 1}`
-    - `{"frame": F, "kind": "screen_grid", "bbox": [x, y, w, h]}` — palette idx 2D array
+    - `{"frame": F, "kind": "screen_grid", "bbox": [x, y, w, h]}` — input field
+      `bbox` (list); output emits `region: {x, y, w, h}` (dict, consistent with
+      inspect_image / inspect_tilemap / compare_frames)
     - `{"frame": F, "kind": "state", "attrs": ["player.x", "scene"]}` — dotted-path App attrs
     - `{"frame": F, "kind": "layout"}` — text/region balance metrics
     - `{"kind": "video", "start_frame": A, "end_frame": B, "fps": 30, "output": "clip.gif"}`
