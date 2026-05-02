@@ -56,6 +56,13 @@ def headless_pyxel():
         if pyxel.width > 0:
             return
         kwargs["headless"] = True  # override: headless mode is mandatory in harness context
+        # Pyxel's `flip()` sleeps to maintain the fps target; under harness
+        # control the frame loop is driven externally (run.py), so Pyxel's
+        # internal fps only governs flip() wait. Forcing a high fps makes
+        # flip() near-instant and turns N-frame runs into <N/30 seconds rather
+        # than real-time playback. Game logic that reads pyxel.frame_count is
+        # unaffected (run.py sets it explicitly each iteration).
+        kwargs["fps"] = 10000
         saved_init(*args, **kwargs)
 
     pyxel.init = _headless_init

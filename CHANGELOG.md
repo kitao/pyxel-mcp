@@ -20,6 +20,8 @@
 - Trim instructions.md and migrate design knowledge to pyxel-skill
 - Add `pyxel://run-snapshots-schema` MCP resource
 - Add Python 3.14 classifier
+- Override Pyxel internal fps in headless harness for fast-forward runs
+- Filter inspect_palette contrast warnings to co-located pixel pairs
 
 ## 0.9.2
 

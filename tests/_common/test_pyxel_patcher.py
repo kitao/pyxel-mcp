@@ -50,3 +50,27 @@ def test_run_not_called_raises():
         pass  # script doesn't call pyxel.run
     with pytest.raises(RunNotCalledError):
         state.require_run_called()
+
+
+def test_fps_override_makes_flip_near_instant():
+    """flip() sleeps to maintain pyxel's internal fps. The patcher must override
+    fps to a high value so harness runs are near-instant rather than real-time.
+    Without the override, a 60-flip loop would take ~2s at fps=30.
+    """
+    import time
+    import pyxel
+
+    with headless_pyxel():
+        # User passes fps=30 explicitly — patcher must override anyway.
+        pyxel.init(32, 32, fps=30)
+        t0 = time.monotonic()
+        for _ in range(60):
+            pyxel.flip()
+        elapsed = time.monotonic() - t0
+
+    # Real-time at fps=30 = 2s; with override (fps=10000) ~0.1s. Allow generous
+    # margin for slow CI machines but reject anything close to real-time.
+    assert elapsed < 0.5, (
+        f"60 flips took {elapsed:.3f}s — fps override appears not applied "
+        f"(real-time would be ~2.0s)"
+    )
