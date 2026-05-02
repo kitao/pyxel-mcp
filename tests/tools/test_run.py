@@ -126,6 +126,24 @@ def test_inputs_drive_state():
     assert result["snapshots"][0]["values"]["x"] == 10
 
 
+def test_btnp_only_on_press_edge():
+    result = run_tool({
+        "script": str(SCRIPTS / "btnp_responder.py"),
+        "frames": 20,
+        "inputs": [
+            {"frame": 0, "buttons": ["KEY_SPACE"]},
+            {"frame": 3, "buttons": []},
+            {"frame": 6, "buttons": ["KEY_SPACE"]},
+            {"frame": 10, "buttons": []},
+        ],
+        "snapshots": [{"frame": 19, "kind": "state", "attrs": ["jumps"]}],
+    })
+    # Two press edges → jumps == 2
+    assert result["exit_status"] == "ok"
+    assert result["errors"] == []
+    assert result["snapshots"][0]["values"]["jumps"] == 2
+
+
 def test_input_release_stops_movement():
     result = run_tool({
         "script": str(SCRIPTS / "btn_responder.py"),

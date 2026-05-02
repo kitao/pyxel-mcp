@@ -21,6 +21,12 @@ class InputScheduler:
         self._validate(events)
         self.events = sorted(events, key=lambda e: e["frame"])
         self._held_buttons: set[str] = set()
+        # Tracks which buttons were held in the previous apply_to_pyxel() call.
+        # Pyxel 2.9.4 derives btnp from set_btn(True) being called on a fresh
+        # post-flip slate; re-calling set_btn(True) for already-held buttons
+        # would spuriously re-fire btnp. Only new-press edges call set_btn(True);
+        # continued holds skip the call; releases call set_btn(False).
+        self._prev_held_buttons: set[str] = set()
         self._held_axes: dict[str, float] = {}
         self._mouse_pos: tuple[int, int] = (0, 0)
         self._next_event_idx = 0
@@ -93,11 +99,30 @@ class InputScheduler:
 
         Called at the start of each frame F by the run loop. The scheduler must
         first have been advanced to F via advance_to_frame(F).
+
+        Edge-detection contract (Pyxel 2.9.4):
+        - set_btn(K, True) on a post-flip fresh slate → btnp(K) returns True
+        - Skipping set_btn(K, ...) for a held key → btn(K) stays True, btnp False
+        - set_btn(K, False) → btn(K) becomes False, btnp False
+        To correctly model btnp, only newly-pressed buttons (press edges) call
+        set_btn(True); continuously-held buttons skip the call; releases call False.
         """
         import pyxel
 
-        for name in self._all_button_names:
-            pyxel.set_btn(getattr(pyxel, name), name in self._held_buttons)
+        prev = self._prev_held_buttons
+        curr = self._held_buttons
+
+        # New press edges: call set_btn(True) to trigger btnp
+        for name in curr - prev:
+            pyxel.set_btn(getattr(pyxel, name), True)
+
+        # Released keys: call set_btn(False) to clear btn and trigger btnr
+        for name in prev - curr:
+            pyxel.set_btn(getattr(pyxel, name), False)
+
+        # Continuously held keys: no set_btn call; Pyxel retains btn=True, btnp=False
+
+        self._prev_held_buttons = set(curr)
 
         # Axes: scale [-1.0, 1.0] → int range -32768..32767 (Pyxel set_btnv convention).
         for name, value in self._held_axes.items():
