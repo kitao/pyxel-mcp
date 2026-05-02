@@ -30,6 +30,9 @@
 - Add `verdict` field to inspect_palette and inspect_image responses
 - Add `pyxel://anti-patterns` MCP resource (8th URI)
 - Implement `stall_window_frames` opt-in stall detection on run
+- Vectorize palette/image/animation/tilemap analyzers via numpy data_ptr reads
+- Drop PNG disk round-trip in run video frame capture
+- Vectorize screen_grid and layout snapshot kinds
 
 ## 0.9.2
 
