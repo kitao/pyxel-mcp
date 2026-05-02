@@ -318,6 +318,86 @@ def test_explicit_list_dedupe_warning():
     assert "sorted" in result["log"].lower()
 
 
+def test_frame_and_frames_conflict_is_validation_error():
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"frame": 1, "frames": [2, 3], "kind": "state"}],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+
+
+def test_output_and_output_pattern_conflict_is_validation_error(tmp_path):
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{
+            "frames": [1, 2],
+            "kind": "screen_image",
+            "output": str(tmp_path / "f.png"),
+            "output_pattern": str(tmp_path / "f-{frame}.png"),
+        }],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+
+
+def test_single_frame_with_output_pattern_is_validation_error(tmp_path):
+    """Per spec §6.6, single-frame mode requires `output`, not `output_pattern`."""
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{
+            "frame": 1,
+            "kind": "screen_image",
+            "output_pattern": str(tmp_path / "f-{frame}.png"),
+        }],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+
+
+def test_video_with_frames_is_validation_error(tmp_path):
+    out = tmp_path / "play.gif"
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{
+            "kind": "video",
+            "frames": [0, 1, 2],
+            "output": str(out),
+        }],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+    assert "frames" in result["errors"][0]["message"].lower()
+
+
+def test_multi_frame_screen_image_without_output_pattern_is_validation_error():
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"frames": [0, 1], "kind": "screen_image"}],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+
+
+def test_output_pattern_missing_frame_token_is_validation_error(tmp_path):
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{
+            "frames": [0, 1],
+            "kind": "screen_image",
+            "output_pattern": str(tmp_path / "no-token.png"),
+        }],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+
+
 # --- Frame-bounds validation tests ---
 
 def test_snapshot_frame_out_of_bounds_is_validation_error():

@@ -83,15 +83,17 @@ def _expand_multi_frame_snapshots(
         kind = snap.get("kind")
 
         if not has_frames:
-            # Single-frame snapshot (or video): pass through unchanged.
+            # Single-frame snapshot (or video): pass through, but reject
+            # output_pattern in single-frame mode per spec §6.6.
+            if has_pattern and kind != "video":
+                raise _ValidationFailed(make_validation_error(
+                    f"`snapshots[{i}]` single-frame mode requires `output`, not `output_pattern`"
+                ))
             expanded.append(snap)
             continue
 
-        # Multi-frame snapshot
-        if kind == "video":
-            raise _ValidationFailed(make_validation_error(
-                f"`snapshots[{i}]` video kind does not support `frames`; use `start_frame`/`end_frame`"
-            ))
+        # Multi-frame snapshot. (video+frames was already rejected in the
+        # first-pass shape validation; non-video kinds reach here.)
 
         # screen_image multi-frame requires output_pattern (not output)
         if kind == "screen_image":
@@ -171,6 +173,11 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
                 f"`snapshots[{i}].kind` must be one of {sorted(_VALID_SNAPSHOT_KINDS)}, got: {kind!r}"
             ))
         if kind == "video":
+            # video uses start_frame/end_frame, not the multi-frame `frames` field
+            if "frames" in snap:
+                raise _ValidationFailed(make_validation_error(
+                    f"`snapshots[{i}]` video kind does not support `frames`; use `start_frame`/`end_frame`"
+                ))
             # Validate extension early without keeping the instance.
             out = snap.get("output", "")
             ext = Path(str(out)).suffix.lower()
