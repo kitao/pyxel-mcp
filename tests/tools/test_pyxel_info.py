@@ -21,8 +21,12 @@ def test_errors_empty_on_success():
     assert result["errors"] == []
 
 
-def test_resources_has_all_seven_uris():
-    """Spec §8.2 enumerates 7 resource URIs; verify every one is present and correct."""
+def test_resources_has_all_eight_uris():
+    """Verify every advertised resource URI is present and correct.
+
+    Was 7 in spec §8.2; the 8th URI `anti-patterns` was added so agents can
+    resolve unfamiliar `validate` issue categories.
+    """
     result = pyxel_info_run({})
     assert result["resources"] == {
         "api_reference": "pyxel://api-reference",
@@ -32,6 +36,7 @@ def test_resources_has_all_seven_uris():
         "default_palette": "pyxel://palette/default",
         "examples": "pyxel://examples/<name>",
         "run_snapshots_schema": "pyxel://run-snapshots-schema",
+        "anti_patterns": "pyxel://anti-patterns",
     }
 
 

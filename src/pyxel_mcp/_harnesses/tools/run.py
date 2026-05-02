@@ -169,7 +169,9 @@ def _expand_multi_frame_snapshots(
 
 
 def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
-    """Validate payload and return (script_path, frames, random_seed, snapshots, scheduler, warnings).
+    """Validate payload and return
+    (script_path, frames, random_seed, snapshots, scheduler, warnings,
+    stall_window_frames).
 
     Raises _ValidationFailed with a ToolError dict on any invalid input.
     """
@@ -194,6 +196,12 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
     if not isinstance(timeout, int) or timeout < 1:
         raise _ValidationFailed(make_validation_error("`timeout` must be int >= 1"))
     # timeout is informational at this layer; server enforces wall-clock kill.
+
+    stall_window = payload.get("stall_window_frames")
+    if stall_window is not None and (not isinstance(stall_window, int) or stall_window < 1):
+        raise _ValidationFailed(make_validation_error(
+            "`stall_window_frames` must be int >= 1 or null"
+        ))
 
     raw_snapshots = payload.get("snapshots", [])
     if not isinstance(raw_snapshots, list):
@@ -261,7 +269,7 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
     except ValidationError as e:
         raise _ValidationFailed(make_validation_error(str(e)))
 
-    return path, frames, random_seed, snapshots, scheduler, pending_warnings
+    return path, frames, random_seed, snapshots, scheduler, pending_warnings, stall_window
 
 
 def _capture_screen_as_pil() -> Image.Image:
@@ -286,6 +294,16 @@ def _capture_screen_as_pil() -> Image.Image:
         except OSError:
             pass
     return img
+
+
+def _grid_signature(grid: list) -> tuple:
+    """Convert a screen_grid 2D list into a hashable nested tuple.
+
+    The grid is `list[list[int]]`; tuples with the same nesting are hashable
+    and compare structurally — so we can put `hash(...)` into the rolling
+    buffer cheaply.
+    """
+    return tuple(tuple(row) for row in grid)
 
 
 def _is_asset_load_error(tb_text: str) -> bool:
@@ -318,7 +336,10 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     raised, so callers always receive a well-formed result dict.
     """
     try:
-        path, frames, random_seed, snapshots, scheduler, pending_warnings = _validate(payload)
+        (
+            path, frames, random_seed, snapshots, scheduler, pending_warnings,
+            stall_window,
+        ) = _validate(payload)
     except _ValidationFailed as vf:
         return _empty_result(exit_status="invalid", errors=[vf.err])
 
@@ -338,6 +359,16 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
             single_frame_snaps.append(snap)
     snapshot_results: list[dict] = []
 
+    # Stall detection setup. We track the rolling buffer here so we can also
+    # warn (after the loop) if the agent set stall_window_frames but did not
+    # schedule any state or screen_grid snapshots — in that case we have no
+    # signal to compare against and cannot detect stalls.
+    has_state_snap = any(s["kind"] == "state" for s in single_frame_snaps)
+    has_grid_snap = any(s["kind"] == "screen_grid" for s in single_frame_snaps)
+    stall_active = stall_window is not None and (has_state_snap or has_grid_snap)
+    state_buffer: list[dict] = []
+    grid_buffer: list[int] = []
+
     # Capture stdout+stderr from the user script into log_buf.
     # The real stdout is reserved for the JSON result written by main.py,
     # so the redirect must be closed before run() returns.
@@ -347,6 +378,15 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
             # Write any validation warnings collected during pre-expansion
             for w in pending_warnings:
                 log_buf.write(f"[pyxel-mcp] warning: {w}\n")
+
+            # Stall detection cannot run without a signal — warn the agent
+            # that the param is informational-only in this configuration.
+            if stall_window is not None and not stall_active:
+                log_buf.write(
+                    "[pyxel-mcp] warning: stall_window_frames is set but no "
+                    "`state` or `screen_grid` snapshot is scheduled; "
+                    "stall detection has no signal to compare and is disabled.\n"
+                )
 
             # Phase 1: import script (pyxel.run is intercepted by headless_pyxel)
             imported_module = None
@@ -415,6 +455,8 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                         break
 
                     # Single-frame snapshot dispatch
+                    captured_state_this_frame: dict | None = None
+                    captured_grid_this_frame: list | None = None
                     for snap in single_frame_snaps:
                         if snap.get("frame") != f:
                             continue
@@ -422,13 +464,17 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                         if kind == "screen_image":
                             snapshot_results.append(_si_kind.capture(snap))
                         elif kind == "screen_grid":
-                            snapshot_results.append(_sg_kind.capture(snap))
+                            res = _sg_kind.capture(snap)
+                            snapshot_results.append(res)
+                            captured_grid_this_frame = res.get("grid")
                         elif kind == "state":
-                            snapshot_results.append(_state_kind.capture(
+                            res = _state_kind.capture(
                                 snap,
                                 app_instance=state.app_instance,
                                 module=imported_module,
-                            ))
+                            )
+                            snapshot_results.append(res)
+                            captured_state_this_frame = res.get("values")
                         elif kind == "layout":
                             snapshot_results.append(_layout_kind.capture(snap))
 
@@ -437,6 +483,31 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                         img = _capture_screen_as_pil()
                         for accum in video_accumulators:
                             accum.add_frame(f, img)
+
+                    # Stall detection: maintain rolling buffer of the most
+                    # recent N captured state-values and grid-hashes. If at
+                    # least one buffer is full and every entry is identical,
+                    # the run has not advanced for N consecutive frames despite
+                    # scheduled inputs — break early and surface "stalled".
+                    if stall_active:
+                        if captured_state_this_frame is not None:
+                            state_buffer.append(captured_state_this_frame)
+                            if len(state_buffer) > stall_window:
+                                state_buffer.pop(0)
+                        if captured_grid_this_frame is not None:
+                            grid_buffer.append(hash(_grid_signature(captured_grid_this_frame)))
+                            if len(grid_buffer) > stall_window:
+                                grid_buffer.pop(0)
+
+                        if (
+                            (len(state_buffer) == stall_window
+                             and all(v == state_buffer[0] for v in state_buffer[1:]))
+                            or
+                            (len(grid_buffer) == stall_window
+                             and all(g == grid_buffer[0] for g in grid_buffer[1:]))
+                        ):
+                            exit_status = "stalled"
+                            break
 
             # Post-loop: encode all video accumulators (partial videos are useful for debugging)
             for accum in video_accumulators:

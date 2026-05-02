@@ -61,6 +61,7 @@ def run(
     snapshots: list[dict] | None = None,
     random_seed: int | None = None,
     timeout: int = 10,
+    stall_window_frames: int | None = None,
 ) -> dict:
     """Drive the script through `frames` headless Pyxel frames, applying
     scheduled `inputs` and collecting `snapshots`.
@@ -80,12 +81,21 @@ def run(
     `random_seed` (non-negative int) seeds both `pyxel.rseed` and Python's stdlib
     random at the pre-loop checkpoint for deterministic replays. `timeout` is the
     wall-clock cap (seconds) on the run subprocess.
+
+    `stall_window_frames` (opt-in; default None = disabled): when set to N, the
+    harness keeps a rolling buffer of the last N captured `state.values` dicts
+    and last N `screen_grid` hashes. If every entry in either buffer is
+    identical for N consecutive frames despite scheduled inputs, the run
+    breaks early with `exit_status="stalled"`. Requires at least one `state`
+    or `screen_grid` snapshot scheduled — without one, the param is
+    informational-only and a warning is logged.
     """
     payload = {
         "script": script, "frames": frames,
         "inputs": inputs or [], "snapshots": snapshots or [],
         "random_seed": random_seed,
         "timeout": timeout,
+        "stall_window_frames": stall_window_frames,
     }
     return _dispatch("run", payload, timeout=timeout + 5)
 

@@ -291,7 +291,7 @@ run(
     inputs: list[InputEvent] = [],        # scheduled input events
     snapshots: list[Snapshot] = [],       # what to capture and when
     random_seed: int | None = None,       # if given, pyxel.rseed(this) at pre-loop checkpoint
-    stall_detection: bool = False,        # see §6.5 stall semantics; opt-in (per-frame hash overhead)
+    stall_window_frames: int | None = None,  # see §6.5; opt-in rolling-buffer stall detection
     timeout: int = 10,                    # max wall-clock seconds for the subprocess
 ) -> RunResult
 ```
@@ -556,7 +556,7 @@ Output: {
 | `update`/`draw` callback raises at frame F                    | `"crashed"`   | `"game_loop"` (with `frame=F`)          | F                         |
 | Snapshot capture itself raises at frame F                     | `"crashed"`   | `"snapshot"` (with `frame=F`)           | F                         |
 | Wall-clock elapsed > `timeout`                                | `"timeout"`   | empty (timeout is meta-level, not a phase) | last completed frame   |
-| `stall_detection=True` and 60 consecutive frames identical    | `"stalled"`   | empty                                   | last frame in stall window |
+| `stall_window_frames=N` and N consecutive frames identical    | `"stalled"`   | empty                                   | last frame in stall window |
 
 **Triage protocol:** Agents check **both** `exit_status` (failure category) and `errors` (per-phase detail). For `"invalid"` and `"crashed"`, `errors` carries the diagnostic. For `"timeout"` and `"stalled"`, `exit_status` alone signals the failure mode (no per-phase detail applies; the loop didn't crash). For `"ok"`, the run completed and `errors` is empty (warnings may still be present in `RunResult.warnings` or per-snapshot `warnings`). An agent that checks only one signal will miss either timeout/stalled (if checking only `errors`) or diagnostic context (if checking only `exit_status`); both are needed.
 
@@ -577,7 +577,7 @@ Output: {
 
 This list is non-exhaustive and informational; structured failures are reported via `errors` field, not parsed from `log`.
 
-**Stall detection** (`exit_status="stalled"`) is opt-in via the `stall_detection: bool = False` parameter on `run` (§6.1). When true, the harness computes a hash of `(screen_grid, state)` each frame and sets `stalled` if 60 consecutive frames have identical hash despite scheduled inputs. Default off; agent enables for long-path verification.
+**Stall detection** (`exit_status="stalled"`) is opt-in via the `stall_window_frames: int | None = None` parameter on `run` (§6.1). When set to N, the harness keeps a rolling buffer of the last N captured `state.values` dicts and the last N `screen_grid` hashes. If every entry in either buffer is bit-identical for N consecutive frames despite scheduled inputs, the loop breaks early and `exit_status` becomes `"stalled"`. Detection requires at least one `state` or `screen_grid` snapshot scheduled; without one, the harness has no signal to compare and the parameter is informational-only — a warning is logged but the run completes normally. `None` (default) disables detection entirely.
 
 ### 6.6 Verbose-snapshot reduction
 
@@ -1180,7 +1180,7 @@ Phase 9  pyxel-skill v0.1.0+ tag (post-PyPI publish)
 
 1. **Pyxel 2.9 mouse-position API.** The spec assumes Pyxel 2.9+ exposes a way to set `mouse_x` / `mouse_y` (either a `set_mouse_pos` API or direct module-attribute assignment). Verify against current Pyxel source before implementing `mouse_pos` in InputEvent. If the API does not exist, harness implementation may need to monkey-patch `pyxel._mouse_x` etc.
 2. **Pyxel `set_btnv` argument-range convention.** §6.3 normalizes the agent-facing axis values to `-1.0..1.0` floats. The harness converts to whatever range Pyxel's actual `set_btnv` expects (verify against the installed Pyxel version during implementation). If Pyxel uses int `-32768..32767`, scale by 32767. If Pyxel itself uses floats, pass through.
-3. **`stall_detection` overhead.** Computing a state hash every frame is non-trivial. Default-off keeps the common path fast; enabling it for long-path verification incurs ~5-15% slowdown depending on state size. Acceptable; document.
+3. **`stall_window_frames` overhead.** Maintaining a rolling buffer of the last N captured `state.values` dicts (and screen_grid hashes) is non-trivial. Detection is opt-in; default `None` keeps the common path fast; enabling it for long-path verification incurs minor per-frame buffer-and-compare cost proportional to state size. Acceptable; document.
 4. **`ffmpeg` availability assumption.** Pyxel-skill tests on macOS in development; ffmpeg is typically installed via brew. CI environments (when added) need ffmpeg in their image. Headless servers may not have it; the GIF fallback is the safety net.
 5. **Validation iteration count.** The redesign aims to make DK validation pass in 1-2 iterations vs the current 4+. This is an expectation, not a guarantee. If the redesigned surface still requires many iterations, additional design refinement may be needed before PyPI publish.
 6. **`pyxel://run-snapshots-schema` MCP Resource.** This is a new resource URI; pyxel-mcp's resource-serving infrastructure must be extended to provide the schema as either a static markdown or a JSON Schema file.
