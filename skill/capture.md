@@ -23,7 +23,7 @@ screenshots/result/<N>/
 │   ├── title.png        — `run` `screen_image` snapshot
 │   └── ...              (5 frames at TITLE, play_start, mid_game, win, game_over)
 ├── audio/
-│   ├── bgm_ch0.wav      — read_audio per BGM channel (target={"music": N})
+│   ├── bgm_ch*.wav      — read_audio with target={"sound": <bgm sound id>}
 │   └── se_*.wav         — read_audio per SE manifest entry (target={"sound": N})
 └── notes.md             — summary, observations, known issues
 ```
@@ -65,16 +65,29 @@ The `{frame}` token expands to a 5-digit zero-padded integer (only this token is
 
 ## Audio rendering
 
-For every audio cue declared in `ASSETS.md` (BGM channels and SE), render to WAV:
+For every audio cue declared in `ASSETS.md`, render to WAV. **Render against sound slots, not music slots, when you intend to feed the result into `judge_audio`** — see the next paragraph for why.
 
 ```python
+# SE — render the sound slot directly.
 read_audio(script="main.py", target={"sound": 10},
-             output_path="screenshots/result/1/audio/se_jump.wav")
+             output_path="/abs/path/screenshots/result/1/audio/se_jump.wav")
+
+# BGM — Pyxel's music slot is an aggregate of constituent sound IDs.
+# Render each constituent sound (the IDs the music slot points at) so
+# `notes` is populated and `judge_audio` can verify them.
+read_audio(script="main.py", target={"sound": 32},   # bgm channel 0 sound id
+             output_path="/abs/path/screenshots/result/1/audio/bgm_ch0.wav")
+read_audio(script="main.py", target={"sound": 33},   # bgm channel 1
+             output_path="/abs/path/screenshots/result/1/audio/bgm_ch1.wav")
+
+# Whole-mix BGM render (informational only — note: `notes: []`).
 read_audio(script="main.py", target={"music": 0},
-             output_path="screenshots/result/1/audio/bgm_ch0.wav")
+             output_path="/abs/path/screenshots/result/1/audio/bgm_mix.wav")
 ```
 
-The `target` dict must contain exactly one of `"sound"` or `"music"` (validation error otherwise). The result schema is unchanged: `peak_amplitude`, `notes`, `warnings`. Assert `peak_amplitude > 0` and `len(notes) > 0` per `quality-gate.md` check #7. An empty slot returns success with `peak_amplitude: 0.0`, `notes: []`, plus a warning — that's the gate-failing condition.
+`target` accepts exactly one of `"sound"` or `"music"` (validation error otherwise). Both produce `peak_amplitude` and a WAV file, but **only `target={"sound": N}` populates `notes`** — `target={"music": N}` returns `notes: []` because Pyxel's music object is a list-of-channel-sound-IDs, not a note sequence. `judge_audio`'s default `min_notes: 1` therefore cannot be satisfied by a music-target render. Treat the music-target render as a peak-amplitude-only sanity check; route the per-channel sound renders into `judge_audio` for the gate (#7).
+
+Empty slots return success with `peak_amplitude: 0.0`, `notes: []`, plus a warning — that's the gate-failing condition `judge_audio` routes to `sprite-quality`.
 
 ## notes.md template
 
@@ -134,11 +147,14 @@ run(
     ],
 )
 
-# Audio (script must run cleanly to populate sound slots first):
+# Audio (script must run cleanly to populate sound slots first).
+# Use `target={"sound": N}` for anything that will go through judge_audio:
+# the music-target render does not populate `notes` (see "Audio rendering"
+# section above for the full explanation).
 read_audio(script="main.py", target={"sound": 10},
-             output_path="screenshots/result/1/audio/se_jump.wav")
-read_audio(script="main.py", target={"music": 0},
-             output_path="screenshots/result/1/audio/bgm_ch0.wav")
+             output_path="/abs/path/screenshots/result/1/audio/se_jump.wav")
+read_audio(script="main.py", target={"sound": 32},   # bgm channel 0 sound id
+             output_path="/abs/path/screenshots/result/1/audio/bgm_ch0.wav")
 ```
 
 ## Anti-patterns

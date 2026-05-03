@@ -48,9 +48,9 @@ Stop and write gate-report.json with the FAIL even if later checks would have pa
 | 4 | Asset identity | Per ASSETS.md sprite entry: `read_image(...)` for the sprite region; for paired frames: `read_animation(...)` with `region_count=2` | `judge_sprite(image_obs, sprite_entry)` and `judge_animation(anim_obs, paired_entry)` per row | ASSETS.md sprite manifest (`min_distinct_colors`, `silhouette`, `diff_band`, `represents`) | sprite-quality |
 | 5 | Win path | `run(script="main.py", frames=<final_milestone+1>, random_seed=42, inputs=<PLAN.md win inputs>, snapshots=[{"frames":[<every milestone>],"kind":"state","attrs":[<every attr referenced in PLAN.md milestone Asserts column>]}])` | `judge_milestone(run_result, win_path_milestones)` | PLAN.md Win Path Milestones table (`asserts: [{frame, kind:"state", predicate}, ...]`); `random_seed=42` is mandatory — see Anti-shortcut rule #8 | playthrough or spec |
 | 6 | Lose path | `run(...)` with the lose-path inputs and `state` snapshots at every milestone | `judge_milestone(run_result, lose_path_milestones)` | PLAN.md Lose Path Milestones table | playthrough or spec |
-| 7 | Audio renders | Per audio manifest entry: `read_audio(script="main.py", target={"sound": N}, output_path=...)` (or `{"music": N}` for BGM) | `judge_audio(audio_obs, manifest_entry)` per slot | ASSETS.md Audio Manifest (`min_peak`, `min_notes`) | sprite-quality (empty slot) / scaffolding (under-spec) |
-| 8 | Palette hierarchy | `read_palette(script="main.py")` | `judge_palette(palette_obs)` | (default contract: `min_hierarchy_score=2`) | asset-planning / sprite-quality |
-| 9 | Contrast | `read_palette(script="main.py")` (same observation as #8) | `judge_palette(palette_obs)` (same call certifies both #8 and #9) | (default contract: `max_contrast_warnings=1`) | asset-planning / sprite-quality |
+| 7 | Audio renders | Per audio manifest entry: `read_audio(script="main.py", target={"sound": N}, output_path=...)`. **Always render against sound slots, not music slots** — `target={"music": N}` produces a WAV but no `notes` list, so `judge_audio` cannot verify it. Render BGM by walking the music slot's constituent sound IDs and rendering each as a sound. | `judge_audio(audio_obs, manifest_entry)` per slot | ASSETS.md Audio Manifest (`min_peak`, `min_notes`) | sprite-quality (empty slot) / scaffolding (under-spec) |
+| 8 | Palette hierarchy | `read_palette` AND a runtime `screen_grid` snapshot (HUD / overlay colours are not visible to pre-loop palette inspection — see asset-planner.md). Build a merged observation: take `read_palette`'s result, replace its `used_indices` with the union of pre-loop indices and the runtime grid's indices. | `judge_palette(merged_obs)` — read `result["sub_verdicts"]["hierarchy"]` for this row | (default contract: `min_hierarchy_score=2`) | asset-planning / sprite-quality |
+| 9 | Contrast | Same merged observation as #8 (no extra call) | `judge_palette(merged_obs)` — read `result["sub_verdicts"]["contrast"]` for this row | (default contract: `max_contrast_warnings=5`; band 6-9 = warn, ≥10 = fail) | asset-planning / sprite-quality |
 | 10 | Difficulty floor | `run(...)` with the lose-path inputs and `state` snapshots tracking `scene` across the full lose window | `judge_milestone(run_result, difficulty_floor_contract)` where the contract's predicate is `scene == 'GAME_OVER' and lo <= frame <= hi` | PLAN.md + STRUCTURE.md `FPS` (band: `lo, hi = int(10*fps), int(14*fps)`) | playthrough / spec |
 | 11 | Layout balance | TITLE: `run(script="main.py", frames=60, snapshots=[{"frame":30,"kind":"layout"}])` | `judge_layout(run_result)` | (default contract: `min_h_balance=0.70`, `min_quadrant_density=0.0001`) | scaffolding |
 | 12 | Proof bundle | bundle dir at `screenshots/result/<N>/` | `judge_bundle({"bundle_dir": <path>}, bundle_contract)` | ASSETS.md audio manifest + frame coverage spec; `min_dead_time_diff=0.05` default | bundle |
@@ -108,6 +108,29 @@ becomes
     ],
 }
 ```
+
+> **Predicate sandbox constraints (judge_milestone / judge_genre)**
+>
+> Predicates must use comparisons (`==`, `<`, `>=`, `in`, ...), boolean
+> ops (`and`, `or`, `not`), arithmetic (`+`, `-`, `*`, `/`, `//`, `%`),
+> and attribute / subscript access only. **No function calls.** That
+> means `abs(...)`, `len(...)`, `min(...)`, `max(...)`, `int(...)`, etc.
+> all parse-fail.
+>
+> Workarounds:
+> - "x within ε of target" — spell it out: `x >= 68 and x <= 76`
+>   instead of `abs(x - 72) <= 4`.
+> - "list size" — expose a derived attribute in `update()` rather than
+>   computing it in the predicate: `self.n_barrels = len(self.barrels)`,
+>   then read `n_barrels` in the predicate.
+> - "min / max of two scalars" — use a comparison: `a if a < b else b`
+>   isn't allowed either (no `IfExp` is — actually it IS, but for
+>   clarity `min(a, b)` users should rewrite as `a < b and a or b`).
+>
+> Other guards: no dunder access (`__class__`, `__bases__`), no integer
+> literals > 1,000,000, no exponentiation (`**`). Result must be exactly
+> `bool` — `x.bit_length` (a method reference, no call) is rejected as
+> "predicate must return bool" rather than silently truthy.
 
 **PLAN.md `## Genre Identity` → `judge_genre` contract:**
 ```

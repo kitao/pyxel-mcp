@@ -50,6 +50,15 @@
   the two common mistakes — `self.` prefix and inline `len(...)`
 - run-snapshots-schema.md: mandate absolute paths for snapshot
   `output` / `output_pattern`; document `state.attrs` path syntax
+- skill/capture.md + quality-gate.md: clarify that audio rendering
+  for `judge_audio` must use `target={"sound": N}` (music targets
+  produce no `notes` and cannot be judge_audio-verified)
+- skill/quality-gate.md: row #8/#9 reference `sub_verdicts` so the
+  rows fill independently; row #8/#9 also call for runtime
+  `screen_grid` ∪ pre-loop `read_palette` merge before judging
+- skill/quality-gate.md: warning box on judge_milestone /
+  judge_genre predicate sandbox constraints (no calls, no Pow,
+  literal cap, must return bool) with workaround recipes
 
 - Integrate pyxel-skill source into skill/ subdir (Phase 0)
 - Add Layer 2: judge/ with 8 policy primitive tools
