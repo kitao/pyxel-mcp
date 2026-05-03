@@ -60,16 +60,52 @@ def _png_diff_ratio(a: Path, b: Path) -> tuple[float, dict[str, Any]]:
 
 
 def _dead_time_diff(frames_dir: Path) -> tuple[float, dict[str, Any]]:
-    """Compare first frame against mid frame; return (ratio, debug)."""
+    """Return (max-pairwise-diff-ratio, debug) across all PNGs in `frames_dir`.
+
+    Pre-fix this compared `pngs[0]` vs `pngs[len(pngs)//2]` after an
+    alphabetical sort. With canonical capture names like
+    `[game_over, mid_game, play_start, title, win]` the comparison
+    always landed on `game_over.png` vs `play_start.png`, which on a
+    sparse-content game often differs by < 5% — making the gate fail
+    even on a fully working game and forcing the user to make
+    GAME_OVER look intentionally distinct (i.e. the gate driving
+    design, the wrong direction).
+
+    Taking the max across all pairs means: as long as **any** two
+    frames in the bundle show meaningful pixel movement, the bundle
+    isn't a dead loop. The 5-frame canonical capture has 10 pairs;
+    a typical full-run capture has more; runtime is O(N²) on a small N
+    so it stays fast.
+
+    Size-mismatched pairs are surfaced in `debug` and contribute
+    `ratio=0.0` to the candidates — capture.md requires consistent
+    `scale` across frames, and a mismatch is itself a defect we want
+    visible.
+    """
     pngs = _list_pngs(frames_dir)
     if len(pngs) < 2:
         return 0.0, {"reason": "fewer than 2 frames available", "n_frames": len(pngs)}
-    first = pngs[0]
-    mid = pngs[len(pngs) // 2]
-    ratio, debug = _png_diff_ratio(first, mid)
-    debug["first"] = str(first)
-    debug["mid"] = str(mid)
-    return ratio, debug
+
+    pairs: list[tuple[float, str, str, dict[str, Any]]] = []
+    size_mismatches: list[tuple[str, str]] = []
+    for i in range(len(pngs)):
+        for j in range(i + 1, len(pngs)):
+            ratio, dbg = _png_diff_ratio(pngs[i], pngs[j])
+            pairs.append((ratio, str(pngs[i]), str(pngs[j]), dbg))
+            if dbg.get("reason") == "size mismatch":
+                size_mismatches.append((str(pngs[i]), str(pngs[j])))
+
+    if not pairs:
+        return 0.0, {"reason": "no comparable pairs", "n_frames": len(pngs)}
+
+    best = max(pairs, key=lambda p: p[0])
+    return best[0], {
+        "max_pair": [best[1], best[2]],
+        "max_ratio": best[0],
+        "n_pairs": len(pairs),
+        "n_frames": len(pngs),
+        "size_mismatches": size_mismatches,
+    }
 
 
 def judge_bundle(
@@ -115,9 +151,19 @@ def judge_bundle(
     dead_time_ratio, dt_debug = _dead_time_diff(bundle_dir / "frames")
     details["dead_time_diff_ratio"] = dead_time_ratio
     details["dead_time_debug"] = dt_debug
+    # Frame size mismatches are a separate failure even if some other pair
+    # happened to clear the dead-time threshold — capture.md mandates a
+    # uniform scale and a mismatch is a defect we want surfaced loudly.
+    size_mismatches = dt_debug.get("size_mismatches") or []
+    if size_mismatches:
+        failures.append(
+            f"frame size mismatches in bundle ({len(size_mismatches)} pair(s)) — "
+            f"check capture.md `scale` consistency across canonical frames"
+        )
     if dead_time_ratio < min_diff:
         failures.append(
-            f"dead-time check failed: mid-bundle frame diff {dead_time_ratio:.4f} < {min_diff}"
+            f"dead-time check failed: max pairwise diff "
+            f"{dead_time_ratio:.4f} < {min_diff}"
         )
 
     if failures:

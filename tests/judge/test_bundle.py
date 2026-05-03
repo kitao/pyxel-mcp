@@ -134,3 +134,95 @@ def test_default_contract_constants():
     assert DEFAULT_CONTRACT["required_videos"] == ["win-path.gif", "lose-path.gif"]
     assert DEFAULT_CONTRACT["min_frames"] == 5
     assert DEFAULT_CONTRACT["min_dead_time_diff"] == 0.05
+
+
+def test_pass_when_only_one_pair_among_many_shows_motion(tmp_path):
+    """Sparse-content game whose canonical frames mostly look alike (same
+    bg + wall) but at least one pair (e.g. mid_game vs title) differs
+    meaningfully. Pre-P0-2 this failed because only the alphabetical
+    first-vs-mid pair was checked."""
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    _make_gif(bundle / "win-path.gif", (0, 255, 0))
+    _make_gif(bundle / "lose-path.gif", (255, 0, 0))
+    frames_dir = bundle / "frames"
+    frames_dir.mkdir()
+    # Canonical names landing in alphabetical order:
+    # game_over.png, mid_game.png, play_start.png, title.png, win.png
+    base = (10, 20, 30)
+    _make_png(frames_dir / "game_over.png", base)
+    _make_png(frames_dir / "mid_game.png", base)
+    _make_png(frames_dir / "play_start.png", base)   # all identical so far
+    _make_png(frames_dir / "title.png", (200, 50, 30))  # only this differs
+    _make_png(frames_dir / "win.png", base)
+
+    audio_dir = bundle / "audio"
+    audio_dir.mkdir()
+    _make_wav(audio_dir / "bgm.wav")
+
+    result = judge_bundle({"bundle_dir": str(bundle)}, {
+        "required_videos": ["win-path.gif", "lose-path.gif"],
+        "min_frames": 5, "min_dead_time_diff": 0.05,
+        "audio_manifest": [{"name": "bgm.wav", "type": "music"}],
+    })
+    assert result["verdict"] == "pass", result["evidence"]
+    # The max pair should be (something, title.png) or (title.png, something)
+    max_pair = result["details"]["dead_time_debug"]["max_pair"]
+    assert any("title" in p for p in max_pair)
+
+
+def test_fail_when_every_pair_is_below_threshold(tmp_path):
+    """Five identical frames — no pair shows movement. Bundle fails."""
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    _make_gif(bundle / "win-path.gif", (0, 255, 0))
+    _make_gif(bundle / "lose-path.gif", (255, 0, 0))
+    frames_dir = bundle / "frames"
+    frames_dir.mkdir()
+    base = (10, 20, 30)
+    for name in ("game_over", "mid_game", "play_start", "title", "win"):
+        _make_png(frames_dir / f"{name}.png", base)
+
+    audio_dir = bundle / "audio"
+    audio_dir.mkdir()
+    _make_wav(audio_dir / "bgm.wav")
+
+    result = judge_bundle({"bundle_dir": str(bundle)}, {
+        "required_videos": ["win-path.gif", "lose-path.gif"],
+        "min_frames": 5, "min_dead_time_diff": 0.05,
+        "audio_manifest": [{"name": "bgm.wav", "type": "music"}],
+    })
+    assert result["verdict"] == "fail"
+    assert result["details"]["dead_time_debug"]["max_ratio"] == 0.0
+
+
+def test_dead_time_records_size_mismatches_in_debug(tmp_path):
+    """Frames captured at inconsistent scales surface as size_mismatches
+    in debug — capture.md requires uniform scale, this is the diagnostic."""
+    bundle = tmp_path / "bundle"
+    bundle.mkdir()
+    _make_gif(bundle / "win-path.gif", (0, 255, 0))
+    _make_gif(bundle / "lose-path.gif", (255, 0, 0))
+    frames_dir = bundle / "frames"
+    frames_dir.mkdir()
+    # Mismatched sizes
+    Image.new("RGB", (16, 16), (10, 20, 30)).save(frames_dir / "title.png")
+    Image.new("RGB", (32, 32), (10, 20, 30)).save(frames_dir / "play_start.png")
+    Image.new("RGB", (32, 32), (200, 200, 200)).save(frames_dir / "mid_game.png")
+    Image.new("RGB", (32, 32), (10, 20, 30)).save(frames_dir / "win.png")
+    Image.new("RGB", (32, 32), (10, 20, 30)).save(frames_dir / "game_over.png")
+
+    audio_dir = bundle / "audio"
+    audio_dir.mkdir()
+    _make_wav(audio_dir / "bgm.wav")
+
+    result = judge_bundle({"bundle_dir": str(bundle)}, {
+        "required_videos": ["win-path.gif", "lose-path.gif"],
+        "min_frames": 5, "min_dead_time_diff": 0.05,
+        "audio_manifest": [{"name": "bgm.wav", "type": "music"}],
+    })
+    mismatches = result["details"]["dead_time_debug"]["size_mismatches"]
+    assert mismatches, "expected size_mismatches list to record the mixed-scale pairs"
+    # title.png is the odd one out (16x16 vs the rest 32x32) — should
+    # appear in every recorded mismatch.
+    assert all("title" in pair[0] or "title" in pair[1] for pair in mismatches)

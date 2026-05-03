@@ -35,10 +35,23 @@ def contrast_ratio(rgb_a: int, rgb_b: int) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
-def _hierarchy_score(colors: list[int]) -> dict[str, Any]:
-    bg_used = [i for i in _DEFAULT_BACKGROUND if i < len(colors)]
-    env_used = [i for i in _DEFAULT_ENVIRONMENT if i < len(colors)]
-    int_used = [i for i in _DEFAULT_INTERACTIVE if i < len(colors)]
+def _hierarchy_score(used: set[int]) -> dict[str, Any]:
+    """Score the 3-layer palette hierarchy from indices that were actually
+    drawn into image banks.
+
+    Pre-fix this counted layers based on `len(colors)` — i.e., the
+    palette's *capacity* of 16 — which meant every default-palette game
+    scored 2/2 regardless of which colours the script actually used.
+    The intent of the check is "did the agent populate background,
+    environment, and interactive bands?", which is only meaningful
+    against `used_indices`.
+
+    score: 2 = all three bands have at least one colour drawn; 1 = two
+    bands; 0 = one or none.
+    """
+    bg_used = [i for i in _DEFAULT_BACKGROUND if i in used]
+    env_used = [i for i in _DEFAULT_ENVIRONMENT if i in used]
+    int_used = [i for i in _DEFAULT_INTERACTIVE if i in used]
     layers_present = sum(1 for layer in (bg_used, env_used, int_used) if layer)
     score = 2 if layers_present == 3 else (1 if layers_present == 2 else 0)
     return {
@@ -148,7 +161,7 @@ def analyze_palette() -> dict[str, Any]:
     colors = list(pyxel.colors)
     extended = len(colors) > 16
     used, co_located = _scan_image_banks()
-    hierarchy = None if extended else _hierarchy_score(colors)
+    hierarchy = None if extended else _hierarchy_score(used)
     contrast_warnings = _detect_close_pairs(colors, co_located)
     info: dict[str, Any] = {
         "colors": {i: _hex(c) for i, c in enumerate(colors)},

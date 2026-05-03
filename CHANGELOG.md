@@ -10,6 +10,17 @@
   intentionally not yet performed — verification pending)
 - Drop lazy hatchling import in build_hooks.py; hatch's plugin loader
   needs the BuildHookInterface subclass discoverable via `dir()`
+- Score palette hierarchy off `used_indices`, not palette capacity
+  (default-palette games no longer score 2/2 vacuously — the gate
+  finally enforces "did the script actually use bg + env + interactive")
+- judge_bundle dead-time check uses max pairwise diff across all
+  frames, not first-vs-mid alphabetical (sparse-content games no
+  longer require GAME_OVER to look intentionally distinct)
+- judge_bundle records and surfaces frame-size mismatches as a
+  loud bundle failure (capture.md mandates uniform scale)
+- judge_sprite default `min_distinct_colors` scales with sprite area
+  (4×4 ≤ 2, 8×8 ≤ 3, larger ≤ 4) — small balls/bullets no longer
+  need a contract override to clear gate check #4
 
 - Integrate pyxel-skill source into skill/ subdir (Phase 0)
 - Add Layer 2: judge/ with 8 policy primitive tools
