@@ -1,5 +1,19 @@
 # Change Log
 
+## 1.0.0 (unreleased)
+
+- Integrate pyxel-skill source into skill/ subdir (Phase 0)
+- Add Layer 2: judge/ with 8 policy primitive tools
+- Add judge_palette / judge_sprite / judge_animation
+- Add judge_milestone (Pattern D, sandboxed predicate eval)
+- Add judge_genre for PLAN.md ## Genre Identity rules
+- Add judge_bundle (Pattern G, proof bundle + dead-time)
+- Add judge_audio / judge_layout
+- Wire 8 judge_* into FastMCP server as in-process pure funcs
+- Document Layer 1 / Layer 2 split in instructions.md (17 tools)
+- Refactor quality-gate.md 17 checks into judge_* recipe table
+- Add 63 unit tests for judge/* (pass/fail/edge/contract)
+
 ## 0.11.0
 
 - Add top-level `ok: bool` to every tool response for uniform error checks

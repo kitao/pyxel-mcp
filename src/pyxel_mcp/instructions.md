@@ -1,13 +1,24 @@
 # pyxel-mcp
 
 pyxel-mcp is an MCP server that lets AI agents run, verify, and iterate on
-Pyxel retro-game programs without a display. It exposes nine tools that span
-the full development loop: static validation, dynamic execution with snapshot
-collection, asset inspection (palette, image, animation, tilemap, audio), and
-visual regression. Each tool call runs in a fresh subprocess so state cannot
-leak between calls.
+Pyxel retro-game programs without a display. It exposes 17 tools across two
+layers:
 
-## Tools at a glance
+- **Layer 1 — observe (9 tools).** Run the script, inspect Pyxel state,
+  diff frames. Returns raw observations (palette, pixels, snapshots, audio
+  metadata). Each call runs in a fresh subprocess so state cannot leak.
+- **Layer 2 — judge (8 tools).** Pure functions that score a Layer 1
+  observation against a contract dict (typically sourced from PLAN.md /
+  ASSETS.md milestones and manifests). Returns
+  `{ok, verdict ('pass'|'warn'|'fail'), evidence, fail_route, details}`.
+  No subprocess; in-process and side-effect free.
+
+Layer 1 answers "what is happening in Pyxel"; Layer 2 answers "is the
+observed state acceptable per the contract." Combine them: call a Layer 1
+tool, pass its result as `observation` to the matching Layer 2 tool with the
+contract entry the agent extracted from PLAN.md / ASSETS.md.
+
+## Tools at a glance — Layer 1 (observe)
 
 **`run(script, frames, inputs=[], snapshots=[], random_seed=None, timeout=10, stall_window_frames=None)`**
 Drive the script through `frames` game frames. Collects snapshots
@@ -76,6 +87,75 @@ Pixel-wise diff between two PNG paths. Returns `identical`, `size_match`,
 `changed_pixels`, `total_pixels`, `ratio`, and `region` (bounding box of
 differences). No script required.
 
+## Tools at a glance — Layer 2 (judge)
+
+Each `judge_*` is a pure function: `(observation, contract=None) -> verdict`.
+Pass the result of the matching Layer 1 tool as `observation`; pass a dict
+extracted from PLAN.md / ASSETS.md (or omit to use the module default) as
+`contract`. All return the same shape:
+
+```
+{
+  "ok": bool,                 // True iff verdict in {pass, warn}
+  "verdict": "pass"|"warn"|"fail",
+  "evidence": str,            // human-readable one-line reason
+  "fail_route": str|None,     // 'asset-planning'|'sprite-quality'|
+                              //  'playthrough'|'spec'|'scaffolding'|
+                              //  'bundle' — only set when verdict == fail
+  "details": dict             // intermediate values for debugging
+}
+```
+
+`fail_route` tells the agent which workflow stage to revisit when a check
+fails — it is the bridge from "what failed" to "what to do next."
+
+**`judge_palette(observation, contract=None)`**
+Verdict on `inspect_palette` against `{min_hierarchy_score, max_contrast_warnings}`.
+Routes failures to `asset-planning` (low hierarchy) or `sprite-quality` (too
+many close-color pairs).
+
+**`judge_sprite(observation, contract=None)`**
+Verdict on `inspect_image` against `{min_distinct_colors, silhouette: [lo, hi]}`.
+A `represents` string in the contract is carried into `details` for
+traceability against ASSETS.md. Failures route to `sprite-quality`.
+
+**`judge_animation(observation, contract=None)`**
+Verdict on `inspect_animation` against `{diff_band: [lo, hi], min_palette_consistency}`.
+Every adjacent-region diff must fall within the band; palette Jaccard must
+meet the threshold. Failures route to `sprite-quality`.
+
+**`judge_milestone(observation, contract=None)`** (Pattern D)
+Evaluate PLAN.md frame-keyed predicates against a `run()` result. Snapshots
+are indexed by `(kind, frame)`; each `asserts` entry
+(`{frame, kind, predicate}`) names the snapshot to evaluate against. The
+predicate is a sandboxed Python expression — comparisons, boolean ops,
+attribute / subscript access. Dotted state keys (`player.x`) auto-promote to
+nested attribute access. Failures route to `playthrough` (predicate False or
+snapshot missing) or `spec` (predicate parse / name error).
+
+**`judge_genre(observation, contract=None)`**
+Evaluate PLAN.md `## Genre Identity` rules (`{name, verify}`) against a
+`run()` result. The `verify` namespace exposes `exit_status`, `frame_count`,
+`ok`, `elapsed_seconds`, `log`, `assertions_passed`, `assertions_failed`. An
+empty `rules` list is itself a `spec` failure — genre identity must be
+explicit.
+
+**`judge_bundle(observation, contract=None)`** (Pattern G)
+`observation = {"bundle_dir": "/path"}`. Verifies required GIFs (default:
+`win-path.gif`, `lose-path.gif`), `frames/` PNG count ≥ `min_frames`, audio
+files per `audio_manifest`, and a dead-time check (`compare_frames` between
+the first and middle PNG must show `ratio > min_dead_time_diff`). Failures
+route to `bundle`.
+
+**`judge_audio(observation, contract=None)`**
+Verdict on `render_audio` against `{min_peak, min_notes}`. Empty slot
+(warning + zero peak / notes) routes to `sprite-quality`; under-spec audio
+routes to `scaffolding`.
+
+**`judge_layout(observation, contract=None)`**
+Verdict on the first `layout` snapshot in a `run()` result against
+`{min_h_balance, min_quadrant_density}`. Failures route to `scaffolding`.
+
 ## Workflow patterns
 
 ### Milestone verification with `run`
@@ -103,10 +183,34 @@ discovering a `crashed` exit_status mid-implementation.
 
 ### Sprite quality chain
 
-1. `inspect_palette` — confirm color hierarchy score and WCAG contrast.
-2. `inspect_image` — read sprite pixels; check fill ratio and symmetry.
-3. `inspect_animation` — verify per-frame palette consistency and silhouette
-   stability across all animation frames.
+1. `inspect_palette` → `judge_palette` — confirm color hierarchy score and WCAG contrast.
+2. `inspect_image` → `judge_sprite` — read sprite pixels; verify against ASSETS.md
+   manifest entry (distinct colors, silhouette band).
+3. `inspect_animation` → `judge_animation` — verify per-frame palette consistency
+   and silhouette stability across animation frames.
+
+The Layer 2 verdict converts a numeric observation into a routed pass/fail
+the agent can act on without re-implementing the threshold logic.
+
+### Milestone evaluation chain (Pattern D)
+
+1. `run(snapshots=[...])` — capture state / layout snapshots at the frames
+   PLAN.md milestones reference.
+2. `judge_milestone(run_result, milestone_contract)` — evaluate every
+   per-frame predicate against the matching snapshot. Failures with
+   `fail_route == "playthrough"` mean the run did not reach the milestone;
+   `fail_route == "spec"` means the predicate itself is malformed.
+
+### Bundle handoff check (Pattern G)
+
+After the win-path / lose-path GIFs and per-frame PNGs are written:
+
+```
+judge_bundle({"bundle_dir": "/path"}, asset_manifest)
+```
+
+This is the last gate before declaring the deliverable complete — it
+catches missing artifacts and silently-stuck playthroughs in one call.
 
 ### Audio asset spot-check
 
