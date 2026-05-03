@@ -9,7 +9,7 @@ that the game functions end-to-end.
 
 - `pyxel://run-snapshots-schema` (MCP resource) — full schema for `video`, `screen_image`, `screen_grid`, `state`, `layout` snapshot kinds used in bundle production.
 - `task-execution.md` — calls into this file for intermediate captures.
-- `quality-gate.md` — gates final bundle existence (check #12) and assets (#4).
+- `quality-gate.md` — gates final bundle existence + dead-time (check #8) and agent visual review of bundle frames (check #11).
 
 ## Bundle structure
 
@@ -46,7 +46,7 @@ atomically. `read_audio` writes WAVs via its `output_path` argument.
 - Must end on the GAME_OVER scene.
 - Production: `run` `video` snapshot, same shape as win-path with shorter `end_frame`.
 
-For `.mp4` output, the harness falls back to GIF if ffmpeg is unavailable on PATH (spec §6.4.5) — emits a warning and rewrites the path to `.gif`. Either format is accepted by `quality-gate.md` check #12.
+For `.mp4` output, the harness falls back to GIF if ffmpeg is unavailable on PATH (spec §6.4.5) — emits a warning and rewrites the path to `.gif`. Either format is accepted by `quality-gate.md` check #8.
 
 ## Frame snapshots
 
@@ -65,7 +65,7 @@ The `{frame}` token expands to a 5-digit zero-padded integer (only this token is
 
 ## Audio rendering
 
-For every audio cue declared in `ASSETS.md`, render to WAV. **Render against sound slots, not music slots, when you intend to feed the result into `judge_audio`** — see the next paragraph for why.
+For every audio cue declared in `ASSETS.md`, render to WAV. **Render against sound slots, not music slots, when you intend the result to satisfy quality-gate check #7** — see the next paragraph for why.
 
 ```python
 # SE — render the sound slot directly.
@@ -74,7 +74,7 @@ read_audio(script="main.py", target={"sound": 10},
 
 # BGM — Pyxel's music slot is an aggregate of constituent sound IDs.
 # Render each constituent sound (the IDs the music slot points at) so
-# `notes` is populated and `judge_audio` can verify them.
+# `notes` is populated and quality-gate check #7 can verify them.
 read_audio(script="main.py", target={"sound": 32},   # bgm channel 0 sound id
              output_path="/abs/path/screenshots/result/1/audio/bgm_ch0.wav")
 read_audio(script="main.py", target={"sound": 33},   # bgm channel 1
@@ -85,9 +85,9 @@ read_audio(script="main.py", target={"music": 0},
              output_path="/abs/path/screenshots/result/1/audio/bgm_mix.wav")
 ```
 
-`target` accepts exactly one of `"sound"` or `"music"` (validation error otherwise). Both produce `peak_amplitude` and a WAV file, but **only `target={"sound": N}` populates `notes`** — `target={"music": N}` returns `notes: []` because Pyxel's music object is a list-of-channel-sound-IDs, not a note sequence. `judge_audio`'s default `min_notes: 1` therefore cannot be satisfied by a music-target render. Treat the music-target render as a peak-amplitude-only sanity check; route the per-channel sound renders into `judge_audio` for the gate (#7).
+`target` accepts exactly one of `"sound"` or `"music"` (validation error otherwise). Both produce `peak_amplitude` and a WAV file, but **only `target={"sound": N}` populates `notes`** — `target={"music": N}` returns `notes: []` because Pyxel's music object is a list-of-channel-sound-IDs, not a note sequence. The audio gate (quality-gate.md check #7) requires `len(notes) >= 1` per cue, which only `target={"sound": N}` populates. Treat the music-target render as a peak-amplitude sanity check; render the per-channel sound IDs as sounds for the gateable evidence.
 
-Empty slots return success with `peak_amplitude: 0.0`, `notes: []`, plus a warning — that's the gate-failing condition `judge_audio` routes to `sprite-quality`.
+Empty slots return success with `peak_amplitude: 0.0`, `notes: []`, plus a warning — that's the gate-failing condition (check #7) routed to `sprite-quality`.
 
 ## notes.md template
 
@@ -148,7 +148,7 @@ run(
 )
 
 # Audio (script must run cleanly to populate sound slots first).
-# Use `target={"sound": N}` for anything that will go through judge_audio:
+# Use `target={"sound": N}` for anything that will go through quality-gate check #7:
 # the music-target render does not populate `notes` (see "Audio rendering"
 # section above for the full explanation).
 read_audio(script="main.py", target={"sound": 10},
@@ -173,9 +173,7 @@ read_audio(script="main.py", target={"sound": 32},   # bgm channel 0 sound id
 
 After `screenshots/result/<N>/` is produced, before calling the
 gate or reporting to the user, agent (you) must inspect the bundle
-visually. This is the harness's enforcement of SKILL.md Anti-shortcut
-rule #9 — tool-based checks certify *mechanics*; only the agent's own
-eyes certify *recognizability* and *playability*.
+visually. This is **the gate's primary check** (quality-gate.md #11) — tool-based observations (`run` state snapshots, `read_audio` peak/notes, `diff_frames` dead-time) certify *mechanics*; only the agent's own multimodal eyes certify *recognizability* and *playability*. A bundle that passes #1-#10 with empty / boilerplate / contradictory verbalization fails #11 and the gate.
 
 Procedure:
 
@@ -210,7 +208,7 @@ Procedure:
    routing, `decomposer.md` for milestone alignment). **Do NOT
    proceed to the gate without a fix.**
 6. When all frames pass agent visual review, the verbalizations
-   become input to the gate's check #16 (Agent visual review),
+   become input to the gate's check #11 (Agent visual review),
    which records them in `gate-report.json["agent_review"]`.
 
 The previous validation cycle taught the project that 15/15
