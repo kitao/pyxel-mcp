@@ -16,9 +16,10 @@ This skill assumes `pyxel-mcp` ≥ 1.0.0 is installed and registered as an MCP s
 - `pyxel_info` (discovery — versions + paths + resource URIs)
 - `validate` (static analysis — 10 anti-pattern detectors)
 - `run` (dynamic execution — N frames, scheduled inputs, snapshots)
-- `read_palette` / `read_image` / `read_animation` / `read_tilemap` / `read_audio` (Layer 1 raw observation)
+- `read_palette` / `read_image` / `read_animation` / `read_tilemap` / `read_audio` (raw observation)
 - `diff_frames` (PNG pixel diff)
-- `judge_palette` / `judge_sprite` / `judge_animation` / `judge_milestone` / `judge_genre` / `judge_bundle` / `judge_audio` / `judge_layout` (Layer 2 contract verdicts)
+
+Quality verification is the **agent's** responsibility, not a tool's. The 9 tools above capture observations; the agent asserts predicates directly in Python and uses the host's `Read` tool to inspect captured PNGs (the Pyxel canvas is small enough that the multimodal LLM reads every pixel). The Layer 3 quality gate (`quality-gate.md`) lays out the 11 stop conditions the agent runs before declaring done.
 
 If the namespace is missing, the user can get the install snippet by running:
 
@@ -141,15 +142,15 @@ These are the cheats this harness exists to catch. Do not commit any of them.
 4. **Bundle integrity.** A `screenshots/result/<N>/` bundle whose first 3 seconds are correct and the rest is static is FAIL, not partial pass.
 5. **Bias toward failure.** If behavior is not clearly visible in the capture, treat as not-done. Hidden or inferred behavior does not count.
 6. **Closed-loop input only.** Open-loop scripted input drifts past ~200 frames. Issue `run` calls in segments per Pattern C (cumulative-replay), reading observed `state` snapshots between segments and recomputing the next input schedule from the actual position.
-7. **No "looks fine".** Every verify is a specific predicate against an observed value, not a vibe check.
+7. **No "looks fine".** Every verify is a specific Python predicate the agent writes against an observed value, not a vibe check. No tool wraps the predicate; you assert it directly against `result["snapshots"]` values.
 8. **No bundle, no done.** A `screenshots/result/<N>/` directory containing win-path.gif, lose-path.gif, frames, audio WAVs is the precondition for declaring "done". A green gate report without a bundle is FAIL.
 9. **No user-handoff without agent visual review.** Before reporting "done" to the user, agent (you) must `Read` every key frame in the proof bundle, verbalize observations in 1–2 sentences each, and confirm against PLAN.md milestones. Bundle existence + 15-check gate PASS is necessary but not sufficient — the agent's own multimodal judgment is the final gate. "Did I look at the screenshot?" is a precondition for "is this done?". Tool-based checks (`read_image` verdicts, `state` snapshots) certify mechanics; only the agent's own eyes certify *recognizability* and *playability*. See `capture.md` "Pre-handoff agent review".
 
 ## Quality gate is the contract
 
-Done is whatever `quality-gate.md`'s stop conditions say is done. The agent cannot skip ahead, cannot self-certify, and cannot claim "done" with unaddressed FAILs. Re-enter whichever phase the FAIL points to, remediate, re-run the gate.
+Done is whatever `quality-gate.md`'s 11 stop conditions say is done. The agent cannot skip ahead, cannot self-certify, and cannot claim "done" with unaddressed FAILs. Re-enter whichever phase the FAIL points to, remediate, re-run the gate.
 
-The Stop hook (`hooks/stop_check_bundle.py`) fires at session boundary as a non-blocking tripwire. It surfaces missing bundles or unaddressed gate FAILs to the user — it does not replace the agent running the gate.
+The Stop hook (`hooks/stop_check_bundle.py`) fires at session boundary as a non-blocking tripwire. It surfaces missing bundles to the user — it does not replace the agent running the gate.
 
 ## What is NOT this skill's job
 
