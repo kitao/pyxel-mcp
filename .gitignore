@@ -8,3 +8,4 @@ build/
 uv.lock
 .worktrees/
 tests/fixtures/images/*.png
+skill/hooks/__pycache__/
