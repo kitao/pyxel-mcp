@@ -23,6 +23,12 @@
 - Expose skill/*.md as pyxel://workflow/* MCP resources (16 URIs)
 - Add hatch custom build hook to embed skill/ in wheel artifact
 - gitignore src/pyxel_mcp/workflow/_content/ (build-time output)
+- Add `pyxel-mcp install` — print MCP config snippet + guide
+- Add `pyxel-mcp publish-skill DIR` — deploy Layer 3 to host
+- Add `pyxel-mcp serve` (default) — back-compat with bare invocation
+- Switch console script entry point to pyxel_mcp.cli:main
+- Add server startup diagnostic to stderr (workflow path)
+- Rewrite README for v1.0.0 user journey (7 stages)
 
 ## 0.11.0
 

@@ -54,4 +54,4 @@ asyncio_mode = "auto"
 markers = ["integration: tests that require Pyxel (GUI library)"]
 
 [project.scripts]
-pyxel-mcp = "pyxel_mcp.server:main"
+pyxel-mcp = "pyxel_mcp.cli:main"

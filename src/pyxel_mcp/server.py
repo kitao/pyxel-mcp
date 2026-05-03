@@ -236,8 +236,30 @@ judge_audio_tool = judge_audio
 judge_layout_tool = judge_layout
 
 
+def _log_startup() -> None:
+    """One-line stderr diagnostic so users can confirm install + workflow path.
+
+    Stderr is safe under MCP's stdio transport: stdout is reserved for
+    protocol frames, stderr surfaces in the host client's logs (Claude
+    Code, Cursor, Codex CLI all forward it). The line names the
+    workflow source so install troubleshooting starts from data, not
+    guesswork.
+    """
+    try:
+        from pyxel_mcp.workflow import workflow_root
+        wf = str(workflow_root())
+    except Exception as e:  # workflow content missing — keep server startable
+        wf = f"<unavailable: {e}>"
+    sys.stderr.write(
+        "[pyxel-mcp] starting — 17 tools (Layer 1: 9, Layer 2: 8), "
+        f"workflow={wf}\n"
+    )
+
+
 def main() -> None:
-    """Console-script entry point (pyproject.toml `pyxel-mcp = pyxel_mcp.server:main`)."""
+    """Console entry point. Emit a startup diagnostic to stderr, then
+    hand off to FastMCP's stdio transport loop."""
+    _log_startup()
     mcp.run()
 
 
