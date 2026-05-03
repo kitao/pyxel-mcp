@@ -63,6 +63,29 @@ Each sprite uses 3–6 colors from the global palette. Patterns from `knowledge/
 
 Single-color sprites ("a brown rectangle") FAIL the identity contract.
 
+**Palette budget — runtime, not pre-loop.** `read_palette` only sees colours that appear in **image-bank pixels** at the pre-loop checkpoint. It does not see colours emitted by `pyxel.text`, `pyxel.rect`, `pyxel.line`, or any drawing call inside `update`/`draw`. Many games use 3-4 colours in `_build_assets()` for sprites and another 5-7 only via runtime drawing (HUD, scoreboards, scene overlays). The "10-14 of 16 colours" budget recorded in STRUCTURE.md is the **runtime** total, so verify it against a `screen_grid` snapshot from a representative gameplay frame, not against `read_palette`'s `used_indices` alone.
+
+Practical recipe at quality-gate time (#8 "Palette hierarchy"):
+
+```python
+# 1. Pre-loop palette state — covers sprite-bank colours.
+palette_obs = read_palette(script="main.py")
+
+# 2. A mid-game runtime sample — covers HUD / overlay / runtime drawing.
+run_result = run(
+    script="main.py",
+    frames=120, random_seed=42, inputs=[...],
+    snapshots=[{"frame": 60, "kind": "screen_grid", "bbox": [0, 0, W, H]}],
+)
+runtime_indices = set(i for row in run_result["snapshots"][0]["grid"] for i in row)
+
+# 3. Combine and check the budget.
+all_used = set(palette_obs["used_indices"]) | runtime_indices
+assert 9 <= len(all_used) <= 14, f"palette budget out of band: {len(all_used)}"
+```
+
+`judge_palette` works on whatever `observation` it is handed — it does not fetch a runtime sample on its own. The orchestration at gate time has to construct a merged observation: take the `read_palette` result, replace its `used_indices` with the union of pre-loop and runtime `screen_grid` indices, and only then pass it to `judge_palette`. Without that merge step, the gate's hierarchy verdict reflects sprite-bank colours only and misses the HUD / overlay layer entirely.
+
 ## Required asset categories
 
 For an arcade-style platformer like Donkey Kong, minimum manifest:

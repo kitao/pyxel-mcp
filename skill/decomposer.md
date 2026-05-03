@@ -146,6 +146,8 @@ Verify (ladder climb):
 
 Closed-loop note: the test harness reads observed values; if they don't match the planned trajectory within tolerance, the milestone FAILs. For paths longer than ~200 frames, the test harness will steer in segments (see `test-harness.md`).
 
+**Frame numbers are guesses, not commitments.** Stage 2 produces best-effort milestone frames given the planned physics; in Stage 6 (task-execution) these are commonly off by 50-200 frames once the actual movement constants are tuned. Tightening a milestone in response to observed behaviour is fine — that is the closed-loop intent. Loosening one to dodge an otherwise-failing playthrough is Anti-shortcut rule #5 ("adjusting milestones to fit"); fix the game, not the spec. If the natural pace of the game falls outside any of the gate's bands (e.g. a survival game that genuinely takes 60 s to lose, well past the 10-14 s difficulty-floor band), record a contract override in PLAN.md alongside the rationale rather than gaming the milestone numbers.
+
 ## Lose Path Milestones table
 
 ```markdown

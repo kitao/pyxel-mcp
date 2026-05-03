@@ -140,6 +140,18 @@ verdict = judge_milestone(run_result, contract)
 
 Below the band → unfair (the player has no time to react). Above → the lose-path schedule isn't reliably triggering GAME_OVER, which means hazards or collision logic are too soft. Both route the same way, but fix the underlying cause — do not widen the band.
 
+**Genre exception.** Some genres genuinely have a different time-to-lose: a survival game whose intended round length is 60 s, or a one-screen puzzle where the lose state is reached in 3-4 s. The default 10-14 s band is calibrated for action / platformer / shooter, not for those edge cases. If your game's design specifies a different time floor, declare it explicitly in PLAN.md alongside the lose-path table:
+
+```markdown
+## Difficulty floor override
+
+This game is a survival round. Default 10-14 s band does not apply. Override:
+- Acceptable lose-path duration: 50-70 s (1500-2100 frames at 30 fps)
+- Rationale: the round is timed at 60 s by spec; <50 s indicates oversteer.
+```
+
+Then the gate's #10 evaluator reads the override band from PLAN.md instead of the FPS-derived default. Anti-shortcut rule #5 still applies: an override locks before the run begins, not after a failing run.
+
 ## gate-report.json schema
 
 One row per check. The gate writes this file regardless of PASS/FAIL — it is the artifact the user reviews when the gate concludes.

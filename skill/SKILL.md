@@ -2,7 +2,7 @@
 name: pyxel
 description: Build complete retro games with Pyxel through a verified, gated pipeline. TRIGGER when the user wants to make a Pyxel / retro / 8-bit / pixel-art game, or asks to recreate a classic arcade title. DO NOT TRIGGER on general Python work, on existing non-Pyxel projects, or when a different game engine (Pygame, Godot, Unity) is mentioned.
 license: MIT
-version: 0.2.0
+version: 1.0.0
 ---
 
 # pyxel — Retro Game Production Harness
@@ -11,26 +11,19 @@ Build playable, clearable, recognizable-sprite Pyxel games via a phased pipeline
 
 ## Required runtime
 
-This skill assumes `pyxel-mcp` ≥ 0.10.0 is installed and registered as an MCP server reachable at the namespace `pyxel`. On activation, before reading any stage file, verify:
+This skill assumes `pyxel-mcp` ≥ 1.0.0 is installed and registered as an MCP server reachable at the namespace `pyxel`. The exact tool-invocation syntax depends on the host (Claude Code surfaces them as `mcp__pyxel__<tool>`, other clients differ); what matters is that the host's MCP tool list shows these names under the `pyxel` namespace:
 
-- `mcp__pyxel__pyxel_info` is callable.
-- `mcp__pyxel__validate` is callable.
-- `mcp__pyxel__run` is callable.
+- `pyxel_info` (discovery — versions + paths + resource URIs)
+- `validate` (static analysis — 10 anti-pattern detectors)
+- `run` (dynamic execution — N frames, scheduled inputs, snapshots)
+- `read_palette` / `read_image` / `read_animation` / `read_tilemap` / `read_audio` (Layer 1 raw observation)
+- `diff_frames` (PNG pixel diff)
+- `judge_palette` / `judge_sprite` / `judge_animation` / `judge_milestone` / `judge_genre` / `judge_bundle` / `judge_audio` / `judge_layout` (Layer 2 contract verdicts)
 
-If absent, run:
+If the namespace is missing, the user can get the install snippet by running:
 
 ```bash
-uvx pyxel-mcp --version
-```
-
-If not installed, instruct the user to add to their `.mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "pyxel": { "command": "uvx", "args": ["pyxel-mcp"] }
-  }
-}
+uvx pyxel-mcp install
 ```
 
 The skill cannot proceed without these tools. Bail with a clear message if Claude Code's permission prompt for `uvx` is denied.
@@ -93,14 +86,21 @@ The quality gate's `gate-report.json` writes abstract phase names in `fail_route
 | `sprite-quality`  | `asset-gen.md`      |
 | `playthrough`     | `task-execution.md` |
 | `bundle`          | `capture.md`        |
+
+### Reference and knowledge files
+
+Loaded on demand from stage files (not eagerly at skill-activation time):
+
+| File | Purpose | Read from |
+|------|---------|-----------|
 | `quirks.md` | Pyxel API gotchas | When Pyxel behaves unexpectedly |
-| `test-harness.md` | Milestone playthrough verification | Called from Stage 6 |
-| `capture.md` | Proof bundle production | Called from Stage 6 / Stage 7 |
-| `knowledge/pixel-art.md` | Sprite + palette + color hierarchy | Stage 4, Stage 5, Stage 7 |
-| `knowledge/background.md` | Bg + parallax + screen layout | Stage 1, Stage 3, Stage 7 |
+| `test-harness.md` | Milestone playthrough verification | Stage 6 |
+| `capture.md` | Proof bundle production | Stages 6 + 7 |
+| `knowledge/pixel-art.md` | Sprite + palette + colour hierarchy | Stages 4, 5, 7 |
+| `knowledge/background.md` | Background + parallax + screen layout | Stages 1, 3, 7 |
 | `knowledge/game-feel.md` | Physics + jumps + hitboxes + camera + shake | Stage 6 |
-| `knowledge/audio.md` | SE cookbook + MML + channel discipline | Stage 3, Stage 6 |
-| `knowledge/patterns.md` | Title screen, scene SM, level/enemy, animation timing | Stage 3, Stage 6 |
+| `knowledge/audio.md` | SE cookbook + MML + channel discipline | Stages 3, 6 |
+| `knowledge/patterns.md` | Title screen, scene SM, level / enemy, animation timing | Stages 3, 6 |
 
 ## Persistent state
 

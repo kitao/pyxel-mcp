@@ -21,6 +21,17 @@
 - judge_sprite default `min_distinct_colors` scales with sprite area
   (4×4 ≤ 2, 8×8 ≤ 3, larger ≤ 4) — small balls/bullets no longer
   need a contract override to clear gate check #4
+- skill/SKILL.md: bump version to 1.0.0 + pyxel-mcp pin to ≥ 1.0.0
+- skill/SKILL.md: drop host-specific `mcp__pyxel__*` tool-name
+  references in favour of generic namespace-only descriptions
+- skill/SKILL.md: split phase ↔ stage table from reference / knowledge
+  table that had bled into it
+- skill/asset-planner.md: palette budget is runtime, not pre-loop —
+  document `read_palette` ∪ `screen_grid` merge recipe for #8/#9
+- skill/decomposer.md: declare milestone frame numbers as Stage 6
+  empirical refinement targets, not Stage 2 commitments
+- skill/quality-gate.md: document `## Difficulty floor override` as
+  the legitimate way to deviate from the default 10-14 s band
 
 - Integrate pyxel-skill source into skill/ subdir (Phase 0)
 - Add Layer 2: judge/ with 8 policy primitive tools
