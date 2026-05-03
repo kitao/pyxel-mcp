@@ -9,10 +9,28 @@ leak between calls.
 
 ## Tools at a glance
 
-**`run(script, frames, inputs=[], snapshots=[], random_seed=None, timeout=10)`**
+**`run(script, frames, inputs=[], snapshots=[], random_seed=None, timeout=10, stall_window_frames=None)`**
 Drive the script through `frames` game frames. Collects snapshots
 (`screen_image`, `screen_grid`, `state`, `layout`, `video`) and console
-assertions. Returns `exit_status`, `snapshots`, `assertions`, and `errors`.
+assertions. The full result dict includes:
+
+- `ok` — boolean shortcut: `exit_status == "ok"` and no fatal errors
+- `exit_status` — `"ok"`, `"crashed"`, `"timeout"`, or `"stalled"`
+- `snapshots` — captured snapshots, one entry per requested frame/range
+- `assertions` — `ASSERT PASS` / `ASSERT FAIL` lines parsed from stdout
+- `frame_count` — actual frame count reached (may be `< frames` on early break)
+- `elapsed_seconds` — wall time of the run
+- `log` — concatenated stdout + stderr from the script
+- `seeded` — whether `random_seed` was supplied (consumed by gates that require determinism)
+- `errors` — structured records when `exit_status != "ok"`
+
+**Always read `log` alongside snapshots.** A clean `exit_status: "ok"` paired
+with warnings, `Failed to open file`, `Traceback`, or unexpected `print`
+output in `log` is a yellow flag — runtime warnings do not change
+`exit_status` but often signal latent bugs (missing assets, wrong colkey,
+slot underrun, etc.). Scan `log` for `WARN`, `ERROR`, `Failed`, and
+`Traceback` even on success.
+
 See `pyxel://run-snapshots-schema` for the full snapshot grammar.
 
 **`validate(script)`**
@@ -100,7 +118,21 @@ during gameplay.
 
 Capture a golden screenshot with `run` + `screen_image`. In subsequent runs,
 use `compare_frames` against the golden file and assert `identical: true` or
-`ratio < 0.01`.
+`ratio < 0.01`. Use `compare_frames` also for **dead-time detection**: capture
+two `screen_image` frames in the visually-active middle of a playthrough and
+assert `identical: false` AND `ratio > 0.05`. Identical mid-bundle frames
+indicate a stall (frozen entity, frozen camera, broken state) even when the
+final scene reaches WIN.
+
+### Multimodal frame review
+
+The result PNGs from `screen_image` snapshots are agent-readable artifacts.
+Open them with the host's `Read` tool (Claude Code, Codex, etc.) and verbalize
+observations directly — at typical Pyxel resolutions (≤ 256×256) the
+multimodal LLM can read every pixel. This complements `inspect_image`
+aggregate fields (`color_count`, `fill_ratio`): aggregates certify mechanics
+("5 colors used, 40% fill"), the Read certifies recognizability ("Mario in
+red cap, mid-stride"). Both are needed for an honest pass.
 
 ### Multi-frame snapshot syntax
 
