@@ -43,10 +43,30 @@ def test_fail_diff_too_high():
 
 
 def test_fail_palette_inconsistent():
-    """Palette consistency < threshold -> fail."""
+    """Palette consistency well below threshold -> fail."""
     result = judge_animation(_obs(diffs=[0.20], palette_consistency=0.5))
     assert result["verdict"] == "fail"
     assert "palette" in result["evidence"].lower() or "consistency" in result["evidence"].lower()
+
+
+def test_pass_with_one_extra_color_under_default():
+    """5/6 consistency (one frame adds a colour, e.g. flame pulse) → pass.
+
+    Pre-fix the default of 1.0 forced strict identity, banning any
+    intentional palette tweak between paired frames. 0.83 (5/6) lets
+    a single-color addition through while still rejecting wholesale
+    palette swaps."""
+    result = judge_animation(_obs(diffs=[0.20], palette_consistency=0.83))
+    assert result["verdict"] == "pass"
+
+
+def test_strict_consistency_via_contract_override():
+    """An author who really wants strict identity can ask for it back."""
+    result = judge_animation(
+        _obs(diffs=[0.20], palette_consistency=0.83),
+        contract={"min_palette_consistency": 1.0},
+    )
+    assert result["verdict"] == "fail"
 
 
 def test_boundary_inclusive():
@@ -71,5 +91,9 @@ def test_empty_region_diffs():
 
 
 def test_default_contract_constants():
+    """The 0.83 default for `min_palette_consistency` was lowered from
+    1.0 in response to e2e validation: legitimate animation idioms
+    (flame pulse, hit flash) introduce one extra colour in a single
+    frame and would otherwise require an explicit override."""
     assert DEFAULT_CONTRACT["diff_band"] == [0.05, 0.50]
-    assert DEFAULT_CONTRACT["min_palette_consistency"] == 1.0
+    assert DEFAULT_CONTRACT["min_palette_consistency"] == 0.83

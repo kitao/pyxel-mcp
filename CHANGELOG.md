@@ -34,6 +34,22 @@
   the legitimate way to deviate from the default 10-14 s band
 - Bump Pyxel minimum dependency to 2.9.5 (was 2.9.4); 405 tests pass
   under 2.9.5 in the local venv with no compatibility regressions
+- judge_palette: raise `max_contrast_warnings` default 1 → 5
+  (3-color-per-material rule produces 9-12 warnings naturally;
+  the old 1 forced an override on every multi-material retro game)
+- judge_palette: return shape now includes `sub_verdicts.hierarchy`
+  + `sub_verdicts.contrast` so quality-gate's #8 and #9 rows can
+  reflect each axis independently instead of doubling up on a
+  contrast-only failure
+- judge_palette: hierarchy "warn" tier — score one below required
+  is no longer a hard fail
+- judge_animation: lower `min_palette_consistency` default 1.0 → 0.83
+  (5/6) so single-color additions like flame pulse / hit flash
+  pass without an explicit override
+- state snapshot: `attrs` not-found warnings now include hints for
+  the two common mistakes — `self.` prefix and inline `len(...)`
+- run-snapshots-schema.md: mandate absolute paths for snapshot
+  `output` / `output_pattern`; document `state.attrs` path syntax
 
 - Integrate pyxel-skill source into skill/ subdir (Phase 0)
 - Add Layer 2: judge/ with 8 policy primitive tools

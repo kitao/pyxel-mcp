@@ -2,9 +2,14 @@
 from __future__ import annotations
 from typing import Any
 
+# `min_palette_consistency` is Jaccard similarity of palette index sets
+# across paired animation frames. 1.0 (strict identity) precludes legitimate
+# idioms like flame pulses or hit flashes that introduce a single new colour
+# in one frame; 5/6 ≈ 0.83 admits exactly that case (one extra colour out
+# of six total) while still rejecting wholesale palette swaps.
 DEFAULT_CONTRACT: dict[str, Any] = {
     "diff_band": [0.05, 0.50],
-    "min_palette_consistency": 1.0,
+    "min_palette_consistency": 0.83,
 }
 
 

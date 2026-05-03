@@ -102,7 +102,25 @@ def capture(
         for path in attrs:
             v, found = _resolve_path(target, path)
             if not found:
-                warnings.append(f"attr '{path}' not found")
+                msg = f"attr '{path}' not found"
+                # Specific hints for the two mistakes a fresh agent
+                # tends to make (surfaced by e2e validation):
+                if path.startswith("self."):
+                    msg += (
+                        " — note: state.attrs paths are evaluated against "
+                        "the App instance directly, so do not include "
+                        "the 'self.' prefix (use 'player.x', not "
+                        "'self.player.x')"
+                    )
+                elif "(" in path or ")" in path:
+                    msg += (
+                        " — note: state.attrs paths do not support "
+                        "function calls; expose a derived value as a "
+                        "plain attribute (e.g. set self.n_barrels = "
+                        "len(self.barrels) in update, then read "
+                        "'n_barrels')"
+                    )
+                warnings.append(msg)
                 continue
             values[path] = _serialize_value(v)
 

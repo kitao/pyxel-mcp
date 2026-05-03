@@ -6,9 +6,37 @@ snapshot entries when calling `run`.
 `snapshots` is a `list[dict]` — each dict is one snapshot entry. The entry
 must include `"kind"` plus kind-specific fields described below.
 
+## Output paths — always absolute
+
+Snapshot fields that name output files (`output` for `screen_image` /
+`video`, `output_pattern` for multi-frame `screen_image`) **should be
+absolute paths**. Relative paths resolve against the harness subprocess's
+working directory — Pyxel chdirs into the script's parent directory before
+the run loop, which is rarely what the caller expects. Constructing the
+path with `os.path.abspath(...)` or `pathlib.Path(...).resolve()` from
+the caller side avoids any ambiguity about where the PNG / GIF lands.
+
 ---
 
 ## Snapshot Kinds (5)
+
+### state — `attrs` path syntax
+
+The `state` snapshot kind reads attributes from the App instance (or the
+imported module if no App class was found). Each entry in `attrs` is a
+dotted path resolved against the target — there are two consistent
+mistakes worth flagging up front:
+
+- **Do not include `self.`**. The path is evaluated against the App
+  instance directly, so write `player.x`, not `self.player.x`.
+- **No function calls or expressions**. `len(barrels)` and similar
+  derived values are not allowed in the path. Expose the value as a
+  plain attribute first (`self.n_barrels = len(self.barrels)` in
+  `update`), then read it as `n_barrels`.
+
+Both mistakes are reported in the snapshot's `warnings` list with a
+specific hint message, so they surface without having to trace silent
+zero values.
 
 ### 1. screen_image
 
