@@ -55,41 +55,38 @@ def test_warns_when_bundle_lacks_video(tmp_path: Path) -> None:
     assert "win-path" in err.lower() or "incomplete" in err.lower()
 
 
-def test_warns_when_gate_report_has_failures(tmp_path: Path) -> None:
-    """Hook warns if gate-report.json shows unaddressed FAILs."""
+def test_warns_when_bundle_lacks_gate_report(tmp_path: Path) -> None:
+    """Hook warns when bundle has artifacts but gate-report.json is missing
+    (= quality gate did not run). The hook does NOT inspect gate-report content."""
     (tmp_path / ".pyxel-skill").mkdir()
     bundle = tmp_path / "screenshots" / "result" / "1"
     bundle.mkdir(parents=True)
     (bundle / "win-path.gif").write_bytes(b"GIF89a")
-    (bundle / "gate-report.json").write_text(json.dumps({
-        "attempt": 1,
-        "fps": 30,
-        "checks": [{"id": 5, "label": "Win path", "result": "FAIL", "evidence": "x"}],
-        "summary": {"pass": 11, "fail": 1, "total": 12},
-    }))
     out, err, rc = run_hook({"cwd": str(tmp_path)}, tmp_path)
     assert rc == 0
     assert json.loads(out) == {}
-    assert "fail" in err.lower()
+    assert "gate-report.json" in err.lower() or "quality gate did not run" in err.lower()
 
 
-def test_silent_pass_on_clean_bundle(tmp_path: Path) -> None:
-    """Hook silently returns {} when bundle is well-formed and gate report is all-PASS."""
+def test_silent_pass_on_complete_bundle(tmp_path: Path) -> None:
+    """Hook silently returns {} when bundle has win-path video AND gate-report.json
+    exists. The hook does NOT parse gate-report content — that is the agent's
+    responsibility (the agent ran the gate and wrote the JSON)."""
     (tmp_path / ".pyxel-skill").mkdir()
     bundle = tmp_path / "screenshots" / "result" / "1"
     bundle.mkdir(parents=True)
     (bundle / "win-path.gif").write_bytes(b"GIF89a")
     (bundle / "lose-path.gif").write_bytes(b"GIF89a")
+    # Even a FAIL gate-report.json: the hook is content-agnostic.
     (bundle / "gate-report.json").write_text(json.dumps({
         "attempt": 1,
         "fps": 30,
-        "checks": [{"id": i, "label": f"check {i}", "result": "PASS"} for i in range(1, 13)],
-        "summary": {"pass": 12, "fail": 0, "total": 12},
+        "checks": [{"id": 5, "label": "Win path", "result": "FAIL", "evidence": "x"}],
+        "summary": {"pass": 10, "fail": 1, "total": 11},
     }))
     out, err, rc = run_hook({"cwd": str(tmp_path)}, tmp_path)
     assert rc == 0
     assert json.loads(out) == {}
-    # Some informational messages OK on stderr; no warnings/errors.
     assert "warn" not in err.lower()
     assert "fail" not in err.lower()
 

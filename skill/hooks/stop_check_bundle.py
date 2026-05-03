@@ -3,6 +3,9 @@
 
 Best-effort. The hook never blocks Claude Code from stopping. It silently no-ops
 when the cwd is not a pyxel-skill project (no .pyxel-skill/ marker).
+
+The hook is a tripwire for missing artifacts only. The gate-report.json content
+is the agent's responsibility; the hook does not re-evaluate it.
 """
 
 from __future__ import annotations
@@ -65,21 +68,11 @@ def main() -> None:
         print(json.dumps({}))
         return
 
-    win_gif = bundle / "win-path.gif"
-    if not win_gif.is_file():
-        warn(f"bundle {bundle.name} is incomplete: missing win-path.gif.")
+    if not (bundle / "win-path.gif").is_file() and not (bundle / "win-path.mp4").is_file():
+        warn(f"bundle {bundle.name} is incomplete: missing win-path.gif/mp4.")
 
-    gate_report = bundle / "gate-report.json"
-    if gate_report.is_file():
-        try:
-            data = json.loads(gate_report.read_text())
-            fail_count = data.get("summary", {}).get("fail", 0)
-            if fail_count > 0:
-                failed_checks = [c for c in data.get("checks", []) if c.get("result") == "FAIL"]
-                ids = ", ".join(str(c.get("id")) for c in failed_checks)
-                warn(f"gate report shows {fail_count} unaddressed FAIL(s) (check IDs: {ids}).")
-        except (json.JSONDecodeError, ValueError):
-            warn(f"gate-report.json in {bundle.name} is not valid JSON.")
+    if not (bundle / "gate-report.json").is_file():
+        warn(f"bundle {bundle.name} has no gate-report.json — quality gate did not run.")
 
     print(json.dumps({}))
 
