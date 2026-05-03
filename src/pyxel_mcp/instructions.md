@@ -1,24 +1,14 @@
 # pyxel-mcp
 
 pyxel-mcp is an MCP server that lets AI agents run, verify, and iterate on
-Pyxel retro-game programs without a display. It exposes 17 tools across two
-layers:
+Pyxel retro-game programs without a display. It exposes 9 observation tools.
 
-- **Layer 1 — observe (9 tools).** Run the script, inspect Pyxel state,
-  diff frames. Returns raw observations (palette, pixels, snapshots, audio
-  metadata). Each call runs in a fresh subprocess so state cannot leak.
-- **Layer 2 — judge (8 tools).** Pure functions that score a Layer 1
-  observation against a contract dict (typically sourced from PLAN.md /
-  ASSETS.md milestones and manifests). Returns
-  `{ok, verdict ('pass'|'warn'|'fail'), evidence, fail_route, details}`.
-  No subprocess; in-process and side-effect free.
+Each tool call runs in a fresh subprocess so per-call state cannot leak. The
+tools return raw observations (palette, pixels, snapshots, audio metadata,
+diff stats); the agent decides whether the observation is acceptable for the
+current task.
 
-Layer 1 answers "what is happening in Pyxel"; Layer 2 answers "is the
-observed state acceptable per the contract." Combine them: call a Layer 1
-tool, pass its result as `observation` to the matching Layer 2 tool with the
-contract entry the agent extracted from PLAN.md / ASSETS.md.
-
-## Tools at a glance — Layer 1 (observe)
+## Tools at a glance
 
 **`run(script, frames, inputs=[], snapshots=[], random_seed=None, timeout=10, stall_window_frames=None)`**
 Drive the script through `frames` game frames. Collects snapshots
@@ -58,12 +48,14 @@ paths, and resource URIs. No script required.
 **`read_palette(script)`**
 Read palette state at the script's pre-loop checkpoint. Returns colors,
 `extended_palette` flag, `hierarchy_score` (3-layer: background / environment
-/ interactive), and WCAG contrast warnings.
+/ interactive — derived from `used_indices`, the union of indices touched
+across image banks), `used_indices`, and WCAG contrast warnings.
 
 **`read_image(script, image, x=0, y=0, w=None, h=None, render_path=None)`**
 Read pixels from an image-bank region (banks 0–2). Returns `color_count`,
 `fill_ratio`, `symmetry`, `edge_density`. Pixel grid is `null` when the
-region exceeds 4096 px. Pass `render_path` to save a PNG.
+region exceeds 4096 px. Pass `render_path` to save a PNG for direct visual
+inspection by the agent (`Read` tool).
 
 **`read_animation(script, image, x, y, w, h, region_count, direction)`**
 Read N adjacent regions in horizontal or vertical direction. Returns
@@ -80,81 +72,42 @@ blank-tile trap).
 **`read_audio(script, target, output_path)`**
 Render a sound or music slot to WAV. `target` is `{"sound": int}` or
 `{"music": int}` (exactly one). Returns `duration_seconds`, `peak_amplitude`,
-`notes` list, and `warnings`.
+`notes` list, and `warnings`. **`target={"sound": N}` populates the `notes`
+list; `target={"music": N}` returns `notes: []` (Pyxel's music object is a
+list-of-channel-sound-IDs, not a note sequence).** Render BGM by walking the
+music slot's constituent sound IDs and rendering each as a sound.
 
 **`diff_frames(frame_a, frame_b)`**
 Pixel-wise diff between two PNG paths. Returns `identical`, `size_match`,
 `changed_pixels`, `total_pixels`, `ratio`, and `region` (bounding box of
 differences). No script required.
 
-## Tools at a glance — Layer 2 (judge)
+## Quality verification is the agent's job
 
-Each `judge_*` is a pure function: `(observation, contract=None) -> verdict`.
-Pass the result of the matching Layer 1 tool as `observation`; pass a dict
-extracted from PLAN.md / ASSETS.md (or omit to use the module default) as
-`contract`. All return the same shape:
+This MCP server intentionally has no `judge_*` tools and no numerical
+default thresholds. Encoding "good game" as universal numerical predicates
+proved structurally brittle — every game type surfaced a default that
+fought a legitimate idiom (3-material palette ↔ contrast-warning budget;
+flame-pulse animation ↔ palette-consistency floor; 4×4 sprite ↔
+distinct-color minimum). The recurring tuning was unbounded.
 
-```
-{
-  "ok": bool,                 // True iff verdict in {pass, warn}
-  "verdict": "pass"|"warn"|"fail",
-  "evidence": str,            // human-readable one-line reason
-  "fail_route": str|None,     // 'asset-planning'|'sprite-quality'|
-                              //  'playthrough'|'spec'|'scaffolding'|
-                              //  'bundle' — only set when verdict == fail
-  "details": dict             // intermediate values for debugging
-}
-```
+Quality verification is the agent's responsibility:
 
-`fail_route` tells the agent which workflow stage to revisit when a check
-fails — it is the bridge from "what failed" to "what to do next."
+1. Capture observations via the 9 tools above (state snapshots, rendered
+   PNGs, audio peaks, palette index sets, frame diffs).
+2. Assert predicates **directly in Python** against the returned values.
+   No tool wraps the predicate; use any Python you need (`abs`, `len`,
+   list comprehensions, helpers).
+3. **Read** rendered PNGs with the host's `Read` tool. The Pyxel canvas
+   is small (≤ 256×256), so the multimodal LLM reads every pixel —
+   verbalize sprite identity, scene state, HUD content, animation state,
+   background and hazard placement against PLAN.md / ASSETS.md anchors.
+4. When code-asserted state and visual observation disagree, **trust the
+   visual observation**.
 
-**`judge_palette(observation, contract=None)`**
-Verdict on `read_palette` against `{min_hierarchy_score, max_contrast_warnings}`.
-Routes failures to `asset-planning` (low hierarchy) or `sprite-quality` (too
-many close-color pairs).
-
-**`judge_sprite(observation, contract=None)`**
-Verdict on `read_image` against `{min_distinct_colors, silhouette: [lo, hi]}`.
-A `represents` string in the contract is carried into `details` for
-traceability against ASSETS.md. Failures route to `sprite-quality`.
-
-**`judge_animation(observation, contract=None)`**
-Verdict on `read_animation` against `{diff_band: [lo, hi], min_palette_consistency}`.
-Every adjacent-region diff must fall within the band; palette Jaccard must
-meet the threshold. Failures route to `sprite-quality`.
-
-**`judge_milestone(observation, contract=None)`** (Pattern D)
-Evaluate PLAN.md frame-keyed predicates against a `run()` result. Snapshots
-are indexed by `(kind, frame)`; each `asserts` entry
-(`{frame, kind, predicate}`) names the snapshot to evaluate against. The
-predicate is a sandboxed Python expression — comparisons, boolean ops,
-attribute / subscript access. Dotted state keys (`player.x`) auto-promote to
-nested attribute access. Failures route to `playthrough` (predicate False or
-snapshot missing) or `spec` (predicate parse / name error).
-
-**`judge_genre(observation, contract=None)`**
-Evaluate PLAN.md `## Genre Identity` rules (`{name, verify}`) against a
-`run()` result. The `verify` namespace exposes `exit_status`, `frame_count`,
-`ok`, `elapsed_seconds`, `log`, `assertions_passed`, `assertions_failed`. An
-empty `rules` list is itself a `spec` failure — genre identity must be
-explicit.
-
-**`judge_bundle(observation, contract=None)`** (Pattern G)
-`observation = {"bundle_dir": "/path"}`. Verifies required GIFs (default:
-`win-path.gif`, `lose-path.gif`), `frames/` PNG count ≥ `min_frames`, audio
-files per `audio_manifest`, and a dead-time check (`diff_frames` between
-the first and middle PNG must show `ratio > min_dead_time_diff`). Failures
-route to `bundle`.
-
-**`judge_audio(observation, contract=None)`**
-Verdict on `read_audio` against `{min_peak, min_notes}`. Empty slot
-(warning + zero peak / notes) routes to `sprite-quality`; under-spec audio
-routes to `scaffolding`.
-
-**`judge_layout(observation, contract=None)`**
-Verdict on the first `layout` snapshot in a `run()` result against
-`{min_h_balance, min_quadrant_density}`. Failures route to `scaffolding`.
+The Layer 3 workflow skill (`pyxel://workflow`) drives this end-to-end
+across a 7-stage pipeline; see its `quality-gate.md` for the 11 stop
+conditions an agent runs before declaring "done".
 
 ## Workflow patterns
 
@@ -169,10 +122,22 @@ shows.
 ```json
 {
   "snapshots": [
-    {"kind": "state",        "frame": 60, "paths": ["player.x", "score"]},
-    {"kind": "screen_image", "frame": 60, "output_path": "/tmp/frame60.png"}
+    {"kind": "state",        "frame": 60, "attrs": ["player.x", "score"]},
+    {"kind": "screen_image", "frame": 60, "output": "/tmp/frame60.png"}
   ]
 }
+```
+
+Then in the agent:
+
+```python
+result = run(script="main.py", frames=120, snapshots=[...])
+snaps = {(s["kind"], s["frame"]): s for s in result["snapshots"]}
+v = lambda f, a: snaps[("state", f)]["values"][a]
+
+assert v(60, "score") == 0
+assert v(60, "player.x") > 10
+# Then Read /tmp/frame60.png and verbalize.
 ```
 
 ### Pre-flight static check with `validate`
@@ -181,52 +146,37 @@ Always run `validate` before the first `run`. It catches syntax errors and the
 10 common anti-patterns without starting a Pyxel process. Cheaper than
 discovering a `crashed` exit_status mid-implementation.
 
-### Sprite quality chain
+### Sprite identity verification
 
-1. `read_palette` → `judge_palette` — confirm color hierarchy score and WCAG contrast.
-2. `read_image` → `judge_sprite` — read sprite pixels; verify against ASSETS.md
-   manifest entry (distinct colors, silhouette band).
-3. `read_animation` → `judge_animation` — verify per-frame palette consistency
-   and silhouette stability across animation frames.
+1. `read_palette(script)` — capture the palette + hierarchy score (derived
+   from indices actually drawn into image banks).
+2. `read_image(script, image=N, x=..., y=..., w=..., h=..., render_path="/tmp/sprite.png")`
+   — capture pixel stats AND save a PNG.
+3. `Read /tmp/sprite.png` — agent verbalizes against the ASSETS.md
+   `represents:` string for that row. Reject blob / placeholder /
+   wrong-subject sprites.
 
-The Layer 2 verdict converts a numeric observation into a routed pass/fail
-the agent can act on without re-implementing the threshold logic.
-
-### Milestone evaluation chain (Pattern D)
-
-1. `run(snapshots=[...])` — capture state / layout snapshots at the frames
-   PLAN.md milestones reference.
-2. `judge_milestone(run_result, milestone_contract)` — evaluate every
-   per-frame predicate against the matching snapshot. Failures with
-   `fail_route == "playthrough"` mean the run did not reach the milestone;
-   `fail_route == "spec"` means the predicate itself is malformed.
-
-### Bundle handoff check (Pattern G)
-
-After the win-path / lose-path GIFs and per-frame PNGs are written:
-
-```
-judge_bundle({"bundle_dir": "/path"}, asset_manifest)
-```
-
-This is the last gate before declaring the deliverable complete — it
-catches missing artifacts and silently-stuck playthroughs in one call.
+For paired animations, `read_animation(..., region_count=2)` plus `Read` of
+each rendered frame.
 
 ### Audio asset spot-check
 
-Run `read_audio` immediately after populating a sound slot. Assert
-`peak_amplitude > 0` and inspect the `notes` list before relying on the slot
-during gameplay.
+Run `read_audio(target={"sound": N}, output_path="...")` immediately after
+populating a sound slot. Assert `peak_amplitude >= 0.02` and inspect the
+`notes` list (must be non-empty for sound targets) before relying on the
+slot during gameplay.
 
-### Visual regression
+### Visual regression and dead-time detection
 
 Capture a golden screenshot with `run` + `screen_image`. In subsequent runs,
 use `diff_frames` against the golden file and assert `identical: true` or
-`ratio < 0.01`. Use `diff_frames` also for **dead-time detection**: capture
-two `screen_image` frames in the visually-active middle of a playthrough and
-assert `identical: false` AND `ratio > 0.05`. Identical mid-bundle frames
-indicate a stall (frozen entity, frozen camera, broken state) even when the
-final scene reaches WIN.
+`ratio < 0.01`.
+
+Use `diff_frames` also for **dead-time detection**: capture frames spanning
+the full bundle window and compute the maximum pairwise diff. A bundle whose
+all-pairs diff is < 5% indicates a stall (frozen entity, frozen camera,
+broken state) even when the final scene reaches WIN. Alphabetical
+first-vs-mid pairs are unreliable — pick the max across all pairs.
 
 ### Multimodal frame review
 
@@ -248,7 +198,8 @@ Pass `frames` as a list of ints or as a range string (`"0:60:10"` for every
 
 Pass `random_seed: int` to `run`. The harness seeds both Python's `random`
 module and Pyxel's `rseed` together so the same frame sequence is reproducible
-across calls.
+across calls. Quality-gate playthroughs must be seeded — an unseeded run
+that happens to pass this attempt may not pass the next.
 
 ## Quirks
 
