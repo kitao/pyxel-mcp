@@ -159,7 +159,7 @@ read_animation(
 
 Frames should differ (5–50% per-frame diff) but share palette and silhouette outline. If the diff is below 5%, the animation will look static. Above 50%, it will flicker.
 
-**Tilemap source-bank trap (Pattern F).** If ASSETS.md declares a tilemap (used in scaffold or task-execution), the source bank's `(0, 0)` tile must be empty (all palette index 0) — otherwise every "empty" tilemap cell shows visible content. This is `quality-gate.md` check #13. Verify by inspecting the (0,0) corner of the source bank:
+**Tilemap source-bank trap (Pattern F).** If ASSETS.md declares a tilemap (used in scaffold or task-execution), the source bank's `(0, 0)` tile must be empty (all palette index 0) — otherwise every "empty" tilemap cell shows visible content. This is `quality-gate.md` check #9. Verify by inspecting the (0,0) corner of the source bank:
 
 ```python
 read_image(script="main.py", image=0, x=0, y=0, w=8, h=8)
@@ -171,7 +171,7 @@ If non-zero pixels are at (0,0), move the offending sprite to a different bank l
 ## Anti-patterns in this stage
 
 - **Generating sprites in `update()` instead of `_build_assets()`.** Either runs every frame (perf disaster) or runs after `pyxel.run()` starts and is invisible to `read_image` for the first few frames.
-- **"Add it later" placeholders:** `pyxel.rect(x, y, 8, 8, 8)` in `draw()` instead of `pyxel.blt(...)`. The asset manifest declares a sprite; the draw call must `blt` from it. Asset-gen was skipped — the gate FAILs check #4.
+- **"Add it later" placeholders:** `pyxel.rect(x, y, 8, 8, 8)` in `draw()` instead of `pyxel.blt(...)`. The asset manifest declares a sprite; the draw call must `blt` from it. Asset-gen was skipped — the agent visual review (quality-gate.md check #11) will catch the placeholder rectangle and route to `sprite-quality`.
 - **Bulk-edit then bulk-verify.** Edit one sprite, run `read_image` with `render_path=`, `Read` the PNG, verbalize observation, fix, then move on. Editing 10 sprites before reviewing means 10 broken sprites to triage at once. The Read step is non-negotiable — see SKILL.md rule #9.
 - **Trusting `color_count` / `fill_ratio` without Reading the PNG.** Aggregate metrics certify "5 colors used" but not "the sprite reads as Mario". A 5-color sprite of a random pattern passes the aggregate check; the multimodal `Read` is the recognizability gate.
 - **Forgetting `colkey=0` in `blt()` calls.** The transparent background of the sprite renders opaque (palette index 0). `validate` warns about missing `colkey` — fix it.

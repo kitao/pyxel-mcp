@@ -84,7 +84,7 @@ all_used = set(palette_obs["used_indices"]) | runtime_indices
 assert 9 <= len(all_used) <= 14, f"palette budget out of band: {len(all_used)}"
 ```
 
-`judge_palette` works on whatever `observation` it is handed — it does not fetch a runtime sample on its own. The orchestration at gate time has to construct a merged observation: take the `read_palette` result, replace its `used_indices` with the union of pre-loop and runtime `screen_grid` indices, and only then pass it to `judge_palette`. Without that merge step, the gate's hierarchy verdict reflects sprite-bank colours only and misses the HUD / overlay layer entirely.
+The agent has to construct the merged `used_indices` set explicitly at gate time: take `read_palette`'s `used_indices` (pre-loop image-bank indices) and union with the runtime `screen_grid` indices (which see HUD / overlay drawing). The agent then judges hierarchy / contrast against this merged set — count distinct dark-layer indices (0,1,5), mid (3,4,13), bright (8,10,11); at least 2 layers should be present, and visual contrast between adjacent indices is judged by reading the rendered PNG, not by a numerical threshold. Without the merge, the assessment reflects sprite-bank colours only and misses the HUD / overlay layer entirely.
 
 ## Required asset categories
 
@@ -154,7 +154,7 @@ For Stage 5 (asset-gen), write strings line-by-line and verify incrementally wit
 ## Anti-patterns in this stage
 
 - **"I'll figure out the sprites while coding"** — leads to last-minute rectangle blobs.
-- **Listing assets without `represents:`.** Stage 5 has no acceptance criterion; the gate FAILs check #4.
+- **Listing assets without `represents:`.** Stage 5 has no acceptance criterion. The agent visual review (quality-gate.md check #11) needs the `represents:` string as the anchor to verbalize against — without it, the verbalization has nothing to compare to and the review devolves into "looks fine".
 - **Listing assets without palette plan.** Result: every sprite is gray.
 - **Reusing the same sprite for "walking" and "idle" without saying so.** Animation diff check FAILs.
 - **Skipping outline color.** Sprites blend into background; contrast warnings trip in `read_palette`.
