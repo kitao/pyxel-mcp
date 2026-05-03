@@ -22,9 +22,11 @@ def _empty(error: dict) -> dict[str, Any]:
 def run(payload: dict[str, Any]) -> dict[str, Any]:
     """Read the script's palette state at the pre-loop checkpoint.
 
-    Returns raw observation (`hierarchy`, `contrast_warnings`, ...). Pass
-    the result to `judge_palette` for a pass/warn/fail verdict; this layer
-    no longer computes one. `ok` is True iff `len(errors) == 0`.
+    Returns raw observation (`hierarchy`, `contrast_warnings`, ...). The
+    agent judges the verdict directly against the merged
+    `read_palette` ∪ `screen_grid` `used_indices` set (HUD / overlay
+    colours are only visible in the runtime grid, not the pre-loop
+    bank). `ok` is True iff `len(errors) == 0`.
     """
     try:
         with run_to_preloop(payload, empty_factory=_empty):

@@ -92,7 +92,7 @@ def _register_workflow(mcp) -> None:
     one stderr line and return — the server still starts and the rest
     of the resource surface (anti-patterns, examples, etc.) remains
     available. The agent will see no `pyxel://workflow/*` resources but
-    can still drive Layer 1 / Layer 2 tools.
+    can still drive the 9 observation tools.
     """
     from pyxel_mcp.workflow import list_workflow_files, workflow_root
     try:

@@ -22,9 +22,11 @@ def _empty(error: dict) -> dict:
 def run(payload: dict[str, Any]) -> dict[str, Any]:
     """Read pixels in an image-bank region at the pre-loop checkpoint.
 
-    Returns raw observation (`color_count`, `fill_ratio`, ...). Pass the
-    result to `judge_sprite` for a pass/warn/fail verdict against an
-    ASSETS.md sprite manifest entry. `ok` is True iff `len(errors) == 0`.
+    Returns raw observation (`color_count`, `fill_ratio`, ...). The agent
+    judges the verdict directly: compare aggregates to ASSETS.md sprite
+    manifest entry, then `Read` the rendered PNG (pass `render_path`)
+    and verbalize against the `represents:` description. `ok` is True
+    iff `len(errors) == 0`.
     """
     image = payload.get("image")
     if not isinstance(image, int):
