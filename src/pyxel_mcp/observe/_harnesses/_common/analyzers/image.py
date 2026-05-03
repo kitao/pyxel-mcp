@@ -74,41 +74,6 @@ def _render_png(region: np.ndarray, render_path: Path) -> None:
     Image.fromarray(rgb, "RGB").save(render_path)
 
 
-def _image_verdict(
-    pixels: list | None,
-    fill_ratio: float,
-    color_count: dict[int, int],
-) -> str | None:
-    """Single-region verdict for sprite quality. Returns None for full-bank scans
-    (pixels=None — fill_ratio over 65k px is meaningless as a sprite metric).
-
-    Thresholds (mirror pyxel-skill quality-gate #4 historic logic):
-      - "pass": 0.15 <= fill_ratio <= 0.95 AND len(color_count) >= 3
-      - "warn": fill_ratio outside [0.15, 0.95] by less than 0.05, OR len(color_count) == 2
-      - "fail": otherwise
-
-    The pixels=None gate distinguishes "this is a sprite-sized region we can
-    judge" from "this is a whole-bank scan, where these numbers don't have the
-    same meaning". For the latter, the verdict is null and callers should use
-    aggregate stats instead.
-    """
-    if pixels is None:
-        return None
-    n_colors = len(color_count)
-    in_band = 0.15 <= fill_ratio <= 0.95
-    if in_band and n_colors >= 3:
-        return "pass"
-    # warn band: fill close to thresholds (within 0.05) or exactly 2 colors
-    if not in_band:
-        # distance from the [0.15, 0.95] range
-        dist = max(0.15 - fill_ratio, fill_ratio - 0.95)
-        if dist < 0.05 and n_colors >= 2:
-            return "warn"
-    elif n_colors == 2:
-        return "warn"
-    return "fail"
-
-
 def analyze_image(
     image: int,
     x: int = 0,
@@ -161,6 +126,5 @@ def analyze_image(
         "edge_density": edge,
         "warnings": warnings,
         "rendered": rendered,
-        "verdict": _image_verdict(pixels, fill, color_count),
         "errors": [],
     }

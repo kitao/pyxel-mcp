@@ -1,14 +1,14 @@
-"""Tests for inspect_image tool (spec §7.2)."""
+"""Tests for read_image tool (spec §7.2)."""
 import tempfile
 from pathlib import Path
 
-from pyxel_mcp.observe._harnesses.tools.inspect_image import run as inspect_image_run
+from pyxel_mcp.observe._harnesses.tools.read_image import run as read_image_run
 from tests.conftest import SCRIPTS
 
 
 def test_invalid_bank_index():
     """image=999 is out of range — errors[0].phase == 'validation'."""
-    result = inspect_image_run({
+    result = read_image_run({
         "script": str(SCRIPTS / "palette_default.py"),
         "image": 999,
     })
@@ -18,7 +18,7 @@ def test_invalid_bank_index():
 
 def test_round_trip_default_region():
     """Valid script + image=0 returns 256x256 bank with no errors."""
-    result = inspect_image_run({
+    result = read_image_run({
         "script": str(SCRIPTS / "palette_default.py"),
         "image": 0,
     })
@@ -36,7 +36,7 @@ def test_render_to_png():
     """render_path produces a PNG file on disk."""
     with tempfile.TemporaryDirectory() as tmpdir:
         png_path = str(Path(tmpdir) / "bank0.png")
-        result = inspect_image_run({
+        result = read_image_run({
             "script": str(SCRIPTS / "palette_default.py"),
             "image": 0,
             "x": 0, "y": 0, "w": 8, "h": 8,

@@ -13,6 +13,12 @@
 - Document Layer 1 / Layer 2 split in instructions.md (17 tools)
 - Refactor quality-gate.md 17 checks into judge_* recipe table
 - Add 63 unit tests for judge/* (pass/fail/edge/contract)
+- Move _harnesses subtree under observe/_harnesses (Layer 1 home)
+- BREAKING: rename inspect_* tools to read_* (palette/image/...)
+- BREAKING: rename render_audio to read_audio
+- BREAKING: rename compare_frames to diff_frames
+- BREAKING: drop verdict field from read_palette + read_image
+  (judgment moves to Layer 2 judge_palette / judge_sprite)
 
 ## 0.11.0
 

@@ -20,19 +20,19 @@ def _build_tools() -> dict[str, Callable[[dict], dict]]:
     """
     from pyxel_mcp.observe._harnesses.tools import (
         run, validate, pyxel_info,
-        inspect_palette, inspect_image, inspect_animation, inspect_tilemap,
-        render_audio, compare_frames,
+        read_palette, read_image, read_animation, read_tilemap,
+        read_audio, diff_frames,
     )
     return {
         "run": run.run,
         "validate": validate.run,
         "pyxel_info": pyxel_info.run,
-        "inspect_palette": inspect_palette.run,
-        "inspect_image": inspect_image.run,
-        "inspect_animation": inspect_animation.run,
-        "inspect_tilemap": inspect_tilemap.run,
-        "render_audio": render_audio.run,
-        "compare_frames": compare_frames.run,
+        "read_palette": read_palette.run,
+        "read_image": read_image.run,
+        "read_animation": read_animation.run,
+        "read_tilemap": read_tilemap.run,
+        "read_audio": read_audio.run,
+        "diff_frames": diff_frames.run,
     }
 
 

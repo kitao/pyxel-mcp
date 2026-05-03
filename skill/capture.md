@@ -23,21 +23,21 @@ screenshots/result/<N>/
 │   ├── title.png        — `run` `screen_image` snapshot
 │   └── ...              (5 frames at TITLE, play_start, mid_game, win, game_over)
 ├── audio/
-│   ├── bgm_ch0.wav      — render_audio per BGM channel (target={"music": N})
-│   └── se_*.wav         — render_audio per SE manifest entry (target={"sound": N})
+│   ├── bgm_ch0.wav      — read_audio per BGM channel (target={"music": N})
+│   └── se_*.wav         — read_audio per SE manifest entry (target={"sound": N})
 └── notes.md             — summary, observations, known issues
 ```
 
 A single `run` call per path writes the GIF (via a `video` snapshot) and
 the milestone frame PNGs (via a multi-frame `screen_image` snapshot)
-atomically. `render_audio` writes WAVs via its `output_path` argument.
+atomically. `read_audio` writes WAVs via its `output_path` argument.
 
 ## Win-path GIF requirements
 
 - Duration: at least the full win-path scenario, typically 20–30 seconds at 30 fps = **600–900 frames**.
 - Must show the player traversing from start to goal and ending on the WIN scene.
 - Production: `run` `video` snapshot with `start_frame=0, end_frame=<frames>, fps=30, output="screenshots/result/<N>/win-path.gif"`. The `.gif` extension triggers PIL-based encoding (no ffmpeg dependency).
-- A bundle whose first 5 seconds look right and then sits static for 20 seconds is FAIL — `compare_frames` between mid and late frames must show meaningful change (Pattern G).
+- A bundle whose first 5 seconds look right and then sits static for 20 seconds is FAIL — `diff_frames` between mid and late frames must show meaningful change (Pattern G).
 
 ## Lose-path GIF requirements
 
@@ -68,9 +68,9 @@ The `{frame}` token expands to a 5-digit zero-padded integer (only this token is
 For every audio cue declared in `ASSETS.md` (BGM channels and SE), render to WAV:
 
 ```python
-render_audio(script="main.py", target={"sound": 10},
+read_audio(script="main.py", target={"sound": 10},
              output_path="screenshots/result/1/audio/se_jump.wav")
-render_audio(script="main.py", target={"music": 0},
+read_audio(script="main.py", target={"music": 0},
              output_path="screenshots/result/1/audio/bgm_ch0.wav")
 ```
 
@@ -135,9 +135,9 @@ run(
 )
 
 # Audio (script must run cleanly to populate sound slots first):
-render_audio(script="main.py", target={"sound": 10},
+read_audio(script="main.py", target={"sound": 10},
              output_path="screenshots/result/1/audio/se_jump.wav")
-render_audio(script="main.py", target={"music": 0},
+read_audio(script="main.py", target={"music": 0},
              output_path="screenshots/result/1/audio/bgm_ch0.wav")
 ```
 
@@ -150,7 +150,7 @@ render_audio(script="main.py", target={"music": 0},
   or input handling.
 - Reusing a stale bundle from before a code change. Bump `<N>` and
   produce a fresh bundle after any non-trivial change.
-- Bundle whose middle 80% is the same frame (game stalled). `compare_frames(frame_a=mid_frame_path, frame_b=late_frame_path)` returns `identical: True` only if pixels are bit-identical. For middle-of-bundle stall checks, capture two frames in the visually-active range and assert `identical: False`. (`region` is `None` when identical, so the check needs both `identical` and `size_match`.) (Pattern G)
+- Bundle whose middle 80% is the same frame (game stalled). `diff_frames(frame_a=mid_frame_path, frame_b=late_frame_path)` returns `identical: True` only if pixels are bit-identical. For middle-of-bundle stall checks, capture two frames in the visually-active range and assert `identical: False`. (`region` is `None` when identical, so the check needs both `identical` and `size_match`.) (Pattern G)
 - Re-attempt regression checks (Pattern G). When iterating, compare a representative frame from the previous bundle (`screenshots/result/<N-1>/frames/mid_game.png`) to the same frame in the new bundle (`screenshots/result/<N>/frames/mid_game.png`). Drift confirms a fix moved things; identical pixels mean the fix did not change the visible state. Useful as a sanity check before running the full gate.
 
 ## Pre-handoff agent review

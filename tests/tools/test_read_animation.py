@@ -1,13 +1,13 @@
-"""Tests for inspect_animation tool (spec §7.3)."""
+"""Tests for read_animation tool (spec §7.3)."""
 import pytest
 
-from pyxel_mcp.observe._harnesses.tools.inspect_animation import run as inspect_animation_run
+from pyxel_mcp.observe._harnesses.tools.read_animation import run as read_animation_run
 from tests.conftest import SCRIPTS
 
 
 def test_missing_region_count_validation():
     """Omitting region_count returns a validation phase error."""
-    result = inspect_animation_run({
+    result = read_animation_run({
         "script": str(SCRIPTS / "palette_default.py"),
         "image": 0,
         "x": 0, "y": 0, "w": 8, "h": 8,
@@ -19,7 +19,7 @@ def test_missing_region_count_validation():
 
 def test_region_count_below_2_validation():
     """region_count=1 fails validation."""
-    result = inspect_animation_run({
+    result = read_animation_run({
         "script": str(SCRIPTS / "palette_default.py"),
         "image": 0,
         "x": 0, "y": 0, "w": 8, "h": 8,
@@ -30,7 +30,7 @@ def test_region_count_below_2_validation():
 
 def test_overflow_returns_validation_error():
     """Region strip extending beyond bank bounds returns a validation phase error."""
-    result = inspect_animation_run({
+    result = read_animation_run({
         "script": str(SCRIPTS / "palette_default.py"),
         "image": 0,
         "x": 250, "y": 0, "w": 8, "h": 8,
@@ -43,7 +43,7 @@ def test_overflow_returns_validation_error():
 
 def test_round_trip_horizontal():
     """Valid horizontal strip returns correct structure with no errors."""
-    result = inspect_animation_run({
+    result = read_animation_run({
         "script": str(SCRIPTS / "palette_default.py"),
         "image": 0,
         "x": 0, "y": 0, "w": 8, "h": 8,
@@ -64,7 +64,7 @@ def test_round_trip_horizontal():
 
 def test_invalid_bank_index_validation():
     """image=99 is out of range — errors[0].phase == 'validation'."""
-    result = inspect_animation_run({
+    result = read_animation_run({
         "script": str(SCRIPTS / "palette_default.py"),
         "image": 99,
         "x": 0, "y": 0, "w": 8, "h": 8,

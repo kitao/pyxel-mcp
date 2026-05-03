@@ -1,7 +1,7 @@
 """Integration smoke: drive mini_dk.py through all 9 tools end-to-end."""
 from tests.conftest import SCRIPTS
 from pyxel_mcp.server import (
-    run_tool, validate_tool, inspect_palette_tool, inspect_image_tool,
+    run_tool, validate_tool, read_palette_tool, read_image_tool,
 )
 
 
@@ -35,7 +35,7 @@ def test_dk_assertions():
 
 
 def test_dk_palette_hierarchy():
-    result = inspect_palette_tool(script=DK)
+    result = read_palette_tool(script=DK)
     assert result["palette_size"] == 16
     # Palette shape may not have hierarchy on this minimal fixture; just check no errors.
     assert result["errors"] == []

@@ -7,13 +7,13 @@ that contract — both for success paths (ok=True) and validation/error paths
 """
 from pathlib import Path
 
-from pyxel_mcp.observe._harnesses.tools.compare_frames import run as compare_frames_run
-from pyxel_mcp.observe._harnesses.tools.inspect_animation import run as inspect_animation_run
-from pyxel_mcp.observe._harnesses.tools.inspect_image import run as inspect_image_run
-from pyxel_mcp.observe._harnesses.tools.inspect_palette import run as inspect_palette_run
-from pyxel_mcp.observe._harnesses.tools.inspect_tilemap import run as inspect_tilemap_run
+from pyxel_mcp.observe._harnesses.tools.diff_frames import run as diff_frames_run
+from pyxel_mcp.observe._harnesses.tools.read_animation import run as read_animation_run
+from pyxel_mcp.observe._harnesses.tools.read_image import run as read_image_run
+from pyxel_mcp.observe._harnesses.tools.read_palette import run as read_palette_run
+from pyxel_mcp.observe._harnesses.tools.read_tilemap import run as read_tilemap_run
 from pyxel_mcp.observe._harnesses.tools.pyxel_info import run as pyxel_info_run
-from pyxel_mcp.observe._harnesses.tools.render_audio import run as render_audio_run
+from pyxel_mcp.observe._harnesses.tools.read_audio import run as read_audio_run
 from pyxel_mcp.observe._harnesses.tools.run import run as run_run
 from pyxel_mcp.observe._harnesses.tools.validate import run as validate_run
 from tests.conftest import IMAGES, SCRIPTS
@@ -52,34 +52,34 @@ def test_pyxel_info_ok_true():
     assert result["ok"] is True
 
 
-def test_inspect_palette_ok_true():
-    result = inspect_palette_run({"script": str(SCRIPTS / "palette_default.py")})
+def test_read_palette_ok_true():
+    result = read_palette_run({"script": str(SCRIPTS / "palette_default.py")})
     assert result["ok"] is True
 
 
-def test_inspect_palette_ok_false_on_missing_script():
-    result = inspect_palette_run({"script": "/does/not/exist.py"})
+def test_read_palette_ok_false_on_missing_script():
+    result = read_palette_run({"script": "/does/not/exist.py"})
     assert result["ok"] is False
 
 
-def test_inspect_image_ok_true():
-    result = inspect_image_run({
+def test_read_image_ok_true():
+    result = read_image_run({
         "script": str(SCRIPTS / "palette_default.py"),
         "image": 0,
     })
     assert result["ok"] is True
 
 
-def test_inspect_image_ok_false_on_invalid_index():
-    result = inspect_image_run({
+def test_read_image_ok_false_on_invalid_index():
+    result = read_image_run({
         "script": str(SCRIPTS / "palette_default.py"),
         "image": 999,
     })
     assert result["ok"] is False
 
 
-def test_inspect_animation_ok_true():
-    result = inspect_animation_run({
+def test_read_animation_ok_true():
+    result = read_animation_run({
         "script": str(SCRIPTS / "palette_default.py"),
         "image": 0,
         "x": 0, "y": 0, "w": 8, "h": 8,
@@ -88,8 +88,8 @@ def test_inspect_animation_ok_true():
     assert result["ok"] is True
 
 
-def test_inspect_animation_ok_false_on_overflow():
-    result = inspect_animation_run({
+def test_read_animation_ok_false_on_overflow():
+    result = read_animation_run({
         "script": str(SCRIPTS / "palette_default.py"),
         "image": 0,
         "x": 250, "y": 0, "w": 8, "h": 8,
@@ -98,24 +98,24 @@ def test_inspect_animation_ok_false_on_overflow():
     assert result["ok"] is False
 
 
-def test_inspect_tilemap_ok_true():
-    result = inspect_tilemap_run({
+def test_read_tilemap_ok_true():
+    result = read_tilemap_run({
         "script": str(SCRIPTS / "tilemap_demo.py"),
         "tilemap": 0,
     })
     assert result["ok"] is True
 
 
-def test_inspect_tilemap_ok_false_on_invalid_index():
-    result = inspect_tilemap_run({
+def test_read_tilemap_ok_false_on_invalid_index():
+    result = read_tilemap_run({
         "script": str(SCRIPTS / "minimal.py"),
         "tilemap": 999,
     })
     assert result["ok"] is False
 
 
-def test_render_audio_ok_true(tmp_path):
-    result = render_audio_run({
+def test_read_audio_ok_true(tmp_path):
+    result = read_audio_run({
         "script": str(SCRIPTS / "sound_demo.py"),
         "target": {"sound": 0},
         "output_path": str(tmp_path / "snd.wav"),
@@ -123,8 +123,8 @@ def test_render_audio_ok_true(tmp_path):
     assert result["ok"] is True
 
 
-def test_render_audio_ok_false_on_missing_target():
-    result = render_audio_run({
+def test_read_audio_ok_false_on_missing_target():
+    result = read_audio_run({
         "script": str(SCRIPTS / "sound_demo.py"),
         "target": {},
         "output_path": "/tmp/x.wav",
@@ -132,8 +132,8 @@ def test_render_audio_ok_false_on_missing_target():
     assert result["ok"] is False
 
 
-def test_compare_frames_ok_true_on_identical():
-    result = compare_frames_run({
+def test_diff_frames_ok_true_on_identical():
+    result = diff_frames_run({
         "frame_a": str(IMAGES / "reference_a.png"),
         "frame_b": str(IMAGES / "reference_a.png"),
     })
@@ -142,9 +142,9 @@ def test_compare_frames_ok_true_on_identical():
     assert result["identical"] is True
 
 
-def test_compare_frames_ok_true_on_size_mismatch():
+def test_diff_frames_ok_true_on_size_mismatch():
     """Size mismatch is informational, not an error — ok stays True."""
-    result = compare_frames_run({
+    result = diff_frames_run({
         "frame_a": str(IMAGES / "reference_a.png"),
         "frame_b": str(IMAGES / "reference_c_16x16.png"),
     })
@@ -152,8 +152,8 @@ def test_compare_frames_ok_true_on_size_mismatch():
     assert result["size_match"] is False
 
 
-def test_compare_frames_ok_false_on_missing_input():
-    result = compare_frames_run({
+def test_diff_frames_ok_false_on_missing_input():
+    result = diff_frames_run({
         "frame_a": "/nonexistent/a.png",
         "frame_b": str(IMAGES / "reference_a.png"),
     })

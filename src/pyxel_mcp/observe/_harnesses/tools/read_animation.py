@@ -1,4 +1,4 @@
-"""inspect_animation tool (spec §7.3)."""
+"""read_animation tool (spec §7.3)."""
 from __future__ import annotations
 from typing import Any
 

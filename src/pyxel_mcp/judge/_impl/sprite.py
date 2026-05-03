@@ -1,4 +1,4 @@
-"""judge_sprite — verdict on an inspect_image observation."""
+"""judge_sprite — verdict on a read_image observation."""
 from __future__ import annotations
 from typing import Any
 
@@ -12,7 +12,7 @@ def judge_sprite(
     observation: dict[str, Any],
     contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Verdict for an `inspect_image` observation against a sprite manifest entry.
+    """Verdict for a `read_image` observation against a sprite manifest entry.
 
     `observation`: dict with `color_count` (dict[int, int]) and `fill_ratio` (float).
     `contract`: dict; missing keys fall back to DEFAULT_CONTRACT. May include

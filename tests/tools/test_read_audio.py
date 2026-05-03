@@ -1,16 +1,16 @@
-"""Tests for render_audio tool (spec §8.3)."""
+"""Tests for read_audio tool (spec §8.3)."""
 import pytest
 from tests.conftest import SCRIPTS
 
 
-def render_audio_run(payload: dict) -> dict:
-    from pyxel_mcp.observe._harnesses.tools.render_audio import run
+def read_audio_run(payload: dict) -> dict:
+    from pyxel_mcp.observe._harnesses.tools.read_audio import run
     return run(payload)
 
 
 def test_render_sound_to_wav(tmp_path):
     out = tmp_path / "snd.wav"
-    result = render_audio_run({
+    result = read_audio_run({
         "script": str(SCRIPTS / "sound_demo.py"),
         "target": {"sound": 0},
         "output_path": str(out),
@@ -24,7 +24,7 @@ def test_render_sound_to_wav(tmp_path):
 
 def test_render_target_validation():
     # Both keys: validation error
-    result = render_audio_run({
+    result = read_audio_run({
         "script": str(SCRIPTS / "sound_demo.py"),
         "target": {"sound": 0, "music": 0},
         "output_path": "/tmp/x.wav",
@@ -34,7 +34,7 @@ def test_render_target_validation():
 
 def test_render_empty_slot_warns():
     """Rendering an empty slot returns success with peak=0 and warning."""
-    result = render_audio_run({
+    result = read_audio_run({
         "script": str(SCRIPTS / "minimal.py"),
         "target": {"sound": 1},
         "output_path": "/tmp/x.wav",
@@ -45,10 +45,10 @@ def test_render_empty_slot_warns():
 
 def test_render_music_to_wav(tmp_path):
     """Music slot wraps a sound; render path uses audio_obj.save with the
-    music slot index. Verifies the `else: music` branch in render_audio.run.
+    music slot index. Verifies the `else: music` branch in read_audio.run.
     """
     out = tmp_path / "music.wav"
-    result = render_audio_run({
+    result = read_audio_run({
         "script": str(SCRIPTS / "music_demo.py"),
         "target": {"music": 0},
         "output_path": str(out),
@@ -61,7 +61,7 @@ def test_render_music_to_wav(tmp_path):
 
 def test_render_empty_music_slot_warns():
     """An unpopulated music slot returns success with warning."""
-    result = render_audio_run({
+    result = read_audio_run({
         "script": str(SCRIPTS / "minimal.py"),
         "target": {"music": 1},
         "output_path": "/tmp/empty_music.wav",
@@ -71,7 +71,7 @@ def test_render_empty_music_slot_warns():
 
 def test_render_target_missing_keys():
     """target with neither sound nor music key is a validation error."""
-    result = render_audio_run({
+    result = read_audio_run({
         "script": str(SCRIPTS / "sound_demo.py"),
         "target": {},
         "output_path": "/tmp/x.wav",
@@ -81,7 +81,7 @@ def test_render_target_missing_keys():
 
 def test_render_music_out_of_range():
     """music slot index >= len(pyxel.musics) is a validation error."""
-    result = render_audio_run({
+    result = read_audio_run({
         "script": str(SCRIPTS / "music_demo.py"),
         "target": {"music": 9999},
         "output_path": "/tmp/x.wav",

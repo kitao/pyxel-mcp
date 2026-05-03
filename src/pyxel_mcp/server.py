@@ -71,7 +71,7 @@ def run(
     - `{"frame": F, "kind": "screen_image", "output": "out.png", "scale": 1}`
     - `{"frame": F, "kind": "screen_grid", "bbox": [x, y, w, h]}` — input field
       `bbox` (list); output emits `region: {x, y, w, h}` (dict, consistent with
-      inspect_image / inspect_tilemap / compare_frames)
+      read_image / read_tilemap / diff_frames)
     - `{"frame": F, "kind": "state", "attrs": ["player.x", "scene"]}` — dotted-path App attrs
     - `{"frame": F, "kind": "layout"}` — text/region balance metrics
     - `{"kind": "video", "start_frame": A, "end_frame": B, "fps": 30, "output": "clip.gif"}`
@@ -116,31 +116,31 @@ def pyxel_info() -> dict:
 
 
 @mcp.tool()
-def inspect_palette(script: str) -> dict:
-    return _dispatch("inspect_palette", {"script": script})
+def read_palette(script: str) -> dict:
+    return _dispatch("read_palette", {"script": script})
 
 
 @mcp.tool()
-def inspect_image(
+def read_image(
     script: str, image: int,
     x: int = 0, y: int = 0,
     w: int | None = None, h: int | None = None,
     render_path: str | None = None,
 ) -> dict:
-    return _dispatch("inspect_image", {
+    return _dispatch("read_image", {
         "script": script, "image": image,
         "x": x, "y": y, "w": w, "h": h, "render_path": render_path,
     })
 
 
 @mcp.tool()
-def inspect_animation(
+def read_animation(
     script: str, image: int,
     x: int, y: int, w: int, h: int,
     region_count: int,
     direction: str = "horizontal",
 ) -> dict:
-    return _dispatch("inspect_animation", {
+    return _dispatch("read_animation", {
         "script": script, "image": image,
         "x": x, "y": y, "w": w, "h": h,
         "region_count": region_count, "direction": direction,
@@ -148,38 +148,38 @@ def inspect_animation(
 
 
 @mcp.tool()
-def inspect_tilemap(script: str, tilemap: int, render_path: str | None = None) -> dict:
-    return _dispatch("inspect_tilemap", {"script": script, "tilemap": tilemap, "render_path": render_path})
+def read_tilemap(script: str, tilemap: int, render_path: str | None = None) -> dict:
+    return _dispatch("read_tilemap", {"script": script, "tilemap": tilemap, "render_path": render_path})
 
 
 @mcp.tool()
-def render_audio(script: str, target: dict, output_path: str) -> dict:
-    return _dispatch("render_audio", {"script": script, "target": target, "output_path": output_path})
+def read_audio(script: str, target: dict, output_path: str) -> dict:
+    return _dispatch("read_audio", {"script": script, "target": target, "output_path": output_path})
 
 
 @mcp.tool()
-def compare_frames(frame_a: str, frame_b: str) -> dict:
-    return _dispatch("compare_frames", {"frame_a": frame_a, "frame_b": frame_b})
+def diff_frames(frame_a: str, frame_b: str) -> dict:
+    return _dispatch("diff_frames", {"frame_a": frame_a, "frame_b": frame_b})
 
 
 # --- Layer 2: judge_* policy primitives (in-process, pure functions) ---
 
 @mcp.tool()
 def judge_palette(observation: dict, contract: dict | None = None) -> dict:
-    """Verdict on an `inspect_palette` observation against a hierarchy /
+    """Verdict on a `read_palette` observation against a hierarchy /
     contrast contract. See `pyxel_mcp.judge._impl.palette.DEFAULT_CONTRACT`."""
     return _judge.judge_palette(observation, contract)
 
 
 @mcp.tool()
 def judge_sprite(observation: dict, contract: dict | None = None) -> dict:
-    """Verdict on an `inspect_image` observation against a sprite manifest entry."""
+    """Verdict on a `read_image` observation against a sprite manifest entry."""
     return _judge.judge_sprite(observation, contract)
 
 
 @mcp.tool()
 def judge_animation(observation: dict, contract: dict | None = None) -> dict:
-    """Verdict on an `inspect_animation` observation against a paired-frame manifest entry."""
+    """Verdict on a `read_animation` observation against a paired-frame manifest entry."""
     return _judge.judge_animation(observation, contract)
 
 
@@ -205,7 +205,7 @@ def judge_bundle(observation: dict, contract: dict | None = None) -> dict:
 
 @mcp.tool()
 def judge_audio(observation: dict, contract: dict | None = None) -> dict:
-    """Verdict on a `render_audio` observation against an audio manifest entry."""
+    """Verdict on a `read_audio` observation against an audio manifest entry."""
     return _judge.judge_audio(observation, contract)
 
 
@@ -220,12 +220,12 @@ def judge_layout(observation: dict, contract: dict | None = None) -> dict:
 run_tool = run
 validate_tool = validate
 pyxel_info_tool = pyxel_info
-inspect_palette_tool = inspect_palette
-inspect_image_tool = inspect_image
-inspect_animation_tool = inspect_animation
-inspect_tilemap_tool = inspect_tilemap
-render_audio_tool = render_audio
-compare_frames_tool = compare_frames
+read_palette_tool = read_palette
+read_image_tool = read_image
+read_animation_tool = read_animation
+read_tilemap_tool = read_tilemap
+read_audio_tool = read_audio
+diff_frames_tool = diff_frames
 judge_palette_tool = judge_palette
 judge_sprite_tool = judge_sprite
 judge_animation_tool = judge_animation

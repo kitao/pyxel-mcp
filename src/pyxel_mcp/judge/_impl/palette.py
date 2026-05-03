@@ -16,7 +16,7 @@ def judge_palette(
     observation: dict[str, Any],
     contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Verdict for an `inspect_palette` observation.
+    """Verdict for a `read_palette` observation.
 
     `observation`: dict with `hierarchy` ({"score": int} or None) and
     `contrast_warnings` (list).

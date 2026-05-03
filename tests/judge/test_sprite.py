@@ -1,6 +1,6 @@
 """Tests for judge_sprite.
 
-Validates an `inspect_image` observation against a sprite manifest entry:
+Validates an `read_image` observation against a sprite manifest entry:
 distinct colors and silhouette fill_ratio.
 """
 from __future__ import annotations

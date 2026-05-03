@@ -2,7 +2,7 @@
 
 A [Claude Code](https://claude.com/claude-code) Skill that drives end-to-end production of **playable, clearable, recognizable-sprite** Pyxel games. Combines a phased workflow harness with topical knowledge files and an enforcement hook that prevents the agent from declaring "done" with placeholder garbage.
 
-This skill orchestrates the workflow; [`pyxel-mcp`](https://github.com/kitao/pyxel-mcp) (≥ 0.10.0) provides the verification verbs (`run`, `validate`, `inspect_*`, `render_audio`, `compare_frames`).
+This skill orchestrates the workflow; [`pyxel-mcp`](https://github.com/kitao/pyxel-mcp) (≥ 1.0.0) provides the verification verbs across two layers — Layer 1 `observe` (`run`, `validate`, `read_*`, `diff_frames`) and Layer 2 `judge_*` (8 policy primitives).
 
 ## Status
 
@@ -68,7 +68,7 @@ Activate the skill by asking Claude Code:
 
 > Make a Donkey Kong style platformer in Pyxel.
 
-The skill walks the 7-stage pipeline, calls `pyxel-mcp` tools at each verification point, and produces a `screenshots/result/<N>/` proof bundle. A typical end-to-end run is hundreds of `run`/`inspect_*` calls — fast because pyxel-mcp's headless mode is sub-second per playthrough.
+The skill walks the 7-stage pipeline, calls `pyxel-mcp` tools at each verification point, and produces a `screenshots/result/<N>/` proof bundle. A typical end-to-end run is hundreds of `run`/`read_*`/`judge_*` calls — fast because pyxel-mcp's headless mode is sub-second per playthrough.
 
 ## Repo layout
 

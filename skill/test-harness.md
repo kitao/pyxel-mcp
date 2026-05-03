@@ -98,7 +98,7 @@ Beyond per-milestone asserts, `run` exposes the data needed directly:
   carries the phase + traceback. No subprocess returncode check needed.
 - **Stall:** compare two `state` snapshots N frames apart — if every observed
   attribute is identical despite scheduled inputs, the game has stalled. Optionally,
-  capture two `screen_image` snapshots and use Pattern G's `compare_frames` to
+  capture two `screen_image` snapshots and use Pattern G's `diff_frames` to
   confirm visual stall. The canonical way for v0.2.0 is `run(stall_detection=True)`
   (spec §6.5), which sets `exit_status="stalled"` automatically.
 - **Frame budget:** `result["elapsed_seconds"] / frames` gives average per-frame ms.

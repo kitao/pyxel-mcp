@@ -158,63 +158,6 @@ def test_co_located_pairs_field_is_sorted_tuples():
         pyxel.images[0].pset(5, 6, 0)
 
 
-# --- verdict field tests (Task 2A) -------------------------------------------
-
-
-def test_verdict_pass_for_default_palette_no_pixels():
-    """Default palette + no co-located pairs → score 2 + 0 warnings → pass."""
-    info = analyze_palette()
-    # Default: hierarchy.score == 2 (all 3 layers in default 16-color palette);
-    # no image content means no co-located pairs and 0 contrast_warnings.
-    assert info["hierarchy"]["score"] == 2
-    assert len(info["contrast_warnings"]) == 0
-    assert info["verdict"] == "pass"
-
-
-def test_verdict_extended_palette_returns_none():
-    """Extended palette skips hierarchy analysis, so verdict is None."""
-    import pyxel
-    pyxel.colors.append(0x123456)
-    info = analyze_palette()
-    assert info["extended_palette"] is True
-    assert info["hierarchy"] is None
-    assert info["verdict"] is None
-
-
-def test_verdict_pass_with_one_warning():
-    """score 2 + 1 warning is still pass (boundary)."""
-    from pyxel_mcp.observe._harnesses._common.analyzers.palette import _palette_verdict
-    h = {"score": 2, "background": [0], "environment": [3], "interactive": [8]}
-    assert _palette_verdict(h, [{"a": 1, "b": 2, "ratio": 1.5, "message": "x"}]) == "pass"
-
-
-def test_verdict_warn_when_two_to_five_warnings():
-    """score 2 + 2 warnings → warn; score 2 + 5 warnings → warn (upper boundary)."""
-    from pyxel_mcp.observe._harnesses._common.analyzers.palette import _palette_verdict
-    h = {"score": 2, "background": [0], "environment": [3], "interactive": [8]}
-    two = [{"a": i, "b": i + 1, "ratio": 1.0, "message": ""} for i in range(2)]
-    five = [{"a": i, "b": i + 1, "ratio": 1.0, "message": ""} for i in range(5)]
-    assert _palette_verdict(h, two) == "warn"
-    assert _palette_verdict(h, five) == "warn"
-
-
-def test_verdict_fail_on_low_hierarchy():
-    """Hierarchy score 0 or 1 → fail regardless of warning count."""
-    from pyxel_mcp.observe._harnesses._common.analyzers.palette import _palette_verdict
-    h0 = {"score": 0, "background": [], "environment": [], "interactive": []}
-    h1 = {"score": 1, "background": [0], "environment": [3], "interactive": []}
-    assert _palette_verdict(h0, []) == "fail"
-    assert _palette_verdict(h1, []) == "fail"
-
-
-def test_verdict_fail_when_more_than_five_warnings():
-    """score 2 but more than 5 warnings → fail (boundary above warn band)."""
-    from pyxel_mcp.observe._harnesses._common.analyzers.palette import _palette_verdict
-    h = {"score": 2, "background": [0], "environment": [3], "interactive": [8]}
-    six = [{"a": i, "b": i + 1, "ratio": 1.0, "message": ""} for i in range(6)]
-    assert _palette_verdict(h, six) == "fail"
-
-
 # --- performance regression guard --------------------------------------------
 
 

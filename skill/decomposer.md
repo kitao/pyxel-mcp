@@ -33,7 +33,7 @@ These features fail unpredictably and produce ambiguous bugs when mixed with oth
 | Object-on-tilted-girder rolling | Direction depends on slope sign; flip at edge or fall when running off; AI implementations frequently get the off-edge fall wrong |
 | Multi-state animation transitions | walk → jump → land state machine with frame timing; easy to leave stuck-in-jump or flickering |
 
-Anything *not* in this list is Main Build — implement directly, no isolation. Note: closed-loop input simulation, headless audio determinism, and image-bank init order are **harness concerns**, not game features — `test-harness.md` (Pattern C), `render_audio`, and `validate` (`assets_in_update`) cover them. Do not allocate Risk Tasks for them.
+Anything *not* in this list is Main Build — implement directly, no isolation. Note: closed-loop input simulation, headless audio determinism, and image-bank init order are **harness concerns**, not game features — `test-harness.md` (Pattern C), `read_audio`, and `validate` (`assets_in_update`) cover them. Do not allocate Risk Tasks for them.
 
 ## Genre identity
 
@@ -71,7 +71,7 @@ Example for a Donkey Kong-style platformer:
 - **Why genre-defining:** DK's only offensive answer to barrels.
   Without it the game has no risk-reward inversion.
 - **Verify:** at frame F where player overlaps the hammer pickup,
-  `inspect_image` at player position shows the hammer-carry sprite
+  `read_image` at player position shows the hammer-carry sprite
   (not walk). For the next K frames (PLAN.md `HAMMER_DURATION`),
   barrel collisions do not decrement `lives` (assert via `state`
   snapshot: `lives` at F+K-1 == `lives` at F).

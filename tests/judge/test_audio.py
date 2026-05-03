@@ -1,6 +1,6 @@
 """Tests for judge_audio.
 
-Validates a render_audio observation against an audio manifest entry.
+Validates a read_audio observation against an audio manifest entry.
 """
 from __future__ import annotations
 

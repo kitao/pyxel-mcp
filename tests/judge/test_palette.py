@@ -1,6 +1,6 @@
 """Tests for judge_palette (Layer 2).
 
-judge_palette is a pure function: takes an `inspect_palette` observation
+judge_palette is a pure function: takes an `read_palette` observation
 plus a contract dict and returns a verdict dict.
 """
 from __future__ import annotations
@@ -8,7 +8,7 @@ from __future__ import annotations
 from pyxel_mcp.judge._impl.palette import DEFAULT_CONTRACT, judge_palette
 
 
-# Helper to build minimal observation dicts in the shape inspect_palette returns.
+# Helper to build minimal observation dicts in the shape read_palette returns.
 def _obs(score: int | None, n_warnings: int = 0) -> dict:
     hierarchy = None if score is None else {"score": score, "background": [], "environment": [], "interactive": []}
     contrast_warnings = [

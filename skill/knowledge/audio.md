@@ -26,7 +26,7 @@ Every player-visible event needs an SE: move, rotate, land, clear, chain, game o
 
 ### MML Composition Guide
 
-Structure BGM as 3 channels: melody (ch0), bass (ch1), harmony/arpeggio (ch2). Reserve ch3 for SE. Use `render_audio` to verify each channel separately.
+Structure BGM as 3 channels: melody (ch0), bass (ch1), harmony/arpeggio (ch2). Reserve ch3 for SE. Use `read_audio` to verify each channel separately.
 
 **3-channel template:**
 

@@ -176,7 +176,7 @@ The Stop hook (`hooks/stop_check_bundle.py`) fires at session end and warns on a
 - **Skipping Risk Tasks for Main Build because Main Build is "easier".** Risk Tasks were isolated for a reason — bugs in them spread into Main Build with interest.
 - **Editing physics constants mid-task.** If `JUMP_VY` changes, all jump-related milestones in PLAN.md need re-verification — and they probably already passed at the old value, so changing it now silently breaks them.
 - **Adding new features mid-task.** If a fix needs a new system (e.g., particle effects for damage flash), open a new task in `PLAN.md` and verify it on its own loop. Don't pile.
-- **"It works on my machine" via interactive run.** Stage 6 verifies via the harness — `run` for state and screen, `render_audio` for audio. An interactive run means nothing.
+- **"It works on my machine" via interactive run.** Stage 6 verifies via the harness — `run` for state and screen, `read_audio` for audio. An interactive run means nothing.
 - **Skipping `MEMORY.md` updates.** A gotcha you found and didn't write down will cost an hour next session.
 
 ## When this stage is done

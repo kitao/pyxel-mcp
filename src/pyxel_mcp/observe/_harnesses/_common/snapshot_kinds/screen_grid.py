@@ -11,7 +11,7 @@ def capture(snapshot: dict[str, Any]) -> dict[str, Any]:
     Reads pyxel.screen.data_ptr() into a numpy array and slices the bbox.
     Input field ``bbox: [x, y, w, h]`` is the ergonomic list form callers
     write; the output emits ``region: {x, y, w, h}`` as a dict, matching
-    the shape used by inspect_image / inspect_tilemap / compare_frames so
+    the shape used by read_image / read_tilemap / diff_frames so
     downstream consumers can read region geometry uniformly across tools.
     Values extending past the screen edge are clamped and a warning is
     appended.

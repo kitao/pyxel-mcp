@@ -72,8 +72,8 @@ def test_large_tilemap_returns_none_tiles():
 
 
 def test_invalid_index_via_tool():
-    """inspect_tilemap should report validation phase for invalid index."""
-    from pyxel_mcp.observe._harnesses.tools.inspect_tilemap import run as tool_run
+    """read_tilemap should report validation phase for invalid index."""
+    from pyxel_mcp.observe._harnesses.tools.read_tilemap import run as tool_run
     from tests.conftest import SCRIPTS
     result = tool_run({"script": str(SCRIPTS / "minimal.py"), "tilemap": 999})
     assert result["errors"][0]["phase"] == "validation"

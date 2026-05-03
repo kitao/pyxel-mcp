@@ -55,34 +55,34 @@ is started; this is cheap and should run before every first `run`.
 Discovery: report Pyxel version, Python version, stub paths, example script
 paths, and resource URIs. No script required.
 
-**`inspect_palette(script)`**
+**`read_palette(script)`**
 Read palette state at the script's pre-loop checkpoint. Returns colors,
 `extended_palette` flag, `hierarchy_score` (3-layer: background / environment
 / interactive), and WCAG contrast warnings.
 
-**`inspect_image(script, image, x=0, y=0, w=None, h=None, render_path=None)`**
+**`read_image(script, image, x=0, y=0, w=None, h=None, render_path=None)`**
 Read pixels from an image-bank region (banks 0–2). Returns `color_count`,
 `fill_ratio`, `symmetry`, `edge_density`. Pixel grid is `null` when the
 region exceeds 4096 px. Pass `render_path` to save a PNG.
 
-**`inspect_animation(script, image, x, y, w, h, region_count, direction)`**
+**`read_animation(script, image, x, y, w, h, region_count, direction)`**
 Read N adjacent regions in horizontal or vertical direction. Returns
 `palette_consistency` (Jaccard), `silhouette_stability` (avg pairwise
 Jaccard), and per-pair `region_diffs`. Useful for verifying that sprite
 frames share a consistent palette and silhouette.
 
-**`inspect_tilemap(script, tilemap, render_path=None)`**
+**`read_tilemap(script, tilemap, render_path=None)`**
 Read tilemap N data. Returns tile usage counter, `region` (bounding box of
 non-empty tiles, dict-shape `{x, y, w, h}`), and `trap_warning` (true when
 the tilemap uses source tile `(0, 0)` and that tile is non-empty — the
 blank-tile trap).
 
-**`render_audio(script, target, output_path)`**
+**`read_audio(script, target, output_path)`**
 Render a sound or music slot to WAV. `target` is `{"sound": int}` or
 `{"music": int}` (exactly one). Returns `duration_seconds`, `peak_amplitude`,
 `notes` list, and `warnings`.
 
-**`compare_frames(frame_a, frame_b)`**
+**`diff_frames(frame_a, frame_b)`**
 Pixel-wise diff between two PNG paths. Returns `identical`, `size_match`,
 `changed_pixels`, `total_pixels`, `ratio`, and `region` (bounding box of
 differences). No script required.
@@ -110,17 +110,17 @@ extracted from PLAN.md / ASSETS.md (or omit to use the module default) as
 fails — it is the bridge from "what failed" to "what to do next."
 
 **`judge_palette(observation, contract=None)`**
-Verdict on `inspect_palette` against `{min_hierarchy_score, max_contrast_warnings}`.
+Verdict on `read_palette` against `{min_hierarchy_score, max_contrast_warnings}`.
 Routes failures to `asset-planning` (low hierarchy) or `sprite-quality` (too
 many close-color pairs).
 
 **`judge_sprite(observation, contract=None)`**
-Verdict on `inspect_image` against `{min_distinct_colors, silhouette: [lo, hi]}`.
+Verdict on `read_image` against `{min_distinct_colors, silhouette: [lo, hi]}`.
 A `represents` string in the contract is carried into `details` for
 traceability against ASSETS.md. Failures route to `sprite-quality`.
 
 **`judge_animation(observation, contract=None)`**
-Verdict on `inspect_animation` against `{diff_band: [lo, hi], min_palette_consistency}`.
+Verdict on `read_animation` against `{diff_band: [lo, hi], min_palette_consistency}`.
 Every adjacent-region diff must fall within the band; palette Jaccard must
 meet the threshold. Failures route to `sprite-quality`.
 
@@ -143,12 +143,12 @@ explicit.
 **`judge_bundle(observation, contract=None)`** (Pattern G)
 `observation = {"bundle_dir": "/path"}`. Verifies required GIFs (default:
 `win-path.gif`, `lose-path.gif`), `frames/` PNG count ≥ `min_frames`, audio
-files per `audio_manifest`, and a dead-time check (`compare_frames` between
+files per `audio_manifest`, and a dead-time check (`diff_frames` between
 the first and middle PNG must show `ratio > min_dead_time_diff`). Failures
 route to `bundle`.
 
 **`judge_audio(observation, contract=None)`**
-Verdict on `render_audio` against `{min_peak, min_notes}`. Empty slot
+Verdict on `read_audio` against `{min_peak, min_notes}`. Empty slot
 (warning + zero peak / notes) routes to `sprite-quality`; under-spec audio
 routes to `scaffolding`.
 
@@ -183,10 +183,10 @@ discovering a `crashed` exit_status mid-implementation.
 
 ### Sprite quality chain
 
-1. `inspect_palette` → `judge_palette` — confirm color hierarchy score and WCAG contrast.
-2. `inspect_image` → `judge_sprite` — read sprite pixels; verify against ASSETS.md
+1. `read_palette` → `judge_palette` — confirm color hierarchy score and WCAG contrast.
+2. `read_image` → `judge_sprite` — read sprite pixels; verify against ASSETS.md
    manifest entry (distinct colors, silhouette band).
-3. `inspect_animation` → `judge_animation` — verify per-frame palette consistency
+3. `read_animation` → `judge_animation` — verify per-frame palette consistency
    and silhouette stability across animation frames.
 
 The Layer 2 verdict converts a numeric observation into a routed pass/fail
@@ -214,15 +214,15 @@ catches missing artifacts and silently-stuck playthroughs in one call.
 
 ### Audio asset spot-check
 
-Run `render_audio` immediately after populating a sound slot. Assert
+Run `read_audio` immediately after populating a sound slot. Assert
 `peak_amplitude > 0` and inspect the `notes` list before relying on the slot
 during gameplay.
 
 ### Visual regression
 
 Capture a golden screenshot with `run` + `screen_image`. In subsequent runs,
-use `compare_frames` against the golden file and assert `identical: true` or
-`ratio < 0.01`. Use `compare_frames` also for **dead-time detection**: capture
+use `diff_frames` against the golden file and assert `identical: true` or
+`ratio < 0.01`. Use `diff_frames` also for **dead-time detection**: capture
 two `screen_image` frames in the visually-active middle of a playthrough and
 assert `identical: false` AND `ratio > 0.05`. Identical mid-bundle frames
 indicate a stall (frozen entity, frozen camera, broken state) even when the
@@ -233,7 +233,7 @@ final scene reaches WIN.
 The result PNGs from `screen_image` snapshots are agent-readable artifacts.
 Open them with the host's `Read` tool (Claude Code, Codex, etc.) and verbalize
 observations directly — at typical Pyxel resolutions (≤ 256×256) the
-multimodal LLM can read every pixel. This complements `inspect_image`
+multimodal LLM can read every pixel. This complements `read_image`
 aggregate fields (`color_count`, `fill_ratio`): aggregates certify mechanics
 ("5 colors used, 40% fill"), the Read certifies recognizability ("Mario in
 red cap, mid-stride"). Both are needed for an honest pass.
@@ -274,13 +274,13 @@ the previous frame's content. `validate` flags the absence of `cls()` as
 In `pyxel.tilemaps[N].pset(tx, ty, (u, v))`, the tile at source coordinates
 `(0, 0)` is conventionally "empty". If the source image bank's top-left tile
 is actually visible (non-transparent pixels), every "empty" cell in the map
-will display that tile. `inspect_tilemap` flags this case as
+will display that tile. `read_tilemap` flags this case as
 `trap_warning: true`. `validate` detects the pattern as `tilemap_zero_zero`.
 
 ### Palette mutation
 
 `pyxel.colors[i] = 0xff8800` (or `.append(...)`) mutates the global palette
-and may disable `inspect_palette`'s hierarchy analysis. Stick to the default
+and may disable `read_palette`'s hierarchy analysis. Stick to the default
 16-color palette unless you are intentionally extending it. `validate` flags
 runtime palette writes as `palette_animation`.
 

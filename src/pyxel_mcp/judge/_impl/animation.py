@@ -1,4 +1,4 @@
-"""judge_animation — verdict on an inspect_animation observation."""
+"""judge_animation — verdict on a read_animation observation."""
 from __future__ import annotations
 from typing import Any
 
@@ -12,7 +12,7 @@ def judge_animation(
     observation: dict[str, Any],
     contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Verdict for an `inspect_animation` observation.
+    """Verdict for a `read_animation` observation.
 
     Pass requires every adjacent-region diff to fall within `diff_band`
     and `palette_consistency` to meet `min_palette_consistency`.

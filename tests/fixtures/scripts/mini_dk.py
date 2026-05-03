@@ -16,7 +16,7 @@ class App:
     def __init__(self):
         pyxel.init(128, 128, title="MiniDK", fps=30)
 
-        # Minimal image-bank population: a few pixels so inspect_image has data
+        # Minimal image-bank population: a few pixels so read_image has data
         pyxel.images[0].pset(0, 0, 11)   # player color sample
         pyxel.images[0].pset(1, 0, 8)    # enemy color sample
         pyxel.images[0].pset(0, 1, 7)    # text color sample

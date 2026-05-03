@@ -1,4 +1,4 @@
-"""inspect_image tool (spec §7.2)."""
+"""read_image tool (spec §7.2)."""
 from __future__ import annotations
 from typing import Any
 
@@ -14,16 +14,17 @@ def _empty(error: dict) -> dict:
         "region": {"x": 0, "y": 0, "w": 0, "h": 0},
         "pixels": None, "color_count": {}, "fill_ratio": 0.0,
         "symmetry": None, "edge_density": None,
-        "warnings": [], "rendered": None, "verdict": None,
+        "warnings": [], "rendered": None,
         "errors": [error],
     }
 
 
 def run(payload: dict[str, Any]) -> dict[str, Any]:
-    """Inspect a region of an image bank at the pre-loop checkpoint.
+    """Read pixels in an image-bank region at the pre-loop checkpoint.
 
-    Result includes `ok: bool` — True iff `len(errors) == 0`. The `verdict`
-    field is informational (pass/warn/fail/null) and does not affect `ok`.
+    Returns raw observation (`color_count`, `fill_ratio`, ...). Pass the
+    result to `judge_sprite` for a pass/warn/fail verdict against an
+    ASSETS.md sprite manifest entry. `ok` is True iff `len(errors) == 0`.
     """
     image = payload.get("image")
     if not isinstance(image, int):

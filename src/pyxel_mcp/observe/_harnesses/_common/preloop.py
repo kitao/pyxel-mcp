@@ -1,8 +1,8 @@
-"""Pre-loop checkpoint helper used by all script-loading inspect_/render_ tools.
+"""Pre-loop checkpoint helper used by all script-loading read_* tools.
 
 Centralises the script validation + headless_pyxel + load_script_module +
-require_run_called dance shared by inspect_palette, inspect_image,
-inspect_animation, inspect_tilemap, and render_audio. Each of those tools
+require_run_called dance shared by read_palette, read_image,
+read_animation, read_tilemap, and read_audio. Each of those tools
 previously copy-pasted the same ~12 lines of try/except plumbing; consolidating
 here keeps the error mapping and phase tagging consistent across tools.
 """

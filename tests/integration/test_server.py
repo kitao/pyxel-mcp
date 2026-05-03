@@ -2,8 +2,8 @@
 import pytest
 from pyxel_mcp.server import (
     run_tool, validate_tool, pyxel_info_tool,
-    inspect_palette_tool, inspect_image_tool, inspect_animation_tool, inspect_tilemap_tool,
-    render_audio_tool, compare_frames_tool,
+    read_palette_tool, read_image_tool, read_animation_tool, read_tilemap_tool,
+    read_audio_tool, diff_frames_tool,
     mcp,
 )
 from tests.conftest import SCRIPTS
@@ -46,11 +46,11 @@ def test_non_run_tool_timeout_returns_errors():
     # validate has near-zero work; force a 1-second timeout to trip dispatch's
     # subprocess.TimeoutExpired only if validate actually takes that long.
     # We can't reliably force a timeout on validate itself, but we can verify
-    # the contract by inspection: render_audio with a long-duration argument
+    # the contract by inspection: read_audio with a long-duration argument
     # plus a tight timeout would trigger the path. Use stalling.py instead
-    # since it's the canonical "never returns" fixture and inspect_tilemap
+    # since it's the canonical "never returns" fixture and read_tilemap
     # imports + headless inits the script.
-    result = inspect_tilemap_tool(script=str(SCRIPTS / "stalling.py"), tilemap=0)
+    result = read_tilemap_tool(script=str(SCRIPTS / "stalling.py"), tilemap=0)
     # stalling.py spins in pyxel.run; harness can't reach pre-loop checkpoint,
     # so we expect either a successful pre-loop reach (if Pyxel.run intercept
     # works) or a timeout error. Either way, the result must be a dict with

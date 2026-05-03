@@ -1,4 +1,4 @@
-"""judge_audio — verdict on a render_audio observation."""
+"""judge_audio — verdict on a read_audio observation."""
 from __future__ import annotations
 from typing import Any
 
@@ -9,7 +9,7 @@ DEFAULT_CONTRACT: dict[str, Any] = {
 
 
 def _is_empty_slot(observation: dict[str, Any]) -> bool:
-    """Detect the 'slot empty / not populated' warning that render_audio
+    """Detect the 'slot empty / not populated' warning that read_audio
     emits when a Sound or Music slot was never assigned."""
     for w in observation.get("warnings") or []:
         if "empty" in w and ("not populated" in w or "slot" in w):
@@ -21,7 +21,7 @@ def judge_audio(
     observation: dict[str, Any],
     contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Verdict for a `render_audio` observation against an audio manifest entry."""
+    """Verdict for a `read_audio` observation against an audio manifest entry."""
     c = {**DEFAULT_CONTRACT, **(contract or {})}
     min_peak = c["min_peak"]
     min_notes = c["min_notes"]

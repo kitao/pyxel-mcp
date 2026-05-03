@@ -90,7 +90,7 @@ Useful for verifying exact pixel-level state without image files.
 - `grid`: list of rows, each row a list of palette indices 0–15.
 - Input field `bbox` (list `[x, y, w, h]`) is preserved for ergonomic call
   sites; output emits `region` (dict `{x, y, w, h}`), matching the shape used
-  by `inspect_image`, `inspect_tilemap`, and `compare_frames` so consumers can
+  by `read_image`, `read_tilemap`, and `diff_frames` so consumers can
   read region geometry uniformly across tools.
 - `region` in output reflects the actual region captured (full screen dimensions if input `bbox` was null).
 

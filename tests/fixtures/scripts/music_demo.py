@@ -1,6 +1,6 @@
 """Fixture: a script that populates pyxel.musics[0] wrapping sound 0.
 
-Used by test_render_audio to verify the music branch of the render path
+Used by test_read_audio to verify the music branch of the render path
 (audio_obj.seqs / snds_list detection, save with music slot index).
 """
 import pyxel

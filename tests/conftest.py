@@ -10,7 +10,7 @@ IMAGES = FIXTURES / "images"
 
 @pytest.fixture(scope="session", autouse=True)
 def _generate_reference_images():
-    """Create reference PNG fixtures for compare_frames tests."""
+    """Create reference PNG fixtures for diff_frames tests."""
     IMAGES.mkdir(parents=True, exist_ok=True)
 
     a = IMAGES / "reference_a.png"

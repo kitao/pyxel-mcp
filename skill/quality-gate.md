@@ -4,7 +4,7 @@ Final acceptance check. PASS gates "done"; FAIL routes back to the phase that ow
 
 In v1.0.0 the gate is split across two layers:
 
-- **Layer 1 (`observe`)** — call `inspect_*`, `run`, `compare_frames`, etc. to capture raw observations.
+- **Layer 1 (`observe`)** — call `read_*`, `run`, `diff_frames`, etc. to capture raw observations.
 - **Layer 2 (`judge`)** — pass each observation plus a contract dict (extracted from PLAN.md / ASSETS.md or omitted to use the module default) into `judge_*`. The verdict drives PASS / FAIL and produces a `fail_route` that names the phase to revisit.
 
 Encoding the thresholds in `judge_*` instead of inline pseudo-code means the same numeric criterion is applied identically across attempts and across host harnesses. The gate's job is to assemble observations + contracts and write `gate-report.json`; the numerical judgment lives in the MCP server.
@@ -32,7 +32,7 @@ Run checks in numeric order:
 2. **Asset (#4, #7–#9, #11)** — single tool calls per asset; cheap relative to playthroughs.
 3. **Gameplay (#5, #6, #10)** — `run` calls of the full win/lose path with `inputs` + `state` snapshots fed into `judge_milestone`. Most expensive.
 4. **Bundle (#12)** — `judge_bundle` against the deliverable directory.
-5. **Scene visuals (#14, #15)** — short `run` calls with `screen_grid` / `layout` snapshots; #14 also calls `compare_frames` for the dead-time check (now folded into `judge_bundle`'s default contract).
+5. **Scene visuals (#14, #15)** — short `run` calls with `screen_grid` / `layout` snapshots; #14 also calls `diff_frames` for the dead-time check (now folded into `judge_bundle`'s default contract).
 6. **Genre identity (#16)** — `run` calls evaluating each PLAN.md `## Genre Identity` rule via `judge_genre`. Comparable cost to #5/#6.
 7. **Agent visual review (#17)** — agent (you) `Read`s each bundle frame PNG and verbalizes observations. Costs context tokens, not tool calls. Run last because it depends on the bundle (#12) and gives the agent's own multimodal judgment as the closing gate.
 
@@ -45,17 +45,17 @@ Stop and write gate-report.json with the FAIL even if later checks would have pa
 | 1 | State files | `os.path.exists` for `PLAN.md`, `STRUCTURE.md`, `ASSETS.md`, `MEMORY.md` (all non-empty) | (none — direct check) | the 4 file names | the owning phase (visual-design / spec / scaffolding / asset-planning) |
 | 2 | Script validates | `validate(script="main.py")` | (none — `validate` is itself a checker) | (no contract) | playthrough |
 | 3 | Smoke run | `run(script="main.py", frames=30, snapshots=[{"frame":29,"kind":"screen_image","output":"tmp/smoke.png"}])` returns `exit_status=="ok"` and the PNG is non-empty | (none — direct check on `exit_status` + file size > 0) | (no contract) | scaffolding / playthrough |
-| 4 | Asset identity | Per ASSETS.md sprite entry: `inspect_image(...)` for the sprite region; for paired frames: `inspect_animation(...)` with `region_count=2` | `judge_sprite(image_obs, sprite_entry)` and `judge_animation(anim_obs, paired_entry)` per row | ASSETS.md sprite manifest (`min_distinct_colors`, `silhouette`, `diff_band`, `represents`) | sprite-quality |
+| 4 | Asset identity | Per ASSETS.md sprite entry: `read_image(...)` for the sprite region; for paired frames: `read_animation(...)` with `region_count=2` | `judge_sprite(image_obs, sprite_entry)` and `judge_animation(anim_obs, paired_entry)` per row | ASSETS.md sprite manifest (`min_distinct_colors`, `silhouette`, `diff_band`, `represents`) | sprite-quality |
 | 5 | Win path | `run(script="main.py", frames=<final_milestone+1>, random_seed=42, inputs=<PLAN.md win inputs>, snapshots=[{"frames":[<every milestone>],"kind":"state","attrs":[<every attr referenced in PLAN.md milestone Asserts column>]}])` | `judge_milestone(run_result, win_path_milestones)` | PLAN.md Win Path Milestones table (`asserts: [{frame, kind:"state", predicate}, ...]`); `random_seed=42` is mandatory — see Anti-shortcut rule #8 | playthrough or spec |
 | 6 | Lose path | `run(...)` with the lose-path inputs and `state` snapshots at every milestone | `judge_milestone(run_result, lose_path_milestones)` | PLAN.md Lose Path Milestones table | playthrough or spec |
-| 7 | Audio renders | Per audio manifest entry: `render_audio(script="main.py", target={"sound": N}, output_path=...)` (or `{"music": N}` for BGM) | `judge_audio(audio_obs, manifest_entry)` per slot | ASSETS.md Audio Manifest (`min_peak`, `min_notes`) | sprite-quality (empty slot) / scaffolding (under-spec) |
-| 8 | Palette hierarchy | `inspect_palette(script="main.py")` | `judge_palette(palette_obs)` | (default contract: `min_hierarchy_score=2`) | asset-planning / sprite-quality |
-| 9 | Contrast | `inspect_palette(script="main.py")` (same observation as #8) | `judge_palette(palette_obs)` (same call certifies both #8 and #9) | (default contract: `max_contrast_warnings=1`) | asset-planning / sprite-quality |
+| 7 | Audio renders | Per audio manifest entry: `read_audio(script="main.py", target={"sound": N}, output_path=...)` (or `{"music": N}` for BGM) | `judge_audio(audio_obs, manifest_entry)` per slot | ASSETS.md Audio Manifest (`min_peak`, `min_notes`) | sprite-quality (empty slot) / scaffolding (under-spec) |
+| 8 | Palette hierarchy | `read_palette(script="main.py")` | `judge_palette(palette_obs)` | (default contract: `min_hierarchy_score=2`) | asset-planning / sprite-quality |
+| 9 | Contrast | `read_palette(script="main.py")` (same observation as #8) | `judge_palette(palette_obs)` (same call certifies both #8 and #9) | (default contract: `max_contrast_warnings=1`) | asset-planning / sprite-quality |
 | 10 | Difficulty floor | `run(...)` with the lose-path inputs and `state` snapshots tracking `scene` across the full lose window | `judge_milestone(run_result, difficulty_floor_contract)` where the contract's predicate is `scene == 'GAME_OVER' and lo <= frame <= hi` | PLAN.md + STRUCTURE.md `FPS` (band: `lo, hi = int(10*fps), int(14*fps)`) | playthrough / spec |
 | 11 | Layout balance | TITLE: `run(script="main.py", frames=60, snapshots=[{"frame":30,"kind":"layout"}])` | `judge_layout(run_result)` | (default contract: `min_h_balance=0.70`, `min_quadrant_density=0.0001`) | scaffolding |
 | 12 | Proof bundle | bundle dir at `screenshots/result/<N>/` | `judge_bundle({"bundle_dir": <path>}, bundle_contract)` | ASSETS.md audio manifest + frame coverage spec; `min_dead_time_diff=0.05` default | bundle |
-| 13 | Tilemap trap clean | `inspect_tilemap(script="main.py", tilemap=N)` for every tilemap declared in STRUCTURE.md | (none — direct check on `trap_warning == False`) | (binary flag) | sprite-quality (source `(0,0)` non-empty) / scaffolding (tilemap usage wrong) |
-| 14 | Background non-empty + no dead-time | (a) `run(...)` with `screen_grid` snapshot at PLAY frame 119; (b) bundle PNGs in `frames/` | (a) custom predicate: distinct dark-layer indices ≥ 2 (default-palette bg = `{0,1,5}`); (b) folded into `judge_bundle` (its dead-time check is the same `compare_frames` call this row used to do inline) | (a) `inspect_palette` colors + dark-layer set; (b) inherited from #12's `judge_bundle` | scaffolding / asset-planning / playthrough |
+| 13 | Tilemap trap clean | `read_tilemap(script="main.py", tilemap=N)` for every tilemap declared in STRUCTURE.md | (none — direct check on `trap_warning == False`) | (binary flag) | sprite-quality (source `(0,0)` non-empty) / scaffolding (tilemap usage wrong) |
+| 14 | Background non-empty + no dead-time | (a) `run(...)` with `screen_grid` snapshot at PLAY frame 119; (b) bundle PNGs in `frames/` | (a) custom predicate: distinct dark-layer indices ≥ 2 (default-palette bg = `{0,1,5}`); (b) folded into `judge_bundle` (its dead-time check is the same `diff_frames` call this row used to do inline) | (a) `read_palette` colors + dark-layer set; (b) inherited from #12's `judge_bundle` | scaffolding / asset-planning / playthrough |
 | 15 | Scene transitions are visual | WIN and GAME_OVER scenes: `run(...)` with `screen_grid` snapshot at `<scene_entry+30>` | (none — direct predicate: `len(set(grid_indices)) >= 5`) | min 5 distinct palette indices total | scaffolding |
 | 16 | Genre identity | `run(...)` configured per PLAN.md `## Genre Identity` rules (each rule's Verify predicate names the snapshot scope) | `judge_genre(run_result, {"rules": [...]})` | PLAN.md `## Genre Identity` section (≥ 3 rules, each with `name` + `verify` predicate) | spec (rules absent) / playthrough (predicate fails) |
 | 17 | Agent visual review | `Read` each `screenshots/result/<N>/frames/{title,play_start,mid_game,win,game_over}.png` | (none — agent verbalization, not a judge tool) | ASSETS.md `represents:` strings + PLAN.md milestone descriptions | playthrough / sprite-quality / scaffolding |
@@ -88,7 +88,7 @@ Layer 2 judges are pure: they do not parse markdown. The agent extracts the cont
   min_distinct_colors: 4
   silhouette: [0.20, 0.85]
 ```
-becomes `{"min_distinct_colors": 4, "silhouette": [0.20, 0.85], "represents": "red-cap plumber, mid-stride"}` paired with `inspect_image(script="main.py", image=0, x=0, y=0, w=16, h=16)`.
+becomes `{"min_distinct_colors": 4, "silhouette": [0.20, 0.85], "represents": "red-cap plumber, mid-stride"}` paired with `read_image(script="main.py", image=0, x=0, y=0, w=16, h=16)`.
 
 **PLAN.md milestone table → `judge_milestone` contract:**
 ```
@@ -185,9 +185,9 @@ The `fail_route` field is required on every FAIL row — copy it from the judge 
 These are the cheats the gate is built to catch. Read them before writing the gate-report.json:
 
 1. **"It compiles and runs, looks fine"** — checks #2 and #3 only certify no-crash. They do not certify gameplay. Checks #5 and #6 (with `judge_milestone`) are the gameplay certifications.
-2. **"I added a sprite"** — without `inspect_image` + `judge_sprite` matching the `represents` description from ASSETS.md, the sprite is unverified. Render, look, judge; check #4 enforces this.
+2. **"I added a sprite"** — without `read_image` + `judge_sprite` matching the `represents` description from ASSETS.md, the sprite is unverified. Render, look, judge; check #4 enforces this.
 3. **"Bundle exists"** — `judge_bundle` certifies completeness AND dead-time absence; existence alone is not enough. Without #5 / #6 PASS the bundle could be a 30-frame loop with stale frames.
-4. **"Audio plays"** — without `render_audio` + `judge_audio` returning `verdict == "pass"` (#7), the slot may be empty or inaudible. A silent `play()` call passes #2 and #3 but fails #7.
+4. **"Audio plays"** — without `read_audio` + `judge_audio` returning `verdict == "pass"` (#7), the slot may be empty or inaudible. A silent `play()` call passes #2 and #3 but fails #7.
 5. **Adjusting milestones to fit** — *most important.* If the game can't reach WIN by the planned frame, fix the game, not the milestone. Backward edits to PLAN.md require re-running #5 and #6 from scratch. Loosening the spec to dodge a FAIL is the failure mode this gate exists to prevent.
 6. **"`trap_warning: True` is a silent killer."** Tilemap (0,0) trap means every "empty" cell shows a sprite. The visual artifact is "stair-step pattern across empty space" — easy to miss in a small screenshot, fatal in a 256x256 tilemap. Check #13 catches it.
 7. **No mid-attempt threshold relaxation.** If a `judge_*` contract threshold is wrong, change it BEFORE a run begins, not during. Mid-run contract changes are documented in `gate-report.json["contract_overrides"]` and trigger automatic FAIL of the affected check unless the contract is restored.

@@ -1,4 +1,4 @@
-"""inspect_palette tool (spec §7.1).
+"""read_palette tool (spec §7.1).
 
 Runs the script to the pre-loop checkpoint, then analyzes the palette.
 """
@@ -10,20 +10,21 @@ from pyxel_mcp.observe._harnesses._common.preloop import PreloopFailed, run_to_p
 
 
 def _empty(error: dict) -> dict[str, Any]:
-    """Error-shape response — verdict is None (no analysis performed)."""
+    """Error-shape response (no analysis performed)."""
     return {
         "ok": False,
         "colors": {}, "extended_palette": False, "palette_size": 0,
-        "hierarchy": None, "contrast_warnings": [], "verdict": None,
+        "hierarchy": None, "contrast_warnings": [],
         "errors": [error],
     }
 
 
 def run(payload: dict[str, Any]) -> dict[str, Any]:
-    """Inspect the script's palette state at the pre-loop checkpoint.
+    """Read the script's palette state at the pre-loop checkpoint.
 
-    Result includes `ok: bool` — True iff `len(errors) == 0`. The `verdict`
-    field is informational (pass/warn/fail/null) and does not affect `ok`.
+    Returns raw observation (`hierarchy`, `contrast_warnings`, ...). Pass
+    the result to `judge_palette` for a pass/warn/fail verdict; this layer
+    no longer computes one. `ok` is True iff `len(errors) == 0`.
     """
     try:
         with run_to_preloop(payload, empty_factory=_empty):

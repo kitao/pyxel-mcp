@@ -1,4 +1,4 @@
-"""inspect_tilemap tool (spec §7.4)."""
+"""read_tilemap tool (spec §7.4)."""
 from __future__ import annotations
 from typing import Any
 

@@ -10,8 +10,8 @@ def test_full_screen_capture():
         pyxel.cls(7)
         result = capture({"frame": 0, "kind": "screen_grid"})
     sw, sh = pyxel.width, pyxel.height
-    # Output uses dict-shaped `region` (consistent with inspect_image /
-    # inspect_tilemap / compare_frames). Input still accepts list-shaped
+    # Output uses dict-shaped `region` (consistent with read_image /
+    # read_tilemap / diff_frames). Input still accepts list-shaped
     # `bbox` for ergonomic call sites.
     assert result["region"] == {"x": 0, "y": 0, "w": sw, "h": sh}
     assert len(result["grid"]) == sh

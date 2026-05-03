@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pyxel_mcp.observe._harnesses.tools.compare_frames import run as _compare_frames
+from pyxel_mcp.observe._harnesses.tools.diff_frames import run as _diff_frames
 
 DEFAULT_CONTRACT: dict[str, Any] = {
     "required_videos": ["win-path.gif", "lose-path.gif"],
@@ -32,9 +32,9 @@ def _dead_time_diff(frames_dir: Path) -> tuple[float, dict[str, Any]]:
 
     first = pngs[0]
     mid = pngs[len(pngs) // 2]
-    diff = _compare_frames({"frame_a": str(first), "frame_b": str(mid)})
+    diff = _diff_frames({"frame_a": str(first), "frame_b": str(mid)})
     if not diff.get("ok"):
-        return 0.0, {"reason": "compare_frames errored", "diff": diff}
+        return 0.0, {"reason": "diff_frames errored", "diff": diff}
     if not diff.get("size_match"):
         return 0.0, {"reason": "frame size mismatch", "diff": diff}
     ratio = diff.get("ratio") or 0.0
