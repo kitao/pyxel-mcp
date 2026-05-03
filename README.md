@@ -119,8 +119,10 @@ In Claude Code, reference any of them with `@pyxel:run-snapshots-schema`, `@pyxe
 
 ## Update
 
+`uvx` caches the package; force a refresh by passing the cache flag:
+
 ```bash
-uvx --upgrade pyxel-mcp install
+uvx --refresh-package pyxel-mcp pyxel-mcp install
 ```
 
 After upgrading, re-run `publish-skill` if you have the host-skill channel installed — the workflow content version is pinned to the server version it shipped with.

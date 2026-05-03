@@ -29,6 +29,20 @@
 - Switch console script entry point to pyxel_mcp.cli:main
 - Add server startup diagnostic to stderr (workflow path)
 - Rewrite README for v1.0.0 user journey (7 stages)
+- Reject Pow + huge int literals + dunder access in predicate eval
+- Reject non-bool predicate result (catch typo'd method refs)
+- Add adversarial sandbox tests (DoS / escape / non-bool)
+- Refuse publish-skill into ~, ~/.claude, ~/.cursor, ~/.codex, etc
+- Refuse publish-skill overwrite of non-skill dir even with --force
+- Refuse publish-skill into a target that is a file
+- publish-skill emits friendly error when workflow content missing
+- Server starts in degraded mode when workflow content missing
+- Strip YAML front matter from workflow resource descriptions
+- Move judge_bundle off observe import (4-layer invariant)
+- Replace pyxel-skill repo link with pyxel://workflow guidance
+- Switch startup diagnostic to live FastMCP tool count
+- README: update section uses `uvx --refresh-package` form
+- Refresh stale path in anti_patterns.py docstring
 
 ## 0.11.0
 

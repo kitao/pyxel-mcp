@@ -6,8 +6,8 @@ Without rationale + fix, a category name is just a label — agents need to
 know *why* the pattern is flagged and *what the canonical fix looks like*.
 
 Source of truth for these rows is
-`src/pyxel_mcp/_harnesses/tools/validate.py`. If a detector's category
-string changes, update the row here as well.
+`src/pyxel_mcp/observe/_harnesses/tools/validate.py`. If a detector's
+category string changes, update the row here as well.
 """
 from __future__ import annotations
 

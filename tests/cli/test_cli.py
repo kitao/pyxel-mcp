@@ -67,14 +67,122 @@ def test_publish_skill_refuses_existing_target_without_force(tmp_path, capsys):
     assert (target / "marker.txt").read_text() == "pre-existing\n"
 
 
-def test_publish_skill_force_overwrites_existing(tmp_path):
+def test_publish_skill_force_overwrites_existing_skill_dir(tmp_path):
+    """--force on a directory that already looks like a skill dir
+    (contains SKILL.md) is the supported overwrite path."""
     target = tmp_path / "skills" / "pyxel"
     target.mkdir(parents=True)
+    (target / "SKILL.md").write_text("# previous publish\n")
     (target / "stale.md").write_text("old\n")
     rc = cli.main(["publish-skill", str(target), "--force"])
     assert rc == 0
     assert not (target / "stale.md").exists()
     assert (target / "SKILL.md").is_file()
+    assert (target / "SKILL.md").read_text() != "# previous publish\n"
+
+
+def test_publish_skill_refuses_existing_non_skill_dir_even_with_force(tmp_path, capsys):
+    """If the target is a non-empty dir without SKILL.md, --force still
+    refuses — prevents wiping out an unrelated directory by typo."""
+    target = tmp_path / "important"
+    target.mkdir()
+    (target / "important.txt").write_text("don't delete\n")
+    rc = cli.main(["publish-skill", str(target), "--force"])
+    assert rc != 0
+    err = capsys.readouterr().err
+    assert "non-skill" in err.lower() or "skill.md" in err.lower()
+    assert (target / "important.txt").read_text() == "don't delete\n"
+
+
+def test_publish_skill_force_overwrites_empty_existing_dir(tmp_path):
+    """An empty existing dir is fine to overwrite with --force."""
+    target = tmp_path / "skills" / "pyxel"
+    target.mkdir(parents=True)
+    rc = cli.main(["publish-skill", str(target), "--force"])
+    assert rc == 0
+    assert (target / "SKILL.md").is_file()
+
+
+def test_publish_skill_refuses_file_target(tmp_path, capsys):
+    target = tmp_path / "afile.txt"
+    target.write_text("preserve me\n")
+    rc = cli.main(["publish-skill", str(target)])
+    assert rc != 0
+    err = capsys.readouterr().err
+    assert "file" in err.lower()
+    assert target.read_text() == "preserve me\n"
+
+
+def test_publish_skill_refuses_file_target_even_with_force(tmp_path, capsys):
+    target = tmp_path / "afile.txt"
+    target.write_text("preserve me\n")
+    rc = cli.main(["publish-skill", str(target), "--force"])
+    assert rc != 0
+    assert target.read_text() == "preserve me\n"
+
+
+def test_publish_skill_refuses_home_directory(tmp_path, monkeypatch, capsys):
+    """`publish-skill ~ --force` must not nuke the user's home directory."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    (fake_home / "important.txt").write_text("don't delete\n")
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+    rc = cli.main(["publish-skill", str(fake_home), "--force"])
+    assert rc != 0
+    err = capsys.readouterr().err
+    assert "high-risk" in err.lower() or "refusing" in err.lower()
+    assert (fake_home / "important.txt").exists()
+
+
+def test_publish_skill_refuses_claude_config_root(tmp_path, monkeypatch, capsys):
+    """`publish-skill ~/.claude --force` must not wipe out .mcp.json / CLAUDE.md."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    claude = fake_home / ".claude"
+    claude.mkdir()
+    (claude / ".mcp.json").write_text("{}\n")
+    (claude / "CLAUDE.md").write_text("# my prefs\n")
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+    rc = cli.main(["publish-skill", str(claude), "--force"])
+    assert rc != 0
+    err = capsys.readouterr().err
+    assert "high-risk" in err.lower() or "refusing" in err.lower()
+    assert (claude / ".mcp.json").read_text() == "{}\n"
+    assert (claude / "CLAUDE.md").read_text() == "# my prefs\n"
+
+
+def test_publish_skill_refuses_cursor_and_codex_config_roots(tmp_path, monkeypatch):
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+    for name in (".cursor", ".codex", ".ssh", ".aws"):
+        d = fake_home / name
+        d.mkdir()
+        rc = cli.main(["publish-skill", str(d), "--force"])
+        assert rc != 0, f"should have refused {name}"
+
+
+def test_publish_skill_refuses_filesystem_root(monkeypatch, capsys):
+    """`publish-skill / --force` is refused at the dangerous-target gate."""
+    rc = cli.main(["publish-skill", "/", "--force"])
+    assert rc != 0
+    err = capsys.readouterr().err
+    assert "high-risk" in err.lower() or "refusing" in err.lower()
+
+
+def test_publish_skill_friendly_error_when_workflow_missing(tmp_path, monkeypatch, capsys):
+    """If workflow_root() raises, surface it as a normal error — not a traceback."""
+    import pyxel_mcp.workflow as wf
+
+    def boom():
+        raise RuntimeError("simulated content loss")
+
+    monkeypatch.setattr(wf, "workflow_root", boom)
+    rc = cli.main(["publish-skill", str(tmp_path / "out")])
+    assert rc != 0
+    err = capsys.readouterr().err
+    assert "simulated content loss" in err
+    assert "Traceback" not in err
 
 
 def test_publish_skill_dry_run_does_not_copy(tmp_path, capsys):

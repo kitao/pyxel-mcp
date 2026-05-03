@@ -1,6 +1,7 @@
 """MCP resource registration aggregator."""
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from pyxel_mcp._resources import anti_patterns, docs, examples, palette
@@ -44,12 +45,37 @@ def _make_workflow_handler(path: Path):
     return _read
 
 
+def _strip_yaml_front_matter(text: str) -> str:
+    """Drop a leading `---\\n...\\n---\\n` block, if present.
+
+    Skill md files (notably SKILL.md) start with a YAML metadata block.
+    Without stripping it, the resource description would surface
+    `name: pyxel\\ndescription: …` as the user-visible blurb instead of
+    the actual lead paragraph.
+    """
+    if not text.startswith("---\n"):
+        return text
+    end = text.find("\n---\n", 4)
+    if end < 0:
+        return text
+    return text[end + len("\n---\n"):]
+
+
 def _first_paragraph(text: str, limit: int = 200) -> str:
-    """Return the first non-empty paragraph (≤ limit chars) of `text`."""
-    for chunk in text.split("\n\n"):
+    """Return the first non-empty paragraph (≤ limit chars) of `text`,
+    after skipping any YAML front matter.
+
+    Control characters are replaced with spaces so the description is
+    safe to surface in MCP clients that don't sanitise resource metadata.
+    """
+    body = _strip_yaml_front_matter(text)
+    for chunk in body.split("\n\n"):
         chunk = chunk.strip()
         if chunk:
-            return chunk[:limit]
+            sanitised = "".join(
+                c if c.isprintable() or c == " " else " " for c in chunk
+            )
+            return sanitised[:limit]
     return ""
 
 
@@ -60,10 +86,25 @@ def _register_workflow(mcp) -> None:
     URI namespace. SKILL.md becomes the bare `pyxel://workflow` entry
     point; sub-paths mirror the on-disk layout (`knowledge/pixel-art.md`
     → `pyxel://workflow/knowledge/pixel-art`).
+
+    If `workflow_root()` raises (the wheel was built without the build
+    hook running, or `skill/` is absent in a development tree), we log
+    one stderr line and return — the server still starts and the rest
+    of the resource surface (anti-patterns, examples, etc.) remains
+    available. The agent will see no `pyxel://workflow/*` resources but
+    can still drive Layer 1 / Layer 2 tools.
     """
     from pyxel_mcp.workflow import list_workflow_files, workflow_root
-    root = workflow_root()
-    for md_path in list_workflow_files():
+    try:
+        root = workflow_root()
+        files = list_workflow_files()
+    except RuntimeError as e:
+        sys.stderr.write(
+            "[pyxel-mcp] warning: workflow content unavailable, "
+            f"pyxel://workflow/* resources will not be registered ({e})\n"
+        )
+        return
+    for md_path in files:
         rel = md_path.relative_to(root)
         uri = _md_to_workflow_uri(rel)
         if uri is None:

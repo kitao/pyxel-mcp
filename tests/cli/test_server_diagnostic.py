@@ -18,15 +18,19 @@ def test_startup_diagnostic_writes_to_stderr(capsys, monkeypatch):
     assert captured.out == ""
 
 
-def test_startup_diagnostic_mentions_tool_layers(capsys, monkeypatch):
-    """The line should record the 17-tool / 2-layer surface for sanity-check."""
+def test_startup_diagnostic_records_live_tool_count(capsys, monkeypatch):
+    """The diagnostic should print a live tool count derived from the
+    FastMCP registry, not a hard-coded number — so it stays accurate as
+    the tool surface evolves."""
     import pyxel_mcp.server as srv
     monkeypatch.setattr(srv.mcp, "run", lambda: None)
     srv.main()
     err = capsys.readouterr().err
-    assert "Layer 1" in err
-    assert "Layer 2" in err
-    assert "17 tools" in err
+    # The string should mention "tools" and a non-zero count.
+    import re
+    m = re.search(r"(\d+) tools", err)
+    assert m is not None, f"no tool count in stderr: {err!r}"
+    assert int(m.group(1)) > 0
 
 
 def test_startup_diagnostic_survives_missing_workflow(capsys, monkeypatch):

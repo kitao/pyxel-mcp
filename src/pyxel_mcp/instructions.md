@@ -311,8 +311,10 @@ handled automatically.
 - **`pyxel://anti-patterns`** — Catalog of detector categories surfaced by
   `validate`, with severity, rationale, and canonical fix per category. Read
   when an issue's `category` string is unfamiliar.
-- **`pyxel-skill` repo** (https://github.com/kitao/pyxel-skill) — Production
-  workflow that uses pyxel-mcp tools end-to-end: visual target → decomposition
-  → scaffold → asset generation → task execution → quality gate.
+- **`pyxel://workflow`** — Layer 3 workflow skill (entry point: SKILL.md).
+  Sub-paths follow the on-disk layout: `pyxel://workflow/<stage>` for the
+  7 pipeline stages, `pyxel://workflow/knowledge/<topic>` for topical
+  knowledge files. Read this when the task is "build a complete Pyxel
+  game" rather than "verify a single sprite".
 - **`pyxel://api-reference`** — Full Pyxel API reference (palette, drawing,
   input, sound, tilemap). Cross-link for the quirks listed above.

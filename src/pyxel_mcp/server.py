@@ -12,12 +12,11 @@ from pyxel_mcp import judge as _judge
 from pyxel_mcp._resources import register_resources
 
 
-# Read instructions if present; placeholder if not yet rewritten (Task 9.2 will).
 _INSTRUCTIONS_PATH = Path(__file__).parent / "instructions.md"
 try:
     _INSTRUCTIONS = _INSTRUCTIONS_PATH.read_text()
 except FileNotFoundError:
-    _INSTRUCTIONS = "pyxel-mcp 0.9.3 — instructions pending."
+    _INSTRUCTIONS = "pyxel-mcp — instructions file missing from install."
 
 mcp = FastMCP(name="pyxel", instructions=_INSTRUCTIONS)
 register_resources(mcp)
@@ -250,9 +249,14 @@ def _log_startup() -> None:
         wf = str(workflow_root())
     except Exception as e:  # workflow content missing — keep server startable
         wf = f"<unavailable: {e}>"
+    # Counted live from FastMCP rather than hard-coded so the diagnostic
+    # tracks reality if the tool surface changes between versions.
+    try:
+        n_tools = len(mcp._tool_manager._tools)  # type: ignore[attr-defined]
+    except Exception:
+        n_tools = 0
     sys.stderr.write(
-        "[pyxel-mcp] starting — 17 tools (Layer 1: 9, Layer 2: 8), "
-        f"workflow={wf}\n"
+        f"[pyxel-mcp] starting — {n_tools} tools, workflow={wf}\n"
     )
 
 
