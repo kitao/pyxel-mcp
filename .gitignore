@@ -9,3 +9,4 @@ uv.lock
 .worktrees/
 tests/fixtures/images/*.png
 skill/hooks/__pycache__/
+src/pyxel_mcp/workflow/_content/

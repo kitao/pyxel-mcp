@@ -19,6 +19,10 @@
 - BREAKING: rename compare_frames to diff_frames
 - BREAKING: drop verdict field from read_palette + read_image
   (judgment moves to Layer 2 judge_palette / judge_sprite)
+- Add workflow/ Layer 3 module + workflow_root() helper
+- Expose skill/*.md as pyxel://workflow/* MCP resources (16 URIs)
+- Add hatch custom build hook to embed skill/ in wheel artifact
+- gitignore src/pyxel_mcp/workflow/_content/ (build-time output)
 
 ## 0.11.0
 
