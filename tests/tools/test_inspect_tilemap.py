@@ -2,7 +2,7 @@
 import tempfile
 from pathlib import Path
 
-from pyxel_mcp._harnesses.tools.inspect_tilemap import run as inspect_tilemap_run
+from pyxel_mcp.observe._harnesses.tools.inspect_tilemap import run as inspect_tilemap_run
 from tests.conftest import SCRIPTS
 
 

@@ -1,7 +1,7 @@
 """Tests for snapshot_kinds.screen_image (spec §6.4.1)."""
 import struct
-from pyxel_mcp._harnesses._common.snapshot_kinds.screen_image import capture
-from pyxel_mcp._harnesses._common.pyxel_patcher import headless_pyxel
+from pyxel_mcp.observe._harnesses._common.snapshot_kinds.screen_image import capture
+from pyxel_mcp.observe._harnesses._common.pyxel_patcher import headless_pyxel
 
 
 def _png_size(path) -> tuple[int, int]:

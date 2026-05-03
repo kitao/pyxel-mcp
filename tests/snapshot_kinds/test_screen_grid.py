@@ -1,6 +1,6 @@
 """Tests for snapshot_kinds.screen_grid (spec §6.4.2)."""
-from pyxel_mcp._harnesses._common.pyxel_patcher import headless_pyxel
-from pyxel_mcp._harnesses._common.snapshot_kinds.screen_grid import capture
+from pyxel_mcp.observe._harnesses._common.pyxel_patcher import headless_pyxel
+from pyxel_mcp.observe._harnesses._common.snapshot_kinds.screen_grid import capture
 
 
 def test_full_screen_capture():

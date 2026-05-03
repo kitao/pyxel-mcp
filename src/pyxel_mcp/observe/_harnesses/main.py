@@ -1,6 +1,6 @@
 """Subprocess entry point (spec §11.2).
 
-Usage: python -m pyxel_mcp._harnesses.main <subcommand>
+Usage: python -m pyxel_mcp.observe._harnesses.main <subcommand>
        reads JSON parameters from stdin, writes JSON result to stdout.
 """
 from __future__ import annotations
@@ -8,7 +8,7 @@ import json
 import sys
 from typing import Callable
 
-from pyxel_mcp._harnesses._common.error_capture import (
+from pyxel_mcp.observe._harnesses._common.error_capture import (
     ErrorPhase, make_error, make_validation_error,
 )
 
@@ -18,7 +18,7 @@ def _build_tools() -> dict[str, Callable[[dict], dict]]:
     paying the pyxel-import cost at module-load time (e.g., for argv-only
     error paths that never need a tool handler).
     """
-    from pyxel_mcp._harnesses.tools import (
+    from pyxel_mcp.observe._harnesses.tools import (
         run, validate, pyxel_info,
         inspect_palette, inspect_image, inspect_animation, inspect_tilemap,
         render_audio, compare_frames,

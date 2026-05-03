@@ -1,5 +1,5 @@
 import re
-from pyxel_mcp._harnesses.tools.pyxel_info import run as pyxel_info_run
+from pyxel_mcp.observe._harnesses.tools.pyxel_info import run as pyxel_info_run
 
 
 def test_returns_required_fields():

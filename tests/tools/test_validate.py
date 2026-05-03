@@ -1,4 +1,4 @@
-from pyxel_mcp._harnesses.tools.validate import run as validate_run
+from pyxel_mcp.observe._harnesses.tools.validate import run as validate_run
 from tests.conftest import SCRIPTS
 
 
@@ -364,7 +364,7 @@ def test_issues_sorted_with_severity_tiebreak():
     # Construct a script where syntax error and a warning land at the same line.
     # We cannot have both simultaneously (syntax error prevents AST analysis),
     # so instead verify the sort key with a synthetic issue list.
-    from pyxel_mcp._harnesses.tools.validate import _make_issue, _SEVERITY_ORDER
+    from pyxel_mcp.observe._harnesses.tools.validate import _make_issue, _SEVERITY_ORDER
 
     issues = [
         _make_issue("warning", 5, 0, "anti_pattern.missing_colkey", "warn"),

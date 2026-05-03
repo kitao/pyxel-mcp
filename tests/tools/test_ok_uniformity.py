@@ -7,15 +7,15 @@ that contract — both for success paths (ok=True) and validation/error paths
 """
 from pathlib import Path
 
-from pyxel_mcp._harnesses.tools.compare_frames import run as compare_frames_run
-from pyxel_mcp._harnesses.tools.inspect_animation import run as inspect_animation_run
-from pyxel_mcp._harnesses.tools.inspect_image import run as inspect_image_run
-from pyxel_mcp._harnesses.tools.inspect_palette import run as inspect_palette_run
-from pyxel_mcp._harnesses.tools.inspect_tilemap import run as inspect_tilemap_run
-from pyxel_mcp._harnesses.tools.pyxel_info import run as pyxel_info_run
-from pyxel_mcp._harnesses.tools.render_audio import run as render_audio_run
-from pyxel_mcp._harnesses.tools.run import run as run_run
-from pyxel_mcp._harnesses.tools.validate import run as validate_run
+from pyxel_mcp.observe._harnesses.tools.compare_frames import run as compare_frames_run
+from pyxel_mcp.observe._harnesses.tools.inspect_animation import run as inspect_animation_run
+from pyxel_mcp.observe._harnesses.tools.inspect_image import run as inspect_image_run
+from pyxel_mcp.observe._harnesses.tools.inspect_palette import run as inspect_palette_run
+from pyxel_mcp.observe._harnesses.tools.inspect_tilemap import run as inspect_tilemap_run
+from pyxel_mcp.observe._harnesses.tools.pyxel_info import run as pyxel_info_run
+from pyxel_mcp.observe._harnesses.tools.render_audio import run as render_audio_run
+from pyxel_mcp.observe._harnesses.tools.run import run as run_run
+from pyxel_mcp.observe._harnesses.tools.validate import run as validate_run
 from tests.conftest import IMAGES, SCRIPTS
 
 

@@ -2,7 +2,7 @@
 import tempfile
 from pathlib import Path
 
-from pyxel_mcp._harnesses.tools.inspect_image import run as inspect_image_run
+from pyxel_mcp.observe._harnesses.tools.inspect_image import run as inspect_image_run
 from tests.conftest import SCRIPTS
 
 

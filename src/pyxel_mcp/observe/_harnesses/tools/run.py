@@ -10,14 +10,14 @@ from typing import Any
 
 from PIL import Image
 
-from pyxel_mcp._harnesses._common.error_capture import (
+from pyxel_mcp.observe._harnesses._common.error_capture import (
     make_error, make_validation_error, ErrorPhase,
 )
-from pyxel_mcp._harnesses._common.input_scheduler import InputScheduler, ValidationError
-from pyxel_mcp._harnesses._common.pyxel_patcher import headless_pyxel, RunNotCalledError
-from pyxel_mcp._harnesses._common.range_parser import resolve_frames as _resolve_frames, RangeError
-from pyxel_mcp._harnesses._common.script_loader import resolve_script_path, load_script_module
-from pyxel_mcp._harnesses._common.snapshot_kinds import (
+from pyxel_mcp.observe._harnesses._common.input_scheduler import InputScheduler, ValidationError
+from pyxel_mcp.observe._harnesses._common.pyxel_patcher import headless_pyxel, RunNotCalledError
+from pyxel_mcp.observe._harnesses._common.range_parser import resolve_frames as _resolve_frames, RangeError
+from pyxel_mcp.observe._harnesses._common.script_loader import resolve_script_path, load_script_module
+from pyxel_mcp.observe._harnesses._common.snapshot_kinds import (
     screen_image as _si_kind,
     screen_grid as _sg_kind,
     state as _state_kind,

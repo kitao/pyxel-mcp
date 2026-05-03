@@ -6,7 +6,7 @@ from tests.conftest import SCRIPTS
 
 def _run(subcommand: str, payload: dict) -> dict:
     proc = subprocess.run(
-        [sys.executable, "-m", "pyxel_mcp._harnesses.main", subcommand],
+        [sys.executable, "-m", "pyxel_mcp.observe._harnesses.main", subcommand],
         input=json.dumps(payload),
         capture_output=True, text=True, timeout=10,
     )

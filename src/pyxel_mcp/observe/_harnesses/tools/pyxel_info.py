@@ -5,7 +5,7 @@ from importlib.metadata import PackageNotFoundError, version as _pkg_version
 from pathlib import Path
 from typing import Any
 
-from pyxel_mcp._harnesses._common.error_capture import make_validation_error
+from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_error
 
 
 def _stubs_path() -> str:

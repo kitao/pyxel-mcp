@@ -1,6 +1,6 @@
 import os
 import pytest
-from pyxel_mcp._harnesses._common.pyxel_patcher import (
+from pyxel_mcp.observe._harnesses._common.pyxel_patcher import (
     PreLoopState, headless_pyxel, RunNotCalledError
 )
 

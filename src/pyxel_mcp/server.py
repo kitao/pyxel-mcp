@@ -25,7 +25,7 @@ register_resources(mcp)
 
 def _dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> dict[str, Any]:
     """Run the harness subprocess with payload as JSON on stdin."""
-    cmd = [sys.executable, "-m", "pyxel_mcp._harnesses.main", subcommand]
+    cmd = [sys.executable, "-m", "pyxel_mcp.observe._harnesses.main", subcommand]
     try:
         proc = subprocess.run(
             cmd,
@@ -41,11 +41,11 @@ def _dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> di
                 "log": "", "seeded": False, "errors": [],
             }
         else:
-            from pyxel_mcp._harnesses._common.error_capture import make_error, ErrorPhase
+            from pyxel_mcp.observe._harnesses._common.error_capture import make_error, ErrorPhase
             return {"errors": [make_error(ErrorPhase.GAME_LOOP, f"subprocess timed out after {timeout}s")]}
 
     if proc.returncode != 0:
-        from pyxel_mcp._harnesses._common.error_capture import make_error, ErrorPhase
+        from pyxel_mcp.observe._harnesses._common.error_capture import make_error, ErrorPhase
         return {"errors": [make_error(ErrorPhase.SCRIPT_IMPORT, f"subprocess exited {proc.returncode}: {proc.stderr}")]}
 
     result = json.loads(proc.stdout) if proc.stdout.strip() else {}

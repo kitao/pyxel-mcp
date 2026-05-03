@@ -22,7 +22,7 @@ def _restore_image_bank():
     pyxel.images[0].cls(0)
 
 
-from pyxel_mcp._harnesses._common.analyzers.animation import analyze_animation
+from pyxel_mcp.observe._harnesses._common.analyzers.animation import analyze_animation
 
 
 def test_two_identical_frames_high_stability():

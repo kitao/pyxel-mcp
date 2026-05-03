@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from pyxel_mcp._harnesses.tools.run import run as run_tool
+from pyxel_mcp.observe._harnesses.tools.run import run as run_tool
 from tests.conftest import SCRIPTS
 
 

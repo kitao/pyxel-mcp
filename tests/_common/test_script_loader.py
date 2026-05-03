@@ -1,7 +1,7 @@
 import os
 import pytest
 from pathlib import Path
-from pyxel_mcp._harnesses._common.script_loader import resolve_script_path, load_script_module
+from pyxel_mcp.observe._harnesses._common.script_loader import resolve_script_path, load_script_module
 from tests.conftest import SCRIPTS
 
 

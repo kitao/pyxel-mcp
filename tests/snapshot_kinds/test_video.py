@@ -2,7 +2,7 @@ import shutil
 import pytest
 from pathlib import Path
 from PIL import Image
-from pyxel_mcp._harnesses._common.snapshot_kinds.video import (
+from pyxel_mcp.observe._harnesses._common.snapshot_kinds.video import (
     VideoAccumulator, ExtensionError
 )
 
@@ -50,7 +50,7 @@ def test_mp4_output(tmp_path):
 
 def test_mp4_falls_back_to_gif_when_ffmpeg_missing(tmp_path, monkeypatch):
     """If ffmpeg isn't available, output is rewritten to .gif and warned."""
-    import pyxel_mcp._harnesses._common.snapshot_kinds.video as vid_mod
+    import pyxel_mcp.observe._harnesses._common.snapshot_kinds.video as vid_mod
     monkeypatch.setattr(vid_mod, "_ffmpeg_available", lambda: False)
     out = tmp_path / "anim.mp4"
     accum = VideoAccumulator({

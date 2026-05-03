@@ -8,7 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pyxel_mcp._harnesses.tools.compare_frames import run as _compare_frames
+from pyxel_mcp.observe._harnesses.tools.compare_frames import run as _compare_frames
 
 DEFAULT_CONTRACT: dict[str, Any] = {
     "required_videos": ["win-path.gif", "lose-path.gif"],

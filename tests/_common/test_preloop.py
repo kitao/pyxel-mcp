@@ -1,5 +1,5 @@
 """Tests for `run_to_preloop` context manager (Task 3b-3)."""
-from pyxel_mcp._harnesses._common.preloop import PreloopFailed, run_to_preloop
+from pyxel_mcp.observe._harnesses._common.preloop import PreloopFailed, run_to_preloop
 from tests.conftest import SCRIPTS
 
 

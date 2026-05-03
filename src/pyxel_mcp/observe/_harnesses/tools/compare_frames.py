@@ -10,7 +10,7 @@ from typing import Any
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 
-from pyxel_mcp._harnesses._common.error_capture import make_validation_error
+from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_error
 
 
 def _error_result(error: dict) -> dict:

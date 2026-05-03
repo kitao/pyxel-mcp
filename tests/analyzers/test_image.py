@@ -22,7 +22,7 @@ def _clear_image_bank():
     pyxel.images[0].cls(0)
 
 
-from pyxel_mcp._harnesses._common.analyzers.image import analyze_image
+from pyxel_mcp.observe._harnesses._common.analyzers.image import analyze_image
 
 
 def test_full_bank_pixels_none_when_large():
@@ -114,14 +114,14 @@ def test_verdict_warn_for_two_color_well_filled():
 
 def test_verdict_warn_at_lower_fill_boundary():
     """fill_ratio just below 0.15 (within 0.05) with 3 colors → warn."""
-    from pyxel_mcp._harnesses._common.analyzers.image import _image_verdict
+    from pyxel_mcp.observe._harnesses._common.analyzers.image import _image_verdict
     # boundary: fill 0.12 (dist = 0.03 from 0.15); 3 colors
     assert _image_verdict([[0]], 0.12, {0: 56, 1: 4, 2: 4}) == "warn"
 
 
 def test_verdict_fail_at_far_below_lower_fill():
     """fill_ratio more than 0.05 below 0.15 → fail."""
-    from pyxel_mcp._harnesses._common.analyzers.image import _image_verdict
+    from pyxel_mcp.observe._harnesses._common.analyzers.image import _image_verdict
     # 0.05 below threshold = 0.10 still within 0.05; 0.09 is just outside
     assert _image_verdict([[0]], 0.05, {0: 60, 1: 2, 2: 2}) == "fail"
 

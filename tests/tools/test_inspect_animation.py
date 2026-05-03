@@ -1,7 +1,7 @@
 """Tests for inspect_animation tool (spec §7.3)."""
 import pytest
 
-from pyxel_mcp._harnesses.tools.inspect_animation import run as inspect_animation_run
+from pyxel_mcp.observe._harnesses.tools.inspect_animation import run as inspect_animation_run
 from tests.conftest import SCRIPTS
 
 

@@ -4,7 +4,7 @@ from tests.conftest import SCRIPTS
 
 
 def render_audio_run(payload: dict) -> dict:
-    from pyxel_mcp._harnesses.tools.render_audio import run
+    from pyxel_mcp.observe._harnesses.tools.render_audio import run
     return run(payload)
 
 

@@ -1,5 +1,5 @@
 """Tests for inspect_palette tool (spec §7.1)."""
-from pyxel_mcp._harnesses.tools.inspect_palette import run as inspect_palette_run
+from pyxel_mcp.observe._harnesses.tools.inspect_palette import run as inspect_palette_run
 from tests.conftest import SCRIPTS
 
 

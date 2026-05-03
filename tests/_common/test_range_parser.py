@@ -1,5 +1,5 @@
 import pytest
-from pyxel_mcp._harnesses._common.range_parser import resolve_frames, RangeError
+from pyxel_mcp.observe._harnesses._common.range_parser import resolve_frames, RangeError
 
 
 # Explicit list cases

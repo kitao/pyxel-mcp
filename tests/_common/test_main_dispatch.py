@@ -4,9 +4,9 @@ import sys
 
 
 def _run_subprocess(subcommand: str, payload: dict) -> tuple[int, dict, str]:
-    """Run pyxel_mcp._harnesses.main as subprocess. Returns (exit_code, stdout_json, stderr)."""
+    """Run pyxel_mcp.observe._harnesses.main as subprocess. Returns (exit_code, stdout_json, stderr)."""
     proc = subprocess.run(
-        [sys.executable, "-m", "pyxel_mcp._harnesses.main", subcommand],
+        [sys.executable, "-m", "pyxel_mcp.observe._harnesses.main", subcommand],
         input=json.dumps(payload),
         capture_output=True,
         text=True,
@@ -25,7 +25,7 @@ def test_unknown_subcommand_returns_validation_error():
 
 def test_invalid_json_stdin_returns_validation_error():
     proc = subprocess.run(
-        [sys.executable, "-m", "pyxel_mcp._harnesses.main", "validate"],
+        [sys.executable, "-m", "pyxel_mcp.observe._harnesses.main", "validate"],
         input="not json {{{",
         capture_output=True,
         text=True,
@@ -38,7 +38,7 @@ def test_invalid_json_stdin_returns_validation_error():
 def test_no_args_returns_validation_error():
     """argv != 1 (zero args) should validation-fail with diagnostic message."""
     proc = subprocess.run(
-        [sys.executable, "-m", "pyxel_mcp._harnesses.main"],
+        [sys.executable, "-m", "pyxel_mcp.observe._harnesses.main"],
         input="",
         capture_output=True,
         text=True,
@@ -52,7 +52,7 @@ def test_no_args_returns_validation_error():
 def test_too_many_args_returns_validation_error():
     """argv != 1 (multiple args) should validation-fail with diagnostic message."""
     proc = subprocess.run(
-        [sys.executable, "-m", "pyxel_mcp._harnesses.main", "validate", "extra"],
+        [sys.executable, "-m", "pyxel_mcp.observe._harnesses.main", "validate", "extra"],
         input="{}",
         capture_output=True,
         text=True,

@@ -1,6 +1,6 @@
 """Tests for snapshot_kinds.layout (spec §6.4.4)."""
-from pyxel_mcp._harnesses._common.pyxel_patcher import headless_pyxel
-from pyxel_mcp._harnesses._common.snapshot_kinds.layout import capture
+from pyxel_mcp.observe._harnesses._common.pyxel_patcher import headless_pyxel
+from pyxel_mcp.observe._harnesses._common.snapshot_kinds.layout import capture
 
 
 def test_uniform_screen_high_balance():

@@ -3,7 +3,7 @@ from tests.conftest import IMAGES
 
 
 def compare_run(payload: dict) -> dict:
-    from pyxel_mcp._harnesses.tools.compare_frames import run
+    from pyxel_mcp.observe._harnesses.tools.compare_frames import run
     return run(payload)
 
 

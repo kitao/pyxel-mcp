@@ -1,5 +1,5 @@
 """Tests for snapshot_kinds.state (spec §6.4.3)."""
-from pyxel_mcp._harnesses._common.snapshot_kinds.state import capture
+from pyxel_mcp.observe._harnesses._common.snapshot_kinds.state import capture
 
 
 class _AppMock:

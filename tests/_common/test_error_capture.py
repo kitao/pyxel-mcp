@@ -1,5 +1,5 @@
 import pytest
-from pyxel_mcp._harnesses._common.error_capture import (
+from pyxel_mcp.observe._harnesses._common.error_capture import (
     ToolError, ErrorPhase, make_error, make_validation_error
 )
 

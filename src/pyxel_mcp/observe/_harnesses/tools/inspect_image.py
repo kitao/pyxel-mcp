@@ -2,9 +2,9 @@
 from __future__ import annotations
 from typing import Any
 
-from pyxel_mcp._harnesses._common.analyzers.image import analyze_image
-from pyxel_mcp._harnesses._common.error_capture import make_validation_error
-from pyxel_mcp._harnesses._common.preloop import PreloopFailed, run_to_preloop
+from pyxel_mcp.observe._harnesses._common.analyzers.image import analyze_image
+from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_error
+from pyxel_mcp.observe._harnesses._common.preloop import PreloopFailed, run_to_preloop
 
 
 def _empty(error: dict) -> dict:

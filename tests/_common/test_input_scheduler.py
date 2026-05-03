@@ -1,5 +1,5 @@
 import pytest
-from pyxel_mcp._harnesses._common.input_scheduler import (
+from pyxel_mcp.observe._harnesses._common.input_scheduler import (
     InputScheduler, InputEvent, ValidationError
 )
 

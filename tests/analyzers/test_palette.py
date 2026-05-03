@@ -22,7 +22,7 @@ def _restore_palette():
             pyxel.colors.pop()
 
 
-from pyxel_mcp._harnesses._common.analyzers.palette import (
+from pyxel_mcp.observe._harnesses._common.analyzers.palette import (
     analyze_palette, contrast_ratio
 )
 
@@ -183,14 +183,14 @@ def test_verdict_extended_palette_returns_none():
 
 def test_verdict_pass_with_one_warning():
     """score 2 + 1 warning is still pass (boundary)."""
-    from pyxel_mcp._harnesses._common.analyzers.palette import _palette_verdict
+    from pyxel_mcp.observe._harnesses._common.analyzers.palette import _palette_verdict
     h = {"score": 2, "background": [0], "environment": [3], "interactive": [8]}
     assert _palette_verdict(h, [{"a": 1, "b": 2, "ratio": 1.5, "message": "x"}]) == "pass"
 
 
 def test_verdict_warn_when_two_to_five_warnings():
     """score 2 + 2 warnings → warn; score 2 + 5 warnings → warn (upper boundary)."""
-    from pyxel_mcp._harnesses._common.analyzers.palette import _palette_verdict
+    from pyxel_mcp.observe._harnesses._common.analyzers.palette import _palette_verdict
     h = {"score": 2, "background": [0], "environment": [3], "interactive": [8]}
     two = [{"a": i, "b": i + 1, "ratio": 1.0, "message": ""} for i in range(2)]
     five = [{"a": i, "b": i + 1, "ratio": 1.0, "message": ""} for i in range(5)]
@@ -200,7 +200,7 @@ def test_verdict_warn_when_two_to_five_warnings():
 
 def test_verdict_fail_on_low_hierarchy():
     """Hierarchy score 0 or 1 → fail regardless of warning count."""
-    from pyxel_mcp._harnesses._common.analyzers.palette import _palette_verdict
+    from pyxel_mcp.observe._harnesses._common.analyzers.palette import _palette_verdict
     h0 = {"score": 0, "background": [], "environment": [], "interactive": []}
     h1 = {"score": 1, "background": [0], "environment": [3], "interactive": []}
     assert _palette_verdict(h0, []) == "fail"
@@ -209,7 +209,7 @@ def test_verdict_fail_on_low_hierarchy():
 
 def test_verdict_fail_when_more_than_five_warnings():
     """score 2 but more than 5 warnings → fail (boundary above warn band)."""
-    from pyxel_mcp._harnesses._common.analyzers.palette import _palette_verdict
+    from pyxel_mcp.observe._harnesses._common.analyzers.palette import _palette_verdict
     h = {"score": 2, "background": [0], "environment": [3], "interactive": [8]}
     six = [{"a": i, "b": i + 1, "ratio": 1.0, "message": ""} for i in range(6)]
     assert _palette_verdict(h, six) == "fail"
@@ -230,7 +230,7 @@ def test_scan_image_banks_completes_under_500ms():
     for i in range(100):
         pyxel.images[0].pset(i % 64, i // 64, (i % 15) + 1)
     try:
-        from pyxel_mcp._harnesses._common.analyzers.palette import _scan_image_banks
+        from pyxel_mcp.observe._harnesses._common.analyzers.palette import _scan_image_banks
         t0 = time.monotonic()
         used, pairs = _scan_image_banks()
         elapsed = time.monotonic() - t0

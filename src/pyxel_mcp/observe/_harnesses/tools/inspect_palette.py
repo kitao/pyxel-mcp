@@ -5,8 +5,8 @@ Runs the script to the pre-loop checkpoint, then analyzes the palette.
 from __future__ import annotations
 from typing import Any
 
-from pyxel_mcp._harnesses._common.analyzers.palette import analyze_palette
-from pyxel_mcp._harnesses._common.preloop import PreloopFailed, run_to_preloop
+from pyxel_mcp.observe._harnesses._common.analyzers.palette import analyze_palette
+from pyxel_mcp.observe._harnesses._common.preloop import PreloopFailed, run_to_preloop
 
 
 def _empty(error: dict) -> dict[str, Any]:

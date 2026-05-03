@@ -4,8 +4,8 @@ import ast
 from pathlib import Path
 from typing import Any
 
-from pyxel_mcp._harnesses._common.error_capture import make_validation_error
-from pyxel_mcp._harnesses._common.script_loader import resolve_script_path
+from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_error
+from pyxel_mcp.observe._harnesses._common.script_loader import resolve_script_path
 
 
 _SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}

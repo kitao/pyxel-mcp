@@ -10,11 +10,11 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Any, Callable, Iterator
 
-from pyxel_mcp._harnesses._common.error_capture import (
+from pyxel_mcp.observe._harnesses._common.error_capture import (
     make_error, make_validation_error, ErrorPhase,
 )
-from pyxel_mcp._harnesses._common.pyxel_patcher import headless_pyxel, RunNotCalledError
-from pyxel_mcp._harnesses._common.script_loader import (
+from pyxel_mcp.observe._harnesses._common.pyxel_patcher import headless_pyxel, RunNotCalledError
+from pyxel_mcp.observe._harnesses._common.script_loader import (
     resolve_script_path, load_script_module,
 )
 
