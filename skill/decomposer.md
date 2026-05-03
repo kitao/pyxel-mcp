@@ -13,7 +13,7 @@ Convert STRUCTURE.md "Vision" into a verifiable plan with risk isolation and mil
 `PLAN.md` at project root, with six sections in this order:
 
 1. **Risk Tasks** — features that need isolation (omit entirely if no risks identified).
-2. **Genre Identity** — 3–5 genre-defining rules with Verify predicates (`quality-gate.md` check #16).
+2. **Genre Identity** — 3–5 genre-defining rules with Verify predicates (`quality-gate.md` check #10).
 3. **Main Build** — modules + cross-cutting verify criteria.
 4. **Win Path Milestones** — input/assert table.
 5. **Lose Path Milestones** — input/assert table.
@@ -48,9 +48,11 @@ mechanical check.
 The `## Genre Identity` section captures the genre-defining rules
 that mechanic checks miss.
 
+**The Verify line is a description of the agent's Python code, not a string for tool consumption.** The quality gate's check #10 evaluates each rule by having the agent (you) write a Python script that issues `run` calls, reads `result["snapshots"]`, and asserts predicates directly. There is no AST sandbox — use any Python you need (`abs`, `min`, `max`, list comprehensions, helper functions).
+
 For the declared genre, list **3–5 mechanics that define the genre**.
 Each gets a `Verify:` predicate testable via `run` snapshots.
-`quality-gate.md` check #16 evaluates each; if PLAN.md lacks the
+`quality-gate.md` check #10 evaluates each; if PLAN.md lacks the
 section or any predicate fails, the gate FAILs.
 
 Example for a Donkey Kong-style platformer:
@@ -163,7 +165,7 @@ Closed-loop note: the test harness reads observed values; if they don't match th
 | 420   | (no input)   | scene == "GAME_OVER" |
 ```
 
-Standing still must lead to GAME_OVER within 10–14 seconds at the configured fps (≈ 300–420 frames at 30fps). Faster = unfair; slower = the lose path is poorly defined and won't reliably trigger. The quality gate enforces this window in stop condition #10.
+Standing still must lead to GAME_OVER within 10–14 seconds at the configured fps (≈ 300–420 frames at 30fps). Faster = unfair; slower = the lose path is poorly defined and won't reliably trigger. The quality gate enforces this window in stop condition #6 (Difficulty floor).
 
 ## Output template
 
@@ -192,7 +194,7 @@ Standing still must lead to GAME_OVER within 10–14 seconds at the configured f
 
 ### L3. ...
 
-(Required. At least 3 rules. The gate's check #16 evaluates each.)
+(Required. At least 3 rules. The gate's check #10 evaluates each.)
 
 ## Main Build
 
