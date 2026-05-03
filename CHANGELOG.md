@@ -38,6 +38,10 @@
 - Seed Python stdlib random in addition to pyxel.rseed for full run determinism
 - Remove phantom `stall_detection` parameter (was never wired to harness)
 - Expand `run` docstring with inline snapshot/input grammar (was 1 line)
+- Document `run` result fields (ok, log, seeded, errors) in instructions
+- Document log-read enforcement under clean exit_status in instructions
+- Document `compare_frames` mid-bundle dead-time detection pattern
+- Document multimodal `screen_image` frame review pattern
 - Resolve tilemap.imgsrc when assigned via `tm.image=Image` (no longer crashes)
 - Add `verdict` field to inspect_palette and inspect_image responses
 - Add `pyxel://anti-patterns` MCP resource (8th URI)
