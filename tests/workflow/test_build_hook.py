@@ -66,23 +66,37 @@ def test_copy_skill_to_content_no_op_without_skill_dir(tmp_path):
     assert not (tmp_path / "src" / "pyxel_mcp" / "workflow" / "_content").exists()
 
 
-def test_module_exposes_lazy_custom_build_hook_attribute():
-    """Module's __getattr__ should resolve CustomBuildHook when hatchling is
-    available; when not, accessing the attribute raises ImportError (which
-    inherits from Exception). Either path is acceptable here — what we want
-    to assert is that the *non-hatchling* module surface is clean: the
-    `copy_skill_to_content` function and its docstring exist regardless."""
+def test_custom_build_hook_class_is_directly_importable():
+    """Hatch's plugin loader uses `dir()` introspection to find the
+    BuildHookInterface subclass — it has to be a real class on the
+    module surface, not a `__getattr__` lazy resolver."""
     bh = _load_build_hooks()
     assert callable(bh.copy_skill_to_content)
-    # Check the lazy-loader exists and references CustomBuildHook by name.
-    assert callable(getattr(bh, "_build_hook_class"))
-
-
-@pytest.mark.skipif(
-    importlib.util.find_spec("hatchling") is None,
-    reason="hatchling not installed in this venv",
-)
-def test_custom_build_hook_class_resolves_when_hatchling_available():
-    bh = _load_build_hooks()
     cls = bh.CustomBuildHook
     assert cls.PLUGIN_NAME == "custom"
+    # Both lifecycle hooks must be present.
+    assert callable(getattr(cls, "initialize", None))
+    assert callable(getattr(cls, "finalize", None))
+
+
+def test_finalize_removes_dev_content_dir(tmp_path):
+    """After a build finishes, `_content/` must be wiped from the source
+    tree so the next dev run doesn't see a stale copy that shadows the
+    canonical skill/."""
+    (tmp_path / "skill").mkdir()
+    (tmp_path / "skill" / "SKILL.md").write_text("# fake\n")
+    (tmp_path / "src" / "pyxel_mcp" / "workflow").mkdir(parents=True)
+
+    bh = _load_build_hooks()
+    bh.copy_skill_to_content(tmp_path)
+
+    content = tmp_path / "src" / "pyxel_mcp" / "workflow" / "_content"
+    assert content.exists()
+
+    # Simulate the finalize step (Hatch invokes this after the wheel is
+    # written). We invoke the method directly with a stub `self`.
+    cls = bh.CustomBuildHook
+    self_stub = type("Stub", (), {"root": str(tmp_path)})()
+    cls.finalize(self_stub, "standard", {}, "")
+
+    assert not content.exists()

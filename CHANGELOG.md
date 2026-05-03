@@ -2,6 +2,15 @@
 
 ## 1.0.0 (unreleased)
 
+- Add hatch wheel `force-include` for src/pyxel_mcp/workflow/_content
+  (the build hook regenerates it; .gitignore would otherwise exclude
+  it from the wheel — verified by `unzip -l` against a real `python
+  -m build` artifact)
+- Bump version to 1.0.0 in pyproject.toml + server.json (PyPI publish
+  intentionally not yet performed — verification pending)
+- Drop lazy hatchling import in build_hooks.py; hatch's plugin loader
+  needs the BuildHookInterface subclass discoverable via `dir()`
+
 - Integrate pyxel-skill source into skill/ subdir (Phase 0)
 - Add Layer 2: judge/ with 8 policy primitive tools
 - Add judge_palette / judge_sprite / judge_animation
