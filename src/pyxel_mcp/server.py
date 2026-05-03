@@ -8,7 +8,6 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from pyxel_mcp import judge as _judge
 from pyxel_mcp._resources import register_resources
 
 
@@ -161,59 +160,6 @@ def diff_frames(frame_a: str, frame_b: str) -> dict:
     return _dispatch("diff_frames", {"frame_a": frame_a, "frame_b": frame_b})
 
 
-# --- Layer 2: judge_* policy primitives (in-process, pure functions) ---
-
-@mcp.tool()
-def judge_palette(observation: dict, contract: dict | None = None) -> dict:
-    """Verdict on a `read_palette` observation against a hierarchy /
-    contrast contract. See `pyxel_mcp.judge._impl.palette.DEFAULT_CONTRACT`."""
-    return _judge.judge_palette(observation, contract)
-
-
-@mcp.tool()
-def judge_sprite(observation: dict, contract: dict | None = None) -> dict:
-    """Verdict on a `read_image` observation against a sprite manifest entry."""
-    return _judge.judge_sprite(observation, contract)
-
-
-@mcp.tool()
-def judge_animation(observation: dict, contract: dict | None = None) -> dict:
-    """Verdict on a `read_animation` observation against a paired-frame manifest entry."""
-    return _judge.judge_animation(observation, contract)
-
-
-@mcp.tool()
-def judge_milestone(observation: dict, contract: dict | None = None) -> dict:
-    """Pattern D — evaluate PLAN.md milestone asserts (frame-keyed predicates)
-    against a `run()` result by indexing snapshots by `(kind, frame)`."""
-    return _judge.judge_milestone(observation, contract)
-
-
-@mcp.tool()
-def judge_genre(observation: dict, contract: dict | None = None) -> dict:
-    """Evaluate PLAN.md `## Genre Identity` rules against a `run()` result."""
-    return _judge.judge_genre(observation, contract)
-
-
-@mcp.tool()
-def judge_bundle(observation: dict, contract: dict | None = None) -> dict:
-    """Pattern G — proof bundle completeness + dead-time check.
-    `observation` is `{"bundle_dir": "/path/to/bundle"}`."""
-    return _judge.judge_bundle(observation, contract)
-
-
-@mcp.tool()
-def judge_audio(observation: dict, contract: dict | None = None) -> dict:
-    """Verdict on a `read_audio` observation against an audio manifest entry."""
-    return _judge.judge_audio(observation, contract)
-
-
-@mcp.tool()
-def judge_layout(observation: dict, contract: dict | None = None) -> dict:
-    """Verdict on the first layout snapshot in a `run()` result."""
-    return _judge.judge_layout(observation, contract)
-
-
 # Aliases for direct test access without going through MCP machinery.
 # @mcp.tool() returns the function unchanged (directly callable), so simple aliases work.
 run_tool = run
@@ -225,14 +171,6 @@ read_animation_tool = read_animation
 read_tilemap_tool = read_tilemap
 read_audio_tool = read_audio
 diff_frames_tool = diff_frames
-judge_palette_tool = judge_palette
-judge_sprite_tool = judge_sprite
-judge_animation_tool = judge_animation
-judge_milestone_tool = judge_milestone
-judge_genre_tool = judge_genre
-judge_bundle_tool = judge_bundle
-judge_audio_tool = judge_audio
-judge_layout_tool = judge_layout
 
 
 def _log_startup() -> None:
