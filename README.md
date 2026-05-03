@@ -1,16 +1,16 @@
 # pyxel-mcp
 
-MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for Python. Gives AI agents the verbs to **run, observe, judge, and ship** Pyxel programs end-to-end without a window — headless, deterministic, gate-able. Includes a bundled production workflow skill (Layer 3) so the agent has a phased pipeline, not just isolated verbs.
+MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for Python. Gives AI agents the verbs to **run, observe, and ship** Pyxel programs end-to-end without a window — headless, deterministic, gate-able. Includes a bundled production workflow skill so the agent has a phased pipeline, not just isolated verbs.
 
 ## Why this exists
 
 LLM agents writing Pyxel code without verification produce shortcut games: placeholder rectangles, stalled play loops, missing assets, scripts that compile but render black. pyxel-mcp is the verb library that lets the agent **see** what its code actually does — and the workflow skill is the recipe that keeps it honest from concept to playable bundle.
 
 - **Headless + fast-forward.** 600-frame run < 1 second. Pyxel's internal fps is overridden so `flip()` doesn't pace real-time.
-- **Subprocess isolation.** Each Layer 1 tool call is a fresh Python subprocess. No leaked Pyxel state; deterministic with `random_seed=`.
+- **Subprocess isolation.** Each tool call is a fresh Python subprocess. No leaked Pyxel state; deterministic with `random_seed=`.
 - **Structured output.** Every tool returns JSON with a uniform `ok` / error shape — agents chain calls predicating on observed values, not stdout strings.
 - **Pyxel footguns caught structurally.** (0,0) tilemap trap, draw-without-cls ghost trails, palette animation in `update`, run-outside-init — flagged by `validate` and `read_*`, not by squinting at screenshots.
-- **Quality is a contract, not vibes.** Layer 2 (`judge_*`) maps observations against PLAN.md / ASSETS.md contracts and returns `pass`/`warn`/`fail` + a `fail_route`. The workflow skill turns those routes into a 17-check quality gate that refuses to declare "done" until every milestone, asset, audio slot, and proof bundle clears.
+- **Quality is the agent's responsibility, not a tool's.** No `judge_*` tools, no hardcoded numerical defaults — the agent runs the 9 observation tools, asserts predicates directly in Python against state snapshots, and uses `Read` on captured PNGs to verbalize against PLAN.md / ASSETS.md anchors. The workflow skill's 11-step quality gate enforces this end-to-end so "done" requires every milestone, asset, audio slot, proof bundle, and visual review to clear.
 
 ## Install
 
@@ -42,7 +42,7 @@ The snippet itself:
 Restart your client. On startup the server logs one line to stderr (visible in your client's logs) so you can confirm it's loaded:
 
 ```
-[pyxel-mcp] starting — 17 tools (Layer 1: 9, Layer 2: 8), workflow=/path/to/skill
+[pyxel-mcp] starting — 9 tools, workflow=/path/to/skill
 ```
 
 Pyxel ≥ 2.9.5 is fetched as a transitive dependency.
@@ -67,7 +67,7 @@ Three prompts that exercise the full pipeline (try them in order; each later one
 
 Without the skill installed, prompt 3 still works but the agent has no enforced playthrough / asset / bundle gate — outputs degrade to "compiles cleanly" rather than "playable + clearable". `publish-skill` is the difference between verbs and a workflow.
 
-## Tools — Layer 1 (observe, 9 tools)
+## Tools (9 observation tools)
 
 Run the script, read raw Pyxel state, diff frames. Each call is a fresh subprocess.
 
@@ -83,24 +83,13 @@ Run the script, read raw Pyxel state, diff frames. Each call is a fresh subproce
 | `read_audio` | Render `pyxel.sounds[N]` / `pyxel.musics[N]` to WAV; return `notes`, `peak_amplitude`, `warnings`. |
 | `diff_frames` | Pixel-wise diff of two PNGs: `identical`, `ratio`, bounding box. |
 
-## Tools — Layer 2 (judge, 8 tools)
+## Quality verification belongs to the agent
 
-Pure functions: `(observation, contract=None) → {ok, verdict, evidence, fail_route, details}`. Pass a Layer 1 result as `observation`; pass a contract dict (extracted from PLAN.md / ASSETS.md, or omit for module defaults). `fail_route` names the workflow stage to revisit.
+No `judge_*` tools, no hardcoded numerical thresholds. The 9 tools above capture observations; the agent decides whether the observation is acceptable for the current task by writing Python predicates directly against snapshot values and by reading captured PNGs with the host's `Read` tool. The workflow skill (`pyxel://workflow`) lays out the 11 stop conditions an agent runs before declaring done — see its `quality-gate.md`.
 
-| Tool | Pairs with | Routes failures to |
-|---|---|---|
-| `judge_palette` | `read_palette` | asset-planning / sprite-quality |
-| `judge_sprite` | `read_image` | sprite-quality |
-| `judge_animation` | `read_animation` | sprite-quality |
-| `judge_milestone` | `run` (state snapshots) | playthrough / spec |
-| `judge_genre` | `run` (assertions + log) | spec / playthrough |
-| `judge_bundle` | bundle dir | bundle |
-| `judge_audio` | `read_audio` | sprite-quality / scaffolding |
-| `judge_layout` | `run` (layout snapshot) | scaffolding |
+This is a deliberate design choice. An earlier prototype had 8 `judge_*` tools with hardcoded `DEFAULT_CONTRACT` numerical thresholds (`min_distinct_colors`, `max_contrast_warnings`, `min_palette_consistency`, etc.). Every game type surfaced a default that fought a legitimate idiom (3-material palette ↔ contrast budget; flame-pulse ↔ palette-consistency floor; 4×4 sprite ↔ distinct-color minimum), and the tuning was unbounded. Removing the judges put the predicate where the multimodal context is — the agent — and ended the recurring tuning cycle.
 
-`judge_milestone` is Pattern D: snapshots are indexed by `(kind, frame)` and per-frame predicates are evaluated in a sandboxed namespace (no `Call` nodes, no imports — comparisons / boolean ops / attribute / subscript only). Dotted state keys (`player.x`) auto-promote to nested attribute access.
-
-## Workflow skill (Layer 3) and resources
+## Workflow skill and resources
 
 The workflow skill ships inside this package. Its 7-stage pipeline (visual-target → decomposer → scaffold → asset-planner → asset-gen → task-execution → quality-gate) plus reference and knowledge files are exposed two ways:
 
@@ -129,7 +118,7 @@ After upgrading, re-run `publish-skill` if you have the host-skill channel insta
 
 ## Troubleshooting
 
-**Tools don't appear in the client.** Confirm the server started: look for `[pyxel-mcp] starting — 17 tools` in your client's MCP server logs. If absent, the snippet wasn't picked up — re-check the path you pasted into. If present but tools are missing, restart the client (some clients cache the tool list across config edits).
+**Tools don't appear in the client.** Confirm the server started: look for `[pyxel-mcp] starting — 9 tools` in your client's MCP server logs. If absent, the snippet wasn't picked up — re-check the path you pasted into. If present but tools are missing, restart the client (some clients cache the tool list across config edits).
 
 **Skill doesn't activate on prompts.** The skill must be in the host's skill directory and the host must be restarted. Verify with `ls ~/.claude/skills/pyxel/SKILL.md`. If absent, run `uvx pyxel-mcp publish-skill ~/.claude/skills/pyxel`.
 
@@ -137,7 +126,7 @@ After upgrading, re-run `publish-skill` if you have the host-skill channel insta
 
 **`validate` reports `tilemap_zero_zero` / `cls_missing` / etc. — what does it mean?** Read `@pyxel:anti-patterns` for the catalog (severity, rationale, canonical fix per category).
 
-**Diagnostic line says `workflow=<unavailable: …>`.** The wheel was installed without the workflow build artifact (rare — usually means a pip-from-sdist install with the build hook disabled). Server still works for Layer 1+2 tools; only `pyxel://workflow/*` resources and `publish-skill` require the workflow content. Reinstall via `uvx pyxel-mcp` to pick up the wheel.
+**Diagnostic line says `workflow=<unavailable: …>`.** The wheel was installed without the workflow build artifact (rare — usually means a pip-from-sdist install with the build hook disabled). Server still works for the 9 tools; only `pyxel://workflow/*` resources and `publish-skill` require the workflow content. Reinstall via `uvx pyxel-mcp` to pick up the wheel.
 
 ## MCP Registry
 
