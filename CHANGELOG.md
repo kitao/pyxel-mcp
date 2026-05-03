@@ -101,6 +101,15 @@
 - Switch startup diagnostic to live FastMCP tool count
 - README: update section uses `uvx --refresh-package` form
 - Refresh stale path in anti_patterns.py docstring
+- Drop Layer 2 entirely — agent visual primacy is the gate
+- Remove 8 judge_* tools and 12 hardcoded numerical defaults
+- Replace 17-check matrix with 11-step flat stop-conditions list
+- Win/lose path predicates become agent-direct Python asserts
+- Genre Identity rules become agent-written Python (no sandbox)
+- Drop predicate AST sandbox (no abs/len/min/max friction)
+- Stop hook simplifies to bundle-existence tripwire only
+- Drop 104 judge unit tests (309 remain, was 413)
+- Add closing rationale to instructions.md (no judge_* by design)
 
 ## 0.11.0
 
