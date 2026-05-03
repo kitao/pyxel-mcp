@@ -45,7 +45,7 @@ Restart your client. On startup the server logs one line to stderr (visible in y
 [pyxel-mcp] starting — 17 tools (Layer 1: 9, Layer 2: 8), workflow=/path/to/skill
 ```
 
-Pyxel ≥ 2.9.4 is fetched as a transitive dependency.
+Pyxel ≥ 2.9.5 is fetched as a transitive dependency.
 
 ### Optional: publish the workflow skill (Layer 3)
 

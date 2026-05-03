@@ -32,6 +32,8 @@
   empirical refinement targets, not Stage 2 commitments
 - skill/quality-gate.md: document `## Difficulty floor override` as
   the legitimate way to deviate from the default 10-14 s band
+- Bump Pyxel minimum dependency to 2.9.5 (was 2.9.4); 405 tests pass
+  under 2.9.5 in the local venv with no compatibility regressions
 
 - Integrate pyxel-skill source into skill/ subdir (Phase 0)
 - Add Layer 2: judge/ with 8 policy primitive tools

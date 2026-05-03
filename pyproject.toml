@@ -29,7 +29,7 @@ classifiers = [
     "Topic :: Games/Entertainment",
     "Topic :: Software Development :: Libraries",
 ]
-dependencies = ["mcp>=1.0.0,<2.0.0", "pyxel>=2.9.4", "numpy", "Pillow"]
+dependencies = ["mcp>=1.0.0,<2.0.0", "pyxel>=2.9.5", "numpy", "Pillow"]
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-asyncio"]
