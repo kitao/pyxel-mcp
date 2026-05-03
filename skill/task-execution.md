@@ -16,6 +16,13 @@ Implement gameplay logic against `PLAN.md` and `STRUCTURE.md`. Verify after ever
 - `PLAN.md` tasks marked done with one-line `verified by:` notes.
 - `MEMORY.md` updated with any non-obvious gotcha discovered while implementing.
 
+## Visual Verification
+
+- Do not trust code alone. Look at screenshots, captured frames, and `state` snapshots after every visible change.
+- When code and media disagree, trust the media.
+- Bias toward failure. If the required behavior is not clearly visible, treat it as unfinished.
+- Hidden or inferred behavior does not count. The visible result has to prove the requirement.
+
 ## References
 
 Read these before invoking the corresponding tools:
@@ -37,11 +44,11 @@ For each task in `PLAN.md`:
 3. **Read the current source.** Don't guess what's there.
 4. **Implement the smallest change that makes the task observable.** One method, one constant, one behavior. No bundled "while I'm in there" edits.
 5. **`validate` clean.** Catches syntax errors and Pyxel anti-patterns before runtime.
-6. **One `run` call covers smoke + milestone verification (Pattern A).** Build a `snapshots` list with: (a) `{"frame": K, "kind": "screen_image", "output": "tmp/smoke.png"}` at one early frame to catch black-screen / import failures, and (b) one multi-frame `{"frames": [...], "kind": "state", "attrs": [...]}` covering every frame the task's predicates reference. Pass the task's input schedule via `inputs`. The single call returns `snapshots`, `assertions`, `exit_status`, and `log` — **read them all**. The `log` field captures stdout/stderr from the script; scan it for warnings, missing-asset errors, unexpected `print` output, and any line containing `WARN`, `ERROR`, `Failed`, or `Traceback` even when `exit_status == "ok"`. A clean `exit_status` with a noisy `log` is a yellow flag worth investigating before declaring PASS.
+6. **One `run` call covers smoke + milestone verification.** Build a `snapshots` list with: (a) `{"frame": K, "kind": "screen_image", "output": "tmp/smoke.png"}` at one early frame to catch black-screen / import failures, and (b) one multi-frame `{"frames": [...], "kind": "state", "attrs": [...]}` covering every frame the task's predicates reference. Pass the task's input schedule via `inputs`. The single call returns `snapshots`, `assertions`, `exit_status`, and `log` — **read them all**. The `log` field captures stdout/stderr from the script; scan it for warnings, missing-asset errors, unexpected `print` output, and any line containing `WARN`, `ERROR`, `Failed`, or `Traceback` even when `exit_status == "ok"`. A clean `exit_status` with a noisy `log` is a yellow flag worth investigating before declaring PASS. Predicates are Python expressions you write against the returned snapshot values — there is no judge tool that wraps them.
 
 6.5. **Read the captured PNG with `Read` tool (visual primacy enforcement).** For each frame where you took a `screen_image` snapshot, open the PNG with the `Read` tool and verbalize what you see in 1–2 sentences (e.g., `"at frame 60: Mario is on girder 4, barrel mid-air at x≈140, score=300 in HUD"`). Compare against the task's expected visual outcome. If the verbalized observation contradicts the predicate, **trust the observation** — the predicate may pass on `state.player.y` while the rendered frame shows the player drawn behind the HUD, swapped to the wrong sprite, or invisible due to `colkey` collision. Skipping this step is the failure mode the harness exists to catch: tool-based gate PASS while the agent never looked at a single frame. See SKILL.md Anti-shortcut rule #9.
 
-7. **Evaluate the task's Verify predicates against the returned snapshots and assertions.** Each Verify clause maps to either (a) a `state` snapshot value at a specific frame, or (b) a named ASSERT in `result["assertions"]` (Pattern B). For complex tasks, use both: state for the agent's predicate evaluation, ASSERT for the script's self-check. If the script-side ASSERT disagrees with the agent-side predicate evaluation, OR the visual observation from step 6.5 disagrees with either, that's a divergence — investigate before declaring PASS.
+7. **Evaluate the task's Verify predicates against the returned snapshots and assertions.** Each Verify clause maps to either (a) a `state` snapshot value at a specific frame (Python `assert` from the agent), or (b) a named `ASSERT` line in `result["assertions"]` (Pattern B — script-side `print("ASSERT PASS: ...")`). For complex tasks, use both: state for the agent's predicate evaluation, ASSERT for the script's self-check. If the script-side ASSERT disagrees with the agent-side predicate evaluation, OR the visual observation from step 6.5 disagrees with either, that's a divergence — investigate before declaring PASS.
 8. **If FAIL** — read the captured state, find the divergence, fix. Don't move on. Don't lower the threshold. Don't retry the same input expecting a different result.
 9. **If PASS** — update `PLAN.md` (mark task done with a one-line `verified by:` note pointing to the milestone frame and observed value), append to `MEMORY.md` if a non-obvious gotcha was discovered, commit.
 
@@ -50,6 +57,8 @@ For each task in `PLAN.md`:
 PLAN.md task: *"Player jumps reach height H_JUMP=24px in 18 frames; falling resumes after frame 18; landing on platform clears `vy`."*
 
 Verify: a single `run` call drives the script through 60 frames with `KEY_SPACE` pressed at frame 30, capturing `state` at frames 30, 31, 48, 60.
+
+The example below is **agent-direct Python**. The agent reads `result["snapshots"]`, indexes by `(kind, frame)`, and asserts each predicate. There is no `judge_*` wrapping; the predicates are normal Python and can use `abs()`, `len()`, list comprehensions, anything Python supports.
 
 ```python
 # In your stage script (or directly via the MCP client):
@@ -68,7 +77,7 @@ run(
 )
 ```
 
-The `state` block expands to 4 entries with frames 30, 31, 48, 60. Use Pattern D to key by frame:
+The `state` block expands to 4 entries with frames 30, 31, 48, 60. Index snapshots by `(kind, frame)` for direct lookup:
 
 ```python
 snaps = {(s["kind"], s["frame"]): s for s in result["snapshots"]}
