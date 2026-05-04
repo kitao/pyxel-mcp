@@ -405,6 +405,69 @@ def _walk_or_single(node: ast.AST):
         yield from _walk_excluding_scopes(node)
 
 
+def _detect_ragged_image_set(tree: ast.AST) -> list[dict[str, Any]]:
+    """pyxel.images[N].set(x, y, data) where `data` is a list of string
+    constants whose lengths differ — Pyxel raises `Invalid sound note` /
+    `byte index out of bounds` at runtime when reading mismatched rows.
+
+    Catches the trap of a 32x32 sprite written with some 30-char rows
+    (β-DK validation surfaced this).
+
+    Heuristic: all-string elements must share the same length. A list with
+    any non-string-constant element is skipped (can't statically check).
+    """
+    issues: list[dict[str, Any]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        # Must be <expr>.set(...)
+        if not (isinstance(func, ast.Attribute) and func.attr == "set"):
+            continue
+        # Receiver must be pyxel.images[N] or images[N]
+        receiver = func.value
+        if not isinstance(receiver, ast.Subscript):
+            continue
+        sub_val = receiver.value
+        is_images = (
+            (isinstance(sub_val, ast.Name) and sub_val.id == "images")
+            or (
+                isinstance(sub_val, ast.Attribute)
+                and sub_val.attr == "images"
+                and isinstance(sub_val.value, ast.Name)
+                and sub_val.value.id == "pyxel"
+            )
+        )
+        if not is_images:
+            continue
+        # The 3rd positional arg should be a list of string constants
+        if len(node.args) < 3:
+            continue
+        data_arg = node.args[2]
+        if not isinstance(data_arg, ast.List):
+            continue
+        # Collect string-constant lengths; bail if any element is not a string
+        # constant (variable reference, computed expression, etc.).
+        lengths: list[int] = []
+        for elt in data_arg.elts:
+            if not (isinstance(elt, ast.Constant) and isinstance(elt.value, str)):
+                lengths = []
+                break
+            lengths.append(len(elt.value))
+        if not lengths:
+            continue
+        unique = set(lengths)
+        if len(unique) > 1:
+            issues.append(_make_issue(
+                "warning", node.lineno, node.col_offset,
+                "anti_pattern.ragged_image_set",
+                f"pyxel.images[N].set() data has rows of differing lengths "
+                f"{sorted(unique)} — Pyxel raises 'byte index out of bounds' "
+                f"at runtime; pad every row to the same hex-string width",
+            ))
+    return issues
+
+
 def _detect_degree_radian_mix(tree: ast.AST) -> list[dict[str, Any]]:
     """math.sin/cos and pyxel.sin/cos used in the same module.
 
@@ -464,6 +527,7 @@ _DETECTORS = [
     _detect_palette_animation,
     _detect_cls_missing,
     _detect_degree_radian_mix,
+    _detect_ragged_image_set,
 ]
 
 

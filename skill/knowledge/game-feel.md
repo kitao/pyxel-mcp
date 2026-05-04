@@ -140,6 +140,37 @@ if jump_buffer > 0:
 - Player: use 60-75% of sprite size as hitbox (e.g., 6x6 for 8x8 sprite)
 - `abs(a.x - b.x) < HIT_W and abs(a.y - b.y) < HIT_H`
 
+### Ladder Mechanics
+
+Climbing a ladder needs three things, in order:
+
+1. **Engage / disengage tolerance.** When the player overlaps a ladder column AND presses UP/DOWN, switch to climb state. Don't require pixel-perfect alignment — a ±2 px tolerance on `x` against the ladder centre prevents "ladder ignored on the second-to-last pixel" frustration. Lock `x` to the ladder centre on engage so vertical movement stays straight.
+
+2. **Snap-on-release at top / bottom.** When the player releases UP near the top of the ladder (i.e. the player's `y` is within `LADDER_SNAP_PX` of the upper girder), snap the player up onto the girder and exit climb state. Without this, releasing UP between the last climb pixel and the girder leaves the player stuck floating on the ladder, neither climbing nor walking. Same shape for DOWN release near the bottom.
+
+```python
+LADDER_SNAP_PX = 12   # tested at 30fps with CLIMB_SPEED=1; raise for faster climbs
+
+if state == "CLIMB":
+    if pyxel.btn(pyxel.KEY_UP):
+        y -= CLIMB_SPEED
+    elif pyxel.btn(pyxel.KEY_DOWN):
+        y += CLIMB_SPEED
+    elif pyxel.btnr(pyxel.KEY_UP):
+        # Snap onto the girder ABOVE if close enough; else stay (keep climbing)
+        upper = girder_above(y)
+        if upper is not None and (y - upper.y) <= LADDER_SNAP_PX:
+            y = upper.y
+            state = "WALK"
+    elif pyxel.btnr(pyxel.KEY_DOWN):
+        lower = girder_below(y)
+        if lower is not None and (lower.y - y) <= LADDER_SNAP_PX:
+            y = lower.y
+            state = "WALK"
+```
+
+3. **Jump must NOT bypass a girder upward.** If the genre is "ladders are the only floor-to-floor path" (DK-style), gate jump height: `JUMP_VEL` must be small enough that the apex stays below `GIRDER_PITCH_Y - PLAYER_H`. Otherwise quality-gate.md check #10 (genre identity L1) catches the regression.
+
 ### Camera (Side-Scroller)
 
 ```python

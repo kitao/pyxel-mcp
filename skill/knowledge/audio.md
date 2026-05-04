@@ -11,6 +11,8 @@ Used by Stage 3 (scaffold — channel allocation) and Stage 6 (task-execution �
 
 For **any** sound that needs to clear the gate — every SE on ch3, every BGM constituent sound on ch0–ch2 — use `.set()` and let `.mml()` stay as a prototyping / reference tool only. Conversion is mechanical (note string ↔ MML letter sequence; volume `V0`-`V100` → `0`-`7`; tone `@N` → `s/p/t/n`).
 
+> **`.set(notes=...)` syntax — every note needs an explicit octave digit.** Pyxel's `set()` accepts notes like `C2C2D2D2E2` (note letter + octave digit per pair) and rejects bare letters like `CCDDE` with `Exception: Invalid sound note 'c'`. Lowercase is also rejected. Octave range is `C0`–`B4` (5 octaves); `C5` and above raise `Invalid sound note '5'`. Use `R` (uppercase, no octave) for rests. Adjacent notes share octave only if you repeat the digit — `C2D2` is two notes both at octave 2; `C2D` is a parse error.
+
 **Gate-passable BGM template (use this, not MML):**
 
 ```python

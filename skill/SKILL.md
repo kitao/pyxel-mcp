@@ -14,7 +14,7 @@ Build playable, clearable, recognizable-sprite Pyxel games via a phased pipeline
 This skill assumes `pyxel-mcp` ≥ 1.0.0 is installed and registered as an MCP server reachable at the namespace `pyxel`. The exact tool-invocation syntax depends on the host (Claude Code surfaces them as `mcp__pyxel__<tool>`, other clients differ); what matters is that the host's MCP tool list shows these names under the `pyxel` namespace:
 
 - `pyxel_info` (discovery — versions + paths + resource URIs)
-- `validate` (static analysis — 10 anti-pattern detectors)
+- `validate` (static analysis — 10 anti-pattern detectors including ragged hex-string rows)
 - `run` (dynamic execution — N frames, scheduled inputs, snapshots)
 - `read_palette` / `read_image` / `read_animation` / `read_tilemap` / `read_audio` (raw observation)
 - `diff_frames` (PNG pixel diff)

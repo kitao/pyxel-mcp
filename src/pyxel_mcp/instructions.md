@@ -38,7 +38,7 @@ See `pyxel://run-snapshots-schema` for the full snapshot grammar.
 Static analysis: syntax check plus 10 anti-pattern detectors
 (`cls_missing`, `update_in_draw`, `btn_one_shot`, `missing_colkey`,
 `palette_animation`, `tilemap_zero_zero`, `iter_modify`, `assets_in_update`,
-`degree_radian_mix`). Returns `{ok: bool, issues: [...]}`. No Pyxel process
+`degree_radian_mix`, `ragged_image_set`). Returns `{ok: bool, issues: [...]}`. No Pyxel process
 is started; this is cheap and should run before every first `run`.
 
 **`pyxel_info()`**

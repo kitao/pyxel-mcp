@@ -38,6 +38,61 @@ def test_tilemap_zero_zero_detected():
     assert "anti_pattern.tilemap_zero_zero" in cats
 
 
+def test_ragged_image_set_detected():
+    """β-DK validation surfaced: pyxel.images[N].set() with hex-string rows of
+    differing length raises a runtime error. Detector should warn statically."""
+    result = validate_run({"script": str(SCRIPTS / "anti_ragged_image_set.py")})
+    cats = [i["category"] for i in result["issues"]]
+    assert "anti_pattern.ragged_image_set" in cats
+    msg = next(i["message"] for i in result["issues"]
+               if i["category"] == "anti_pattern.ragged_image_set")
+    # Message should name the offending widths so the agent can fix
+    assert "6" in msg and "8" in msg
+
+
+def test_uniform_image_set_not_flagged(tmp_path):
+    """Uniform-width rows must NOT trigger the ragged detector."""
+    src = tmp_path / "uniform.py"
+    src.write_text(
+        "import pyxel\n"
+        "class App:\n"
+        "    def __init__(self):\n"
+        "        pyxel.init(64, 64)\n"
+        "        pyxel.images[0].set(0, 0, ['00ff', '00ff', '00ff', '00ff'])\n"
+        "        pyxel.run(self.update, self.draw)\n"
+        "    def update(self): pass\n"
+        "    def draw(self):\n"
+        "        pyxel.cls(0)\n"
+        "App()\n"
+    )
+    result = validate_run({"script": str(src)})
+    cats = [i["category"] for i in result["issues"]]
+    assert "anti_pattern.ragged_image_set" not in cats
+
+
+def test_image_set_with_variable_rows_not_flagged(tmp_path):
+    """If rows are variable references (not string constants), don't flag —
+    we can't statically check the lengths and a false positive is worse than
+    a missed detection here."""
+    src = tmp_path / "variable_rows.py"
+    src.write_text(
+        "import pyxel\n"
+        "ROWS = ['00ff', '0ff0']  # could be wrong length but we can't check\n"
+        "class App:\n"
+        "    def __init__(self):\n"
+        "        pyxel.init(64, 64)\n"
+        "        pyxel.images[0].set(0, 0, ROWS)\n"
+        "        pyxel.run(self.update, self.draw)\n"
+        "    def update(self): pass\n"
+        "    def draw(self):\n"
+        "        pyxel.cls(0)\n"
+        "App()\n"
+    )
+    result = validate_run({"script": str(src)})
+    cats = [i["category"] for i in result["issues"]]
+    assert "anti_pattern.ragged_image_set" not in cats
+
+
 def test_issues_sorted_by_line_then_severity():
     """Per spec §8.1, issues sorted by line ascending, then severity error > warning > info."""
     src = SCRIPTS / "mixed_issues.py"

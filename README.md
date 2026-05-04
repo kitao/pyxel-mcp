@@ -74,7 +74,7 @@ Run the script, read raw Pyxel state, diff frames. Each call is a fresh subproce
 | Tool | What it returns |
 |---|---|
 | `run` | Drives N frames headless. Snapshots: `screen_image`, `screen_grid`, `state`, `layout`, `video`. Inputs schedule (`set_btn`/`set_btnv`/`set_mouse_pos`). `ASSERT` parsing. `random_seed` for determinism. |
-| `validate` | Static analysis: syntax + 10 anti-pattern detectors (`cls_missing`, `palette_animation`, `tilemap_zero_zero`, `update_in_draw`, `iter_modify`, …). |
+| `validate` | Static analysis: syntax + 10 anti-pattern detectors (`cls_missing`, `palette_animation`, `tilemap_zero_zero`, `update_in_draw`, `iter_modify`, `ragged_image_set`, …). |
 | `pyxel_info` | Versions, example paths, resource URIs. |
 | `read_palette` | `pyxel.colors` analysis: 3-layer hierarchy (bg/env/interactive), WCAG contrast warnings filtered to **co-located** pairs only. |
 | `read_image` | Image-bank region pixels + `color_count`, `fill_ratio`, `symmetry`, `edge_density`. Optional PNG render. |
