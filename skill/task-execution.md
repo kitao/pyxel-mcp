@@ -179,6 +179,73 @@ if self.test_target_y is not None and self.y > self.test_target_y:
 
 Design milestones around what state should be reached, not what input should have happened. See `test-harness.md` for the full segmented playthrough pattern.
 
+### Variability tests (gate #4b/#4c — playability proof, not just solvability)
+
+Pattern C above proves a winning trajectory **exists**. Quality-gate #4b/#4c additionally demand the game admits *human-like* play — multiple seeds, jitter-tolerant timing, multiple strategies. Without these, you've found an answer key, not a game. After Pattern C converges on a winning input schedule, run these checks before declaring task done.
+
+```python
+import random
+
+# Assumes `inputs` is the cumulative input schedule that cleared under seed=42.
+final = <last milestone frame>
+attrs = ["scene"]   # plus any milestone-relevant attrs
+
+# --- #4b — ±3 frame jitter, 5 trials, must clear in ≥ 4 ---
+JITTER = 3
+N_TRIALS = 5
+THRESHOLD = 4
+
+cleared = 0
+for trial in range(N_TRIALS):
+    rng = random.Random(trial)
+    jittered = [
+        {**inp, "frame": max(0, inp["frame"] + rng.randint(-JITTER, JITTER))}
+        for inp in inputs
+    ]
+    result = run(script="main.py", frames=final + 5, random_seed=42,
+                 inputs=jittered,
+                 snapshots=[{"frames": [final], "kind": "state", "attrs": attrs}])
+    snaps = {(s["kind"], s["frame"]): s for s in result["snapshots"]}
+    if snaps[("state", final)]["values"]["scene"] == "WIN":
+        cleared += 1
+
+if cleared < THRESHOLD:
+    # Don't tighten thresholds — fix the game. See knowledge/game-feel.md
+    # "Variability Budget" for design constants (hazard window, input
+    # spacing, invuln frames, etc.).
+    raise SystemExit(f"jitter test: {cleared}/{N_TRIALS} — game requires "
+                     f"frame-perfect timing")
+
+# --- #4a — multi-seed, same input schedule, all must clear ---
+for seed in [42, 99, 1]:
+    result = run(script="main.py", frames=final + 1, random_seed=seed,
+                 inputs=inputs,
+                 snapshots=[{"frames": [final], "kind": "state", "attrs": attrs}])
+    snaps = {(s["kind"], s["frame"]): s for s in result["snapshots"]}
+    final_scene = snaps[("state", final)]["values"]["scene"]
+    if final_scene != "WIN":
+        # Spawn timing depends on RNG sequence — make spawns deterministic
+        # by frame (see "Spawn determinism" subsection above).
+        raise SystemExit(f"seed={seed}: scene={final_scene}, expected WIN")
+
+# --- #4c — find a second strategy that also clears ---
+# The 'distinct' strategy is up to you. Common shapes:
+#  - take a different path (skip a pickup, take a longer-but-safer route)
+#  - use jumps where Strategy A used hammers (or vice versa)
+#  - climb a different ladder column
+# Document both in PLAN.md ## Win Path Strategies.
+inputs_strategy_b = <agent-designed alternate input schedule>
+result_b = run(script="main.py", frames=final + 1, random_seed=42,
+               inputs=inputs_strategy_b,
+               snapshots=[{"frames": [final], "kind": "state", "attrs": attrs}])
+snaps = {(s["kind"], s["frame"]): s for s in result_b["snapshots"]}
+if snaps[("state", final)]["values"]["scene"] != "WIN":
+    raise SystemExit("Strategy B did not clear — game is single-thread, "
+                     "not gameplay. Tune until ≥ 2 strategies viable.")
+```
+
+If any of these fail, **do not** lower the gate constants (JITTER, THRESHOLD, strategy count) — that's anti-shortcut #5 in disguise. Fix the design via the constants in `knowledge/game-feel.md` "Variability Budget".
+
 ## Per-task implementation checklist
 
 Before marking a task done in PLAN.md:

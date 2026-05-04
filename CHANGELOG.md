@@ -88,6 +88,19 @@
   length before runtime
 - 312 tests pass under Pyxel 2.9.5 (was 413 in pre-godogen-refactor;
   104 deleted with judge layer, 3 added with ragged_image_set)
+- Variability gate: split check #4 (Win path) into 4a (multi-seed,
+  ≥3 seeds same input must all clear), 4b (±3 frame input jitter,
+  4/5 trials must clear), 4c (≥2 distinct winning strategies); a
+  single Pattern-C-found clearance proves clearability not playability
+- Variability gate: extend check #5 (Lose path) to multi-seed (jitter
+  and strategy-diversity not meaningful for passive failure path)
+- knowledge/game-feel.md: Variability Budget section with design
+  constants (hazard reaction window ≥15 frames, adjacent-input spacing
+  ≥10 frames, hazard period ≥30 frames, invuln ≥30 frames, pickup
+  reach ≥20 frames, ≥2 viable winning paths) and worked math example
+- task-execution.md: variability test worked example showing the
+  jitter / multi-seed / strategy-B Pattern after Pattern C convergence
+- gate-report.json: 13 rows total after #4 splits into 4a/4b/4c
 
 ## 0.11.0
 

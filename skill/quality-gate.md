@@ -2,7 +2,7 @@
 
 Final acceptance check. PASS gates "done"; FAIL routes back to the phase that owns the failed check. The gate is **agent-driven visual primacy** — the agent (you) reads bundle frames with the `Read` tool, verbalizes observations against PLAN.md / ASSETS.md anchors, and asserts state predicates directly in Python. There are no numerical default thresholds — "good" is judged by what the captured frames actually show.
 
-This file contains no `judge_*` calls. The harness's contract is the agent's discipline: run the 11 stop conditions in order, write `gate-report.json`, route every FAIL to its owning phase, and re-run from the top.
+This file contains no `judge_*` calls. The harness's contract is the agent's discipline: run the 11 numbered stop conditions (13 rows after #4 splits into 4a/4b/4c) in order, write `gate-report.json`, route every FAIL to its owning phase, and re-run from the top.
 
 ## Inputs
 
@@ -15,15 +15,15 @@ This file contains no `judge_*` calls. The harness's contract is the agent's dis
 
 ## Output
 
-`screenshots/result/<N>/gate-report.json` — flat list of 11 stop conditions, each PASS or FAIL with evidence. The gate writes this file regardless of overall PASS/FAIL — the artifact is what the user reviews. `<N>` is the bundle counter `task-execution` and `capture.md` produced — the gate writes its report inside the existing bundle directory rather than creating a new one.
+`screenshots/result/<N>/gate-report.json` — flat list of 11 numbered stop conditions (13 rows after #4 splits into 4a/4b/4c), each PASS or FAIL with evidence. The gate writes this file regardless of overall PASS/FAIL — the artifact is what the user reviews. `<N>` is the bundle counter `task-execution` and `capture.md` produced — the gate writes its report inside the existing bundle directory rather than creating a new one.
 
 ## Order of execution
 
-Run the 11 stop conditions in numeric order. Cheap structural checks first; expensive playthrough-driven checks last; agent visual review is the closing gate.
+Run the 11 numbered stop conditions (13 rows after #4 splits into 4a/4b/4c) in numeric order. Cheap structural checks first; expensive playthrough-driven checks last; agent visual review is the closing gate.
 
 If a check FAILs, stop and write the gate report with the FAIL even if later checks would have passed. Partial reports are valid input for routing — there is no benefit in running #4 (Win path) when #1 (State files) has already failed.
 
-## Stop conditions (all 11 must PASS)
+## Stop conditions (all must PASS — counted as 13 rows after #4 splits into 4a/4b/4c)
 
 ### 1. State files
 
@@ -64,41 +64,120 @@ assert Path("tmp/smoke.png").stat().st_size > 200  # > empty PNG header
 
 FAIL routes to: `scaffolding` (no scene rendered) or `playthrough` (early crash).
 
-### 4. Win path
+### 4. Win path (multi-attempt with variability)
 
-Agent runs the win path and asserts each PLAN.md milestone predicate **directly in Python** against the returned state values. No tool wraps the predicate; no sandbox restricts which Python you can write.
+The win path passes only if the agent can clear under **variability** — not via one specific seed + frame-perfect inputs. A single Pattern-C-found clearance is "answer-key making" with rewind, not gameplay; without variability the gate proves *clearability* but not *playability*. Three sub-checks; **all** must pass.
+
+#### #4a — Multi-seed clearance
+
+Run the same input schedule under at least 3 different `random_seed` values. Every run must reach `scene == "WIN"` and hit every PLAN.md milestone.
 
 ```python
-result = run(
-    script="main.py", frames=720, random_seed=42,
-    inputs=<PLAN.md Win Path inputs>,
-    snapshots=[
-        {"frames": [<every milestone frame>], "kind": "state",
-         "attrs": [<every attr referenced in any milestone>]},
-    ],
-)
+SEEDS = [42, 99, 1]   # 3 minimum; 5 if the game has heavy RNG
+inputs = <PLAN.md Win Path inputs>
+final = <last milestone frame>
 
-assert result["seeded"] is True, "non-deterministic playthrough — refusing to gate"
+for seed in SEEDS:
+    result = run(script="main.py", frames=final + 1, random_seed=seed,
+                 inputs=inputs,
+                 snapshots=[{"frames": [<every milestone frame>],
+                             "kind": "state",
+                             "attrs": [<every attr referenced>]}])
+    assert result["seeded"] is True
+    snaps = {(s["kind"], s["frame"]): s for s in result["snapshots"]}
+    v = lambda f, a: snaps[("state", f)]["values"][a]
 
-snaps = {(s["kind"], s["frame"]): s for s in result["snapshots"]}
-v = lambda f, a: snaps[("state", f)]["values"][a]
-
-# One assertion per PLAN.md Win Path milestone row:
-assert v(60, "scene") == "PLAY", f"frame 60: scene={v(60,'scene')!r}"
-assert v(60, "player.x") > 10
-assert v(300, "score") >= 100
-assert v(660, "scene") == "WIN"
+    # Every PLAN.md Win Path milestone assertion under THIS seed:
+    assert v(60, "scene") == "PLAY", f"seed={seed} frame 60: {v(60,'scene')!r}"
+    assert v(660, "scene") == "WIN", f"seed={seed}: did not reach WIN"
 ```
 
-PASS condition: every milestone assert holds. `random_seed=42` is mandatory — if `result["seeded"]` is False, mark FAIL with reason `"non-deterministic playthrough"` even if the asserts happen to pass this attempt.
+If only seed=42 clears and seed=99 doesn't, the win path is exploiting one specific RNG sequence — design failure. Either make spawns deterministic by frame (integer-modular per `task-execution.md` "Spawn determinism"), or design hazards so any plausible RNG yields a clearable pattern.
 
-FAIL routes to: `playthrough` (game can't reach milestone) or `spec` (predicate references attribute not exposed by the App).
+FAIL routes to: `playthrough` (game requires specific RNG to clear) or `spec` (milestone tied to RNG).
 
-### 5. Lose path
+#### #4b — Timing jitter tolerance
 
-Same shape as #4 but with PLAN.md Lose Path inputs and asserts. Final assert must be `scene == "GAME_OVER"`.
+Take a winning input schedule from #4a. Apply random ±3 frame jitter to each input's `frame` field. Replay 5 trials with different jitter draws. At least 4 of 5 must clear. Catches games requiring frame-perfect timing — humans react in ~6 frames at 30fps and cannot replicate frame-precise input.
 
-FAIL routes to: `playthrough` (hazards too soft) or `spec` (predicate misaligned).
+```python
+import random
+JITTER = 3       # ± frames per input
+N_TRIALS = 5
+THRESHOLD = 4    # must clear in 4/5
+
+cleared = 0
+for trial in range(N_TRIALS):
+    rng = random.Random(trial)
+    jittered = [
+        {**inp, "frame": max(0, inp["frame"] + rng.randint(-JITTER, JITTER))}
+        for inp in inputs
+    ]
+    result = run(script="main.py", frames=final + 5, random_seed=42,
+                 inputs=jittered,
+                 snapshots=[{"frames": [final], "kind": "state", "attrs": ["scene"]}])
+    snaps = {(s["kind"], s["frame"]): s for s in result["snapshots"]}
+    if snaps[("state", final)]["values"]["scene"] == "WIN":
+        cleared += 1
+assert cleared >= THRESHOLD, f"jitter tolerance: only {cleared}/{N_TRIALS} clears"
+```
+
+If 0/5 clear under ±3 frame jitter, the game requires frame-perfect timing — not playable by humans. Widen hazard windows, slow projectile speeds, add invuln frames after jumps, or extend pickup windows. See `knowledge/game-feel.md` "Variability Budget" for design constants.
+
+FAIL routes to: `playthrough` (game requires frame-perfect timing) or `spec` (milestones too tight).
+
+#### #4c — Strategy diversity
+
+Find at least 2 **distinct** winning strategies and verify each clears under one seed. "Distinct" means materially different approach: different climb path, different pickup-use sequence, different jump-timing pattern. PLAN.md must contain a `## Win Path Strategies` section listing each strategy's input schedule and rationale.
+
+```markdown
+## Win Path Strategies
+
+### Strategy A — hammer chain
+Pick up hammer on each girder, traverse during invuln, climb when next
+hammer is ~2s away.
+
+### Strategy B — dodge-only
+Skip hammers, jump-dodge each barrel at the apex. Slower, but possible
+because BARREL_SPEED leaves a 20-frame jump window.
+```
+
+```python
+for name, inputs_for_strategy in strategies.items():
+    result = run(script="main.py", frames=final + 1, random_seed=42,
+                 inputs=inputs_for_strategy,
+                 snapshots=[{"frames": [final], "kind": "state", "attrs": ["scene"]}])
+    snaps = {(s["kind"], s["frame"]): s for s in result["snapshots"]}
+    assert snaps[("state", final)]["values"]["scene"] == "WIN", \
+        f"strategy {name!r}: did not reach WIN"
+```
+
+If only Strategy A clears and Strategy B (a sane alternate path) doesn't, the game is single-thread — memorization, not gameplay. Tune so multiple strategies work.
+
+FAIL routes to: `playthrough` (insufficient solution space) or `spec` (PLAN.md `## Win Path Strategies` section missing or contains < 2 strategies).
+
+### 5. Lose path (multi-seed)
+
+The lose path uses PLAN.md Lose Path inputs (typically passive, e.g., "stand still"). Multi-seed only — jitter and strategy-diversity are not meaningful for a passive failure path.
+
+```python
+SEEDS = [42, 99, 1]
+lose_inputs = <PLAN.md Lose Path inputs>
+lose_final = <lose-path final frame>
+
+for seed in SEEDS:
+    result = run(script="main.py", frames=lose_final + 1, random_seed=seed,
+                 inputs=lose_inputs,
+                 snapshots=[{"frames": [lose_final], "kind": "state", "attrs": ["scene"]}])
+    assert result["seeded"] is True
+    snaps = {(s["kind"], s["frame"]): s for s in result["snapshots"]}
+    assert snaps[("state", lose_final)]["values"]["scene"] == "GAME_OVER", \
+        f"seed={seed}: lose path did not reach GAME_OVER"
+```
+
+If only one seed reaches GAME_OVER, the hazard spawn is RNG-dependent and the lose path isn't reliable.
+
+FAIL routes to: `playthrough` (hazards too soft / spawn unreliable) or `spec` (lose-path milestones misaligned).
 
 ### 6. Difficulty floor
 
@@ -256,7 +335,7 @@ These mantras echo across `SKILL.md`, `task-execution.md`, `capture.md`, and `de
 - **Do not trust code alone.** When code says X but the captured frame shows Y, trust the frame.
 - **Bias toward failure.** If the required behavior is not clearly visible in the capture, treat it as not done.
 - **No partial pass.** A bundle whose first 3 seconds look right and then sits static is FAIL, not partial pass.
-- **No verbalization, no PASS.** A 10/11 PASS with empty / boilerplate `agent_review` is itself a FAIL.
+- **No verbalization, no PASS.** A 12/13 PASS with empty / boilerplate `agent_review` is itself a FAIL.
 
 ## gate-report.json schema
 
@@ -270,9 +349,14 @@ One row per check. The gate writes this file regardless of overall PASS/FAIL.
     {"id": 1, "label": "State files", "result": "PASS"},
     {"id": 2, "label": "Validate", "result": "PASS"},
     {"id": 3, "label": "Smoke run", "result": "PASS"},
-    {"id": 4, "label": "Win path", "result": "PASS",
-     "evidence": "all milestones asserted; final scene=WIN at frame 660"},
-    {"id": 5, "label": "Lose path", "result": "PASS"},
+    {"id": "4a", "label": "Win path multi-seed", "result": "PASS",
+     "evidence": "seeds [42, 99, 1] all reached WIN; all milestones held"},
+    {"id": "4b", "label": "Win path jitter tolerance", "result": "PASS",
+     "evidence": "±3 frame jitter, 5 trials, 4 cleared (threshold 4)"},
+    {"id": "4c", "label": "Win path strategy diversity", "result": "PASS",
+     "evidence": "2 strategies (hammer-chain, dodge-only) both reached WIN"},
+    {"id": 5, "label": "Lose path multi-seed", "result": "PASS",
+     "evidence": "seeds [42, 99, 1] all reached GAME_OVER"},
     {"id": 6, "label": "Difficulty floor", "result": "PASS",
      "evidence": "GAME_OVER at frame 372 (12.4s @ 30fps, in 10-14s band)"},
     {"id": 7, "label": "Audio", "result": "PASS",
@@ -291,9 +375,11 @@ One row per check. The gate writes this file regardless of overall PASS/FAIL.
     "win": "Mario adjacent to princess on top platform; 'YOU WIN!' overlay text visible; HUD shows final score 8500.",
     "game_over": "Mario sprite shows death frame at floor; 'GAME OVER' overlay text; HUD shows score 1200, lives 0."
   },
-  "summary": {"pass": 11, "fail": 0, "total": 11}
+  "summary": {"pass": 13, "fail": 0, "total": 13}
 }
 ```
+
+`#4` is reported as three rows (`4a`, `4b`, `4c`) and counted as three towards `total`. `#5` is one row (multi-seed). The other checks (1-3, 6-11) are one row each. So a clean run reports 13 PASS / 13 total.
 
 The `fail_route` field is required on every FAIL row. PASS rows may omit `evidence` when the check is binary; FAIL rows must include enough evidence to act on.
 
@@ -301,11 +387,11 @@ The `fail_route` field is required on every FAIL row. PASS rows may omit `eviden
 
 These are the cheats the gate is built to catch. Read them before writing `gate-report.json`.
 
-1. **"It compiles and runs, looks fine."** Checks #2 / #3 only certify no-crash. Checks #4 / #5 (direct Python asserts on state snapshots) are the gameplay certifications.
+1. **"It compiles and runs, looks fine."** Checks #2 / #3 only certify no-crash. Check #4 (multi-seed, jitter-tolerant, multi-strategy clearance) is what proves the game is *playable* — not just *clearable* by one perfectly-timed input sequence.
 2. **"I added a sprite."** Without check #11 (agent reads the PNG and matches against ASSETS.md `represents:`), the sprite is unverified.
 3. **"Bundle exists."** Bundle artifact presence (#8) only certifies all the files are there. Dead-time / static-bundle is caught by #11's per-frame agent verbalization comparison — if two gameplay frames verbalize identically, the bundle is static.
 4. **"Audio plays."** Without check #7's peak ≥ 0.02 + notes ≥ 1 per slot, the slot may be silent or empty. A `play()` call alone passes #2 and #3 but fails #7.
-5. **Adjusting milestones to fit.** *Most important.* If the game can't reach WIN by the planned frame, fix the game, not the milestone. Loosening the spec to dodge a FAIL is the failure mode this gate exists to prevent. The `## Difficulty floor override` (and any other override declared in PLAN.md) **locks before the run begins**, not after a failing run.
+5. **Adjusting milestones / variability params to fit.** *Most important.* If the game can't reach WIN by the planned frame, fix the game, not the milestone. Loosening the spec to dodge a FAIL is the failure mode this gate exists to prevent. The `## Difficulty floor override` (and any other override declared in PLAN.md) **locks before the run begins**, not after a failing run. Same applies to #4b's `JITTER` / `THRESHOLD` and #4c's strategy count: these are gate-defined constants (±3 frame, 4/5 threshold, ≥2 strategies); reducing them to dodge a FAIL is the same shortcut.
 6. **`trap_warning: True` is a silent killer.** Tilemap (0,0) trap = stair-step pattern across the whole screen. Check #9 catches it.
 7. **No unseeded gate playthroughs.** Win/lose paths use `random_seed=42` unless PLAN.md declares an alternative. If `result["seeded"] is False`, mark #4 / #5 FAIL with reason `"non-deterministic playthrough"` even if the asserts happen to pass this attempt. Determinism is a precondition, not an optimization.
 8. **No bundle without honest agent review.** A green stop-conditions list with empty / boilerplate / contradictory `agent_review` is itself a FAIL. Tool checks (`run` snapshots, `read_audio`, `diff_frames`) certify mechanics; only the agent's verbalization certifies recognizability and playability. Fabricating observations to skip the review is the deepest form of shortcut this gate exists to catch.
@@ -323,8 +409,10 @@ If multiple checks FAIL, route to the earliest-stage owner first (e.g., #11 spri
 
 ### Common FAIL patterns
 
-- **#4 reaches PLAY but never WIN.** Win-trigger logic missing → `playthrough`.
-- **#5 reaches PLAY and stays past the lose-path window.** Hazard / collision too soft → `playthrough`.
+- **#4a reaches PLAY but never WIN under some seed.** RNG-dependent clearance — design failure or spawn not seed-deterministic → `playthrough`.
+- **#4b 0/5 clears under jitter.** Frame-perfect timing required — humans cannot play this. Widen hazard windows, slow projectile speeds → `playthrough`.
+- **#4c only one strategy clears.** Single-thread memorization puzzle, not a game. Tune until 2+ strategies viable → `playthrough`.
+- **#5 some seeds reach GAME_OVER, others don't.** Hazard spawn RNG-dependent → `playthrough`.
 - **#6 GAME_OVER frame outside FPS band.** Hazards too aggressive (frame < lo) or too gentle (frame > hi) → `playthrough`.
 - **#7 audio peak == 0.0 with `slot empty` warning.** Sound slot was never assigned → `sprite-quality`.
 - **#11 two gameplay frames verbalize identically.** Frozen entity / frozen camera / capture replayed the same frame → `playthrough`.
@@ -333,7 +421,7 @@ If multiple checks FAIL, route to the earliest-stage owner first (e.g., #11 spri
 
 ## When this gate PASSes
 
-All 11 checks PASS in `gate-report.json`. Then:
+All 13 rows (11 numbered checks; #4 expands to 4a/4b/4c) PASS in `gate-report.json`. Then:
 
 - `PLAN.md` shows all milestone rows marked `done` with one-line `verified by:` notes.
 - `MEMORY.md` records any non-obvious gotchas worth keeping for next session.

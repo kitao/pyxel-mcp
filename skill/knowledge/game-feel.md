@@ -140,6 +140,24 @@ if jump_buffer > 0:
 - Player: use 60-75% of sprite size as hitbox (e.g., 6x6 for 8x8 sprite)
 - `abs(a.x - b.x) < HIT_W and abs(a.y - b.y) < HIT_H`
 
+### Variability Budget (human-playability design constants)
+
+A game that only clears via one frame-perfect input sequence is a memorization puzzle, not gameplay. Quality gate #4b enforces ±3-frame jitter tolerance and #4c demands 2+ winning strategies; design under these constants:
+
+| Design dimension | Constant | Why |
+|---|---|---|
+| Hazard reaction window | ≥ 15 frames @ 30fps | 500ms human reaction (~6 frames) + decision margin (~9 frames) |
+| Adjacent-input spacing | ≥ 10 frames between any 2 required inputs | ±3 jitter on each → 6-frame collision risk; 10 frames keeps separation under jitter |
+| Hazard spawn period | ≥ 30 frames @ 30fps (1s) for "constant pressure" hazards | Faster + sustained ⇒ hazards-in-flight count grows, multiplicative difficulty |
+| Player invuln after hit | ≥ 30 frames | Without this, multiple hazards in flight chain-kill |
+| Pickup reach window | ≥ 20 frames overlap with player path | Allows ±3 jitter on traversal timing without missing pickup |
+| Multi-strategy paths | ≥ 2 viable winning paths | If only one specific timing clears, you've designed memorization, not gameplay |
+| Boss fire / enemy spawn telegraph | visible for ≥ 15 frames before hazard activates | Player needs to see the warning to react |
+
+**Math worked example.** A barrel travels at 2 px/frame. Mario's jump arc clears 24 px horizontally over 18 frames. So the **earliest** jump that clears a barrel must start when the barrel is ≥ 36 px away (18 frames × 2 px). At 15-frame reaction window, the barrel must be visible to the player at distance ≥ 36 px + 15 frames × 2 px = 66 px. If your screen is 224 px wide and barrels spawn off-screen, that's `224/2 - 66 = 46` px of "decision space" between visible and must-jump. Tune so this is positive — a non-positive decision space means the player loses on every barrel they didn't pre-plan for.
+
+**Pattern C is solvability proof, not playability proof.** Pattern C's cumulative-replay (rewind to frame 0 with adjusted inputs) finds the *one* clearing trajectory. The gate's #4b/#4c demand the trajectory survive jitter and admit alternatives — those approximate human reactive play. If Pattern C clears but #4b/#4c fail, the design has only a pinpoint clearance and is not human-playable; fix the design constants in this table, not the gate thresholds.
+
 ### Ladder Mechanics
 
 Climbing a ladder needs three things, in order:
