@@ -140,6 +140,31 @@ Open-loop input (timed press / release) drifts. Over 200+ frames the player posi
 
 Do NOT try to resume `run` from a mid-game state. Each `run` is a fresh subprocess init — pyxel-mcp's isolation model (spec §5.1) makes each call start from frame 0. The cumulative-replay approach is the correct trade-off: slower than continuation but deterministic. This differs from godogen, where Bevy's persistent `World` allows `Update`-loop continuation.
 
+### Spawn determinism — `random_seed` alone is not enough
+
+`random_seed=42` to `run` seeds Pyxel's `pyxel.rseed` and Python's stdlib `random` once at the pre-loop checkpoint. **It does not guarantee identical spawn timing across `run` calls with different `frames=` values** if the script reads `random` inside `update()` based on accumulated state — the seeded sequence advances per call to `random.randint` / `random.choice`, so a longer run draws more numbers from the same seeded stream and the *order* of what gets produced when can shift if the script's branch points differ.
+
+For Pattern C cumulative replay (and any check #4 / #5 / #10 win/lose/genre-identity playthrough), spawn timing must be deterministic by **construction**, not by reseeding. Two patterns:
+
+```python
+# Pattern: integer-modular spawn (simplest, no RNG state)
+def update(self):
+    if self.frame % SPAWN_PERIOD == 0:
+        spawn_x = (self.frame * 37) % SCREEN_W   # deterministic by frame
+        self.spawn_hazard(spawn_x)
+
+# Pattern: dedicated frame-counted RNG (when variety is needed)
+def update(self):
+    if self.frame % SPAWN_PERIOD == 0:
+        rng = random.Random(self.frame)         # fresh RNG per spawn frame
+        spawn_x = rng.randint(0, SCREEN_W - 16)
+        self.spawn_hazard(spawn_x)
+```
+
+Both patterns produce identical spawn sequences regardless of `frames=` value passed to `run`, because the spawn position depends only on `self.frame`, not on accumulated draws from a single shared RNG.
+
+If your spawn must use a single shared `random.Random` instance for variety, snapshot its state and replay it explicitly rather than relying on `random_seed`. As a quick check: run `result = run(..., frames=N, snapshots=[{"frame": F, "kind": "state", "attrs": ["spawn_x_at_F"]}])` twice with different `N` values (both `N >= F`); if `spawn_x_at_F` differs, your spawn isn't seed-deterministic and the gate's win/lose checks will be flaky.
+
 A second pattern, useful when input would have to thread a precise needle: temporarily replace input checks with state observation in a test fixture:
 
 ```python
