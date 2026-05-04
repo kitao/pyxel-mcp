@@ -2,6 +2,41 @@
 
 Used by Stage 3 (scaffold — channel allocation) and Stage 6 (task-execution — SE definitions per event).
 
+## Gate compatibility — `.set()` not `.mml()` for any sound feeding the gate
+
+**Pyxel's `pyxel.sounds[N].mml("...")` does not populate the underlying `.notes` / `.tones` / `.volumes` / `.effects` lists, and `.save()` produces a silent WAV from an MML-populated slot.** That means:
+
+- `read_audio(target={"sound": N})` returns `notes: []` and `peak_amplitude: 0.0` for any slot populated via `.mml()`
+- quality-gate.md check #7 (`peak >= 0.02 AND len(notes) >= 1`) cannot pass for MML-populated sounds
+
+For **any** sound that needs to clear the gate — every SE on ch3, every BGM constituent sound on ch0–ch2 — use `.set()` and let `.mml()` stay as a prototyping / reference tool only. Conversion is mechanical (note string ↔ MML letter sequence; volume `V0`-`V100` → `0`-`7`; tone `@N` → `s/p/t/n`).
+
+**Gate-passable BGM template (use this, not MML):**
+
+```python
+# Ch0: Melody (set form — populates .notes, gate sees it)
+pyxel.sounds[10].set(
+    notes="C2C2D2D2E2E2F2F2 G2G2A2A2B2B2C3C3",
+    tones="s",
+    volumes="5",
+    effects="n",
+    speed=10,
+)
+# Ch1: Bass
+pyxel.sounds[11].set(
+    notes="C1RG1R A1RF1R",
+    tones="t", volumes="6", effects="n", speed=20,
+)
+# Ch2: Harmony
+pyxel.sounds[12].set(
+    notes="EGCG ECEG",
+    tones="p", volumes="3", effects="s", speed=10,
+)
+pyxel.musics[0].set([10], [11], [12])
+```
+
+The MML composition guide below is still useful for **designing** a tune (MML is more expressive for prototyping in a Pyxel editor session) — but commit the final BGM as `set()` calls so the gate's audio check (#7) can verify it.
+
 ## Channel allocation
 
 Pyxel exposes 4 audio channels (ch0–ch3). Allocate them as follows:
@@ -24,11 +59,13 @@ Never play SE on ch0–ch2 — it cuts the BGM mid-note. Never put BGM on ch3 �
 
 Every player-visible event needs an SE: move, rotate, land, clear, chain, game over, game start. Short SE (4–8 notes, speed 3–10) naturally prevent channel conflicts even on ch3.
 
-### MML Composition Guide
+### MML Composition Guide (prototyping reference only — convert to `set()` for shipping)
+
+> **Reminder.** MML-populated slots fail quality-gate check #7 (`.notes` not populated, `.save()` silent). The 3-channel templates below are useful for designing the tune in a Pyxel editor session; **convert to `set()` calls before shipping** (see "Gate compatibility" section above for the `set()` template).
 
 Structure BGM as 3 channels: melody (ch0), bass (ch1), harmony/arpeggio (ch2). Reserve ch3 for SE. Use `read_audio` to verify each channel separately.
 
-**3-channel template:**
+**3-channel MML template (for prototyping):**
 
 ```python
 # Ch0: Melody — carries the theme
@@ -55,6 +92,8 @@ pyxel.musics[0].set([10], [11], [12])
 ### Quick BGM
 
 `gen_bgm` generates procedural music — great for rapid iteration, but all outputs share a similar flavor. Combine with hand-written MML for variety.
+
+> **Gate compatibility note.** `gen_bgm` returns MML strings, which load via `.mml()`. As covered in the "Gate compatibility" section above, MML-populated slots fail quality-gate check #7 (silent WAV, empty `.notes`). For shipping BGM that the gate verifies, do **not** use `gen_bgm` directly — either: (a) hand-author the BGM via `.set()` per the gate-passable template, or (b) use `gen_bgm` only as a melodic-design starting point and transcribe the result into `.set()` calls. There is no automatic MML→set converter.
 
 ```python
 # gen_bgm(preset, transp, instr, seed, play=False) — first 4 args required
