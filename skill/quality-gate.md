@@ -2,7 +2,7 @@
 
 Final acceptance check. PASS gates "done"; FAIL routes back to the phase that owns the failed check. The gate is **agent-driven visual primacy** — the agent (you) reads bundle frames with the `Read` tool, verbalizes observations against PLAN.md / ASSETS.md anchors, and asserts state predicates directly in Python. There are no numerical default thresholds — "good" is judged by what the captured frames actually show.
 
-This file contains no `judge_*` calls. The harness's contract is the agent's discipline: run the 11 numbered stop conditions (13 rows after #4 splits into 4a/4b/4c) in order, write `gate-report.json`, route every FAIL to its owning phase, and re-run from the top.
+This file contains no `judge_*` calls. The harness's contract is the agent's discipline: run the 11 numbered stop conditions (14 rows after #4 splits into 4a/4b/4c/4d) in order, write `gate-report.json`, route every FAIL to its owning phase, and re-run from the top.
 
 ## Inputs
 
@@ -15,15 +15,15 @@ This file contains no `judge_*` calls. The harness's contract is the agent's dis
 
 ## Output
 
-`screenshots/result/<N>/gate-report.json` — flat list of 11 numbered stop conditions (13 rows after #4 splits into 4a/4b/4c), each PASS or FAIL with evidence. The gate writes this file regardless of overall PASS/FAIL — the artifact is what the user reviews. `<N>` is the bundle counter `task-execution` and `capture.md` produced — the gate writes its report inside the existing bundle directory rather than creating a new one.
+`screenshots/result/<N>/gate-report.json` — flat list of 11 numbered stop conditions (14 rows after #4 splits into 4a/4b/4c/4d), each PASS or FAIL with evidence. The gate writes this file regardless of overall PASS/FAIL — the artifact is what the user reviews. `<N>` is the bundle counter `task-execution` and `capture.md` produced — the gate writes its report inside the existing bundle directory rather than creating a new one.
 
 ## Order of execution
 
-Run the 11 numbered stop conditions (13 rows after #4 splits into 4a/4b/4c) in numeric order. Cheap structural checks first; expensive playthrough-driven checks last; agent visual review is the closing gate.
+Run the 11 numbered stop conditions (14 rows after #4 splits into 4a/4b/4c/4d) in numeric order. Cheap structural checks first; expensive playthrough-driven checks last; agent visual review is the closing gate.
 
 If a check FAILs, stop and write the gate report with the FAIL even if later checks would have passed. Partial reports are valid input for routing — there is no benefit in running #4 (Win path) when #1 (State files) has already failed.
 
-## Stop conditions (all must PASS — counted as 13 rows after #4 splits into 4a/4b/4c)
+## Stop conditions (all must PASS — counted as 14 rows after #4 splits into 4a/4b/4c/4d)
 
 ### 1. State files
 
@@ -125,6 +125,40 @@ assert cleared >= THRESHOLD, f"jitter tolerance: only {cleared}/{N_TRIALS} clear
 If 0/5 clear under ±3 frame jitter, the game requires frame-perfect timing — not playable by humans. Widen hazard windows, slow projectile speeds, add invuln frames after jumps, or extend pickup windows. See `knowledge/game-feel.md` "Variability Budget" for design constants.
 
 FAIL routes to: `playthrough` (game requires frame-perfect timing) or `spec` (milestones too tight).
+
+#### #4d — Hazard spatial distribution
+
+The win-path's hazard spawns must cover the playfield, not cluster on one side. Single-side bias = the player only needs to dodge in one direction = memorization, not reactive gameplay.
+
+```python
+result = run(script="main.py", frames=final + 1, random_seed=42,
+             inputs=inputs,
+             snapshots=[{"frames": list(range(0, final, 30)),
+                         "kind": "state",
+                         "attrs": ["barrels"]}])  # or whatever hazard collection
+# Collect hazard x positions across all snapshots:
+xs = [b["x"] for s in result["snapshots"] for b in s["values"].get("barrels", [])]
+assert xs, "no hazards observed in win-path window"
+
+usable_lo, usable_hi = 16, 208   # exclude HUD / wall margins (224-wide screen)
+usable_w = usable_hi - usable_lo
+
+coverage = (max(xs) - min(xs)) / usable_w
+assert coverage >= 0.70, f"hazard span only {coverage:.0%} of usable width"
+
+# Variance check — single-side cluster fails even with one outlier covering width
+import statistics
+center = (usable_lo + usable_hi) / 2
+stddev = statistics.pstdev(xs) if len(xs) > 1 else 0
+assert stddev >= 0.18 * usable_w, \
+    f"hazard stddev {stddev:.1f} < 18% of usable width — clustered"
+```
+
+PASS condition: hazard x positions span ≥70% of usable playfield width AND stddev ≥18% of usable width. Both must hold — width alone passes with 1 outlier; variance alone passes with 2 stuck-at-extremes points.
+
+If FAIL: hazards are biased to one column / one path. See `knowledge/game-feel.md` "Hazard Distribution" for design fixes (multi-spawn point, randomize spawn x with deterministic-by-frame variation, telegraphed alternating pattern).
+
+FAIL routes to: `playthrough` (game-balance failure — memorization shortcut design).
 
 #### #4c — Strategy diversity
 
@@ -294,7 +328,9 @@ FAIL routes to: `spec` (rules absent) or `playthrough` (predicate fails).
 
 This is the gate's primary check — tool-based observations certify mechanics, but only the agent's own multimodal eyes certify *recognizability* and *playability*.
 
-After all bundle artifacts exist (#8 PASS), the agent (you) must:
+**Pre-condition: ASSETS.md must contain the multi-draft history from `asset-gen.md` Rule A.** For each character sprite (`represents:` names a subject with anatomy: head/body/limbs/face), ASSETS.md must list ≥3 hex-string drafts, each draft's literal verbalization (per Rule B Step B1, pixel-position concrete), the recognition check outcome (Rule B Step B2), and the selection reasoning. If ASSETS.md ships single-draft character sprites, that's a Rule A violation — gate FAILs at #11 because the iteration loop wasn't actually run.
+
+After all bundle artifacts exist (#8 PASS) and ASSETS.md draft history is complete:
 
 1. List bundle frame PNGs:
    - `screenshots/result/<N>/frames/title.png`
@@ -303,10 +339,10 @@ After all bundle artifacts exist (#8 PASS), the agent (you) must:
    - `screenshots/result/<N>/frames/win.png`
    - `screenshots/result/<N>/frames/game_over.png`
 
-2. For each PNG, **use the `Read` tool to open it**. The Pyxel canvas is small (typically 224×256), so the multimodal LLM reads every pixel.
+2. For each PNG, **use the `Read` tool to open it** following the `asset-gen.md` Rule B blind read protocol where applicable: Step B1 literal pixel-position description first, then Step B2 recognition check against ASSETS.md `represents:` strings and PLAN.md milestone description. Vague labels ("Mario-like", "looks like a barrel") are themselves a FAIL — see Rule C anti-patterns.
 
-3. Verbalize observation in 1-2 sentences per frame, covering all of:
-   - **Sprite identity** — does the player sprite match ASSETS.md `represents:` (e.g. "red-cap plumber, mid-stride")? Or is it a single-color rectangle, an unrecognizable blob, the wrong sprite?
+3. Verbalize observation in 2-3 sentences per frame using **pixel-position-concrete language** (Rule C), covering all of:
+   - **Sprite identity (concrete)** — for each visible character: pixel-position description AND recognition outcome ("Mario at row 200, col 30: 4-pixel red region top, brown 8×6 center, blue lower with two leg columns; recognizable as red-cap plumber per ASSETS.md player_walk_1 represents:"). NOT: "Mario in the bottom-left".
    - **Scene state** — TITLE / PLAY / WIN / GAME_OVER as the PLAN.md milestone for this frame implies?
    - **HUD content** — score / lives / level / "PRESS SPACE" prompts — visible, legible, no overflow, no overlap with gameplay sprites?
    - **Animation state** — mid-stride / climbing / jumping / falling / dead as the milestone implies?
@@ -335,7 +371,7 @@ These mantras echo across `SKILL.md`, `task-execution.md`, `capture.md`, and `de
 - **Do not trust code alone.** When code says X but the captured frame shows Y, trust the frame.
 - **Bias toward failure.** If the required behavior is not clearly visible in the capture, treat it as not done.
 - **No partial pass.** A bundle whose first 3 seconds look right and then sits static is FAIL, not partial pass.
-- **No verbalization, no PASS.** A 12/13 PASS with empty / boilerplate `agent_review` is itself a FAIL.
+- **No verbalization, no PASS.** A 13/14 PASS with empty / boilerplate `agent_review` is itself a FAIL.
 
 ## gate-report.json schema
 
@@ -355,6 +391,8 @@ One row per check. The gate writes this file regardless of overall PASS/FAIL.
      "evidence": "±3 frame jitter, 5 trials, 4 cleared (threshold 4)"},
     {"id": "4c", "label": "Win path strategy diversity", "result": "PASS",
      "evidence": "2 strategies (hammer-chain, dodge-only) both reached WIN"},
+    {"id": "4d", "label": "Hazard spatial distribution", "result": "PASS",
+     "evidence": "barrel x positions: span 78% of usable width, stddev 23%"},
     {"id": 5, "label": "Lose path multi-seed", "result": "PASS",
      "evidence": "seeds [42, 99, 1] all reached GAME_OVER"},
     {"id": 6, "label": "Difficulty floor", "result": "PASS",
@@ -375,11 +413,11 @@ One row per check. The gate writes this file regardless of overall PASS/FAIL.
     "win": "Mario adjacent to princess on top platform; 'YOU WIN!' overlay text visible; HUD shows final score 8500.",
     "game_over": "Mario sprite shows death frame at floor; 'GAME OVER' overlay text; HUD shows score 1200, lives 0."
   },
-  "summary": {"pass": 13, "fail": 0, "total": 13}
+  "summary": {"pass": 14, "fail": 0, "total": 14}
 }
 ```
 
-`#4` is reported as three rows (`4a`, `4b`, `4c`) and counted as three towards `total`. `#5` is one row (multi-seed). The other checks (1-3, 6-11) are one row each. So a clean run reports 13 PASS / 13 total.
+`#4` is reported as four rows (`4a` multi-seed, `4b` jitter, `4c` strategy, `4d` distribution) counted as four toward `total`. `#5` is one row (multi-seed). The other checks (1-3, 6-11) are one row each. So a clean run reports 14 PASS / 14 total.
 
 The `fail_route` field is required on every FAIL row. PASS rows may omit `evidence` when the check is binary; FAIL rows must include enough evidence to act on.
 
@@ -412,6 +450,7 @@ If multiple checks FAIL, route to the earliest-stage owner first (e.g., #11 spri
 - **#4a reaches PLAY but never WIN under some seed.** RNG-dependent clearance — design failure or spawn not seed-deterministic → `playthrough`.
 - **#4b 0/5 clears under jitter.** Frame-perfect timing required — humans cannot play this. Widen hazard windows, slow projectile speeds → `playthrough`.
 - **#4c only one strategy clears.** Single-thread memorization puzzle, not a game. Tune until 2+ strategies viable → `playthrough`.
+- **#4d hazard span < 70% or stddev < 18%.** Hazards cluster on one side — player only needs to dodge in one direction = memorization shortcut. Add multi-spawn point or randomize spawn x deterministic-by-frame → `playthrough`.
 - **#5 some seeds reach GAME_OVER, others don't.** Hazard spawn RNG-dependent → `playthrough`.
 - **#6 GAME_OVER frame outside FPS band.** Hazards too aggressive (frame < lo) or too gentle (frame > hi) → `playthrough`.
 - **#7 audio peak == 0.0 with `slot empty` warning.** Sound slot was never assigned → `sprite-quality`.
@@ -421,7 +460,7 @@ If multiple checks FAIL, route to the earliest-stage owner first (e.g., #11 spri
 
 ## When this gate PASSes
 
-All 13 rows (11 numbered checks; #4 expands to 4a/4b/4c) PASS in `gate-report.json`. Then:
+All 14 rows (11 numbered checks; #4 expands to 4a/4b/4c/4d) PASS in `gate-report.json`. Then:
 
 - `PLAN.md` shows all milestone rows marked `done` with one-line `verified by:` notes.
 - `MEMORY.md` records any non-obvious gotchas worth keeping for next session.

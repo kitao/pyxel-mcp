@@ -14,29 +14,85 @@ For every entry in `ASSETS.md`, write the `pyxel.images[N].set()` call in `_buil
 
 `main.py` with `_build_assets()` populated. Every ASSETS.md entry has a working `read_image` showing distinguishable pixels at the declared coordinates.
 
-## Loop per asset
+## Loop per asset — multi-draft, blind read, concrete-feature
 
-For each entry in ASSETS.md, in the order they appear:
+Single-draft sprite shipping is the most common failure mode here. The multimodal LLM has a **generous interpretation bias** when reading its own output ("yes that 5-pixel blob is a head, that red shape is a cap, this is Mario"). One draft + permissive verbalization passes the loop ritual without producing a recognizable sprite. Three structural rules counteract this:
 
-1. Write the hex-string sprite data into `_build_assets()` (or a helper called from it).
-2. Run `validate` to catch syntax errors in the hex strings (wrong length, missing comma, bad indent).
-3. Run `read_image` at the asset's bank coordinates **with `render_path=`** so it writes a PNG of the rendered region alongside its aggregate fields.
-4. **Open the PNG with the `Read` tool and verbalize what you see in 1 sentence** (e.g., `"Mario in red cap and blue overalls, mid-stride, identifiable"` or `"indistinct red blob, no features visible"`). The Pyxel canvas at sprite resolution is small enough that the multimodal LLM can read every pixel directly. Then compare your verbalization to the entry's `represents:` description in ASSETS.md. The `read_image` aggregate fields (`color_count`, `fill_ratio`) are necessary but not sufficient — recognizability requires the agent's own eyes (SKILL.md Anti-shortcut rule #9, applied at sprite scope).
-5. If the rendered sprite does not match the `represents:` description (single-color blob, wrong silhouette, missing features, palette confusion), rewrite the hex strings. Don't move on. Catch one bad sprite before writing 10 of them.
+### Rule A — Multi-draft mandate (≥3 drafts per character sprite)
 
-Concretely, for one asset:
+For each character sprite (`player_*`, antagonist, NPC — anything an ASSETS.md entry calls a character or names a represented subject), produce at least **3 distinct hex-string drafts** with materially different design choices: e.g., Draft 1 minimal (5 colors, simple shapes), Draft 2 detailed (more colors, finer features), Draft 3 stylized (exaggerated proportions, bold outline). Render each draft to its own PNG via `read_image(... render_path="tmp/<sprite>_v<N>.png")`. Single-draft → single attempt → no real iteration.
+
+The drafts and selection are part of the artifact: ASSETS.md's entry for the sprite must list the 3 hex-strings, the literal verbalization of each draft, and a 1-line **selection reasoning** ("v2 picked: cap clearer at top because 4-pixel-wide vs v1's 2-pixel; eyes more legible because pixel positions don't blend with background"). The chosen draft becomes the `_build_assets()` data; the others stay in ASSETS.md as evidence the loop ran.
+
+Background / decoration / abstract sprites (girder tile, ladder rung, single-tone pickup) can be 1 draft if the represented subject is a geometric primitive. Only character sprites (subject + features expected) need ≥3.
+
+### Rule B — Blind read protocol (separate literal description from recognition)
+
+The verbalization step splits into two strictly-separated sub-steps. Generous bias is reduced when literal description happens **without** the `represents:` string in the immediate context.
+
+**Step B1 — Literal description, pixel-by-pixel.** Read the rendered PNG with the explicit prompt-to-self: *"Describe what I literally see in this grid, position by position. Do not name the figure. Do not infer intent. Do not match against expectations."* Output is mechanical: row indices, color regions, pixel positions, sizes. Example:
+
+> "16×16 grid. Top region (rows 0-3): 4-pixel-wide red shape spanning columns 6-9 at row 1, narrowing to 2 pixels at row 3. Mid region (rows 4-9): brown 8×6 block centered, with 1-pixel black dots at (row 4, col 5) and (row 4, col 10). Bottom region (rows 10-15): blue 6×4 region with 2-pixel-wide separation forming two leg-like columns at cols 5-7 and cols 9-11."
+
+**Step B2 — Recognition check.** Now bring the entry's `represents:` into focus (e.g., `"Mario, red-cap plumber, mid-stride"`). Ask: *given only the Step B1 literal description, would a reader with no prior knowledge identify this as `[represents:]`?* Show reasoning explicitly:
+
+> "Step B1 mentions: red shape on top, brown center, blue lower with two columns. Mapping to represents: red cap → ✓ (top red), face → ~ (brown center plausible), eyes → ✓ (black dots), overalls → ✓ (blue lower), legs in stride → ~ (two columns visible but no clear stride asymmetry). 4 of 5 features present, stride ambiguous. Pass with caveat: redraw legs to show offset stride."
+
+If the recognition check fails (literal description doesn't suggest the subject), redraw. **Do not** rationalize the existing draft into recognizability ("well technically the brown is the face if you squint").
+
+For maximum rigor, dispatch the literal-description step to a fresh subagent that does not have ASSETS.md in its context (PNG only). Optional but recommended for the protagonist and antagonist sprites.
+
+### Rule C — Concrete-feature verbalization required
+
+Both Step B1 and B2 outputs must use **pixel-position-concrete** language. Reject any of these vague-label patterns:
+
+| Anti-pattern (vague) | Replace with (concrete) |
+|---|---|
+| "Mario-like figure" | "16×16 sprite, top has 4-pixel red region, middle has 8-pixel brown region, bottom has two 4-pixel blue legs" |
+| "Looks like a barrel" | "8×8 sprite, brown 8×6 oval, 2 horizontal black bands at rows 3 and 5" |
+| "Identifiable as the boss" | "32×32 sprite, brown body 24×24 centered, white eyes 1-pixel at (rows 8, cols 10/14), red bow-tie 4×2 at row 18" |
+| "Recognizable" / "good enough" / "decent" | replaced by the concrete description that justifies the claim |
+
+If the agent's verbalization slides into vague labels, the recognizability test isn't honest — quality-gate.md #11 catches this and the gate FAILs.
+
+### Concrete loop for one character asset
 
 ```python
-# After editing main.py to add player_walk_1:
+# Per ASSETS.md row "player_idle, represents: Mario red-cap plumber idle":
+# 1. Three drafts:
+draft_v1 = ["00088000", "00111000", ...]   # minimal, 5 colors
+draft_v2 = ["08888880", "01111110", ...]   # detailed, 8 colors
+draft_v3 = ["00088000", "00811800", ...]   # stylized, exaggerated cap
+# Write each into a tmp slot, render PNGs:
+for v, hex in [("v1", draft_v1), ("v2", draft_v2), ("v3", draft_v3)]:
+    pyxel.images[7].set(0, 0, hex)   # tmp slot 7
+    read_image(script="main.py", image=7, x=0, y=0, w=16, h=16,
+               render_path=f"tmp/player_idle_{v}.png")
+    # 2. Step B1 — literal Read of each PNG, no represents: in context
+    # 3. Step B2 — recognition check against "Mario red-cap plumber"
+
+# 4. Pick best (e.g., v2). Reasoning recorded in ASSETS.md:
+#    "v2: cap clearer at top (4-px vs v1's 2-px); eyes legible at (4,5)+(4,10);
+#     overalls visible as blue 8×4 lower region. v1 too sparse. v3 caricatured."
+
+# 5. Final commit to _build_assets():
+pyxel.images[0].set(0, 0, draft_v2)
+
+# 6. validate clean
 validate(script="main.py")
-read_image(script="main.py", image=0, x=0, y=0, w=16, h=16,
-              render_path="tmp/player_walk_1.png")
-# Then: Read("tmp/player_walk_1.png")
-# Verbalize: "Red-capped figure, two arm positions distinguishable,
-#             two legs with shoe outline. Identifiable as Mario."
 ```
 
-Note that `read_image` returns the `pixels` palette-index grid inline only when the requested region's area ≤ 4096 (per spec §6.4.1 / §7.2). For 16x16 sprites the grid is included; for the full 256x256 bank it is `None`. The `render_path` argument always writes the PNG regardless — it is the agent-readable artifact and is mandatory for the Read step above.
+### Background / abstract assets (1 draft acceptable)
+
+Tilemap girders, ladders, pickup icons (hammer, coin, key), bullets — these are geometric primitives. Single hex-string draft is acceptable if the represented subject has no sub-features. Still render, still Read once, but no multi-draft is required.
+
+The rule of thumb: *if `represents:` names a subject with anatomy (head, body, limbs, face), it's a character sprite and needs ≥3 drafts. If `represents:` names a shape or material (rectangle, line, geometric tile), 1 draft is fine.*
+
+### What `read_image` aggregate fields are still good for
+
+`color_count` (≥ ASSETS.md `min_distinct_colors`) and `fill_ratio` (in [0.15, 0.95]) remain **necessary** sanity checks for "is the sprite empty / oversaturated / single-blob". They do not certify recognizability — that's the agent's job per Rule A/B/C above.
+
+`read_image` returns the `pixels` palette-index grid inline only when the requested region's area ≤ 4096 (per spec §6.4.1 / §7.2). For 16×16 sprites the grid is included; for the full 256×256 bank it is `None`. The `render_path` argument always writes the PNG regardless — it is the agent-readable artifact and is mandatory for the Read steps above.
 
 ## Sprite identity heuristics
 

@@ -101,6 +101,33 @@
 - task-execution.md: variability test worked example showing the
   jitter / multi-seed / strategy-B Pattern after Pattern C convergence
 - gate-report.json: 13 rows total after #4 splits into 4a/4b/4c
+- Visual + balance gate (round 3 structural fix): user playtest of
+  the variability-gate DK confirmed clearable but visuals "haphazard,
+  headish/faceish" + barrels biased to one side. Pattern: gate PASS
+  != actual quality dimension — needs mechanical enforcement of the
+  feedback loop, not claim of it. User-in-loop discarded ("AIの意義
+  消す"); structural skill-side fix:
+- asset-gen.md: multi-draft mandate (≥3 hex-string drafts per
+  character sprite, recorded in ASSETS.md with literal verbalizations
+  + selection reasoning), blind read protocol (Step B1 literal
+  pixel-position description without represents: in context, Step B2
+  recognition check against represents:), concrete-feature
+  verbalization required (vague labels like "Mario-like" rejected;
+  pixel-position concrete required like "4-pixel red region at
+  rows 0-2 cols 5-10"). Counters multimodal generous interpretation
+  bias by separating literal description from recognition.
+- quality-gate.md #11: extended to verify ASSETS.md draft history
+  evidence (≥3 drafts per character sprite, literal verbalizations,
+  selection reasoning) + concrete-feature verbalization in agent_review
+- quality-gate.md #4d (new): hazard spatial distribution check —
+  win-path hazard x positions must span ≥70% of usable width AND
+  stddev ≥18% of usable width. Catches single-side-bias barrel
+  patterns that turn the game into one-direction-dodge memorization.
+  gate-report.json: 14 rows total after #4 expands to 4a/4b/4c/4d.
+- knowledge/game-feel.md Hazard Distribution section: 3 spawn
+  patterns (multi-spawn-point / deterministic-by-frame randomized x /
+  alternating-direction), telegraph requirement, multi-strategy
+  implication (single-side hazards block #4c too)
 
 ## 0.11.0
 

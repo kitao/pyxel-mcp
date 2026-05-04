@@ -158,6 +158,53 @@ A game that only clears via one frame-perfect input sequence is a memorization p
 
 **Pattern C is solvability proof, not playability proof.** Pattern C's cumulative-replay (rewind to frame 0 with adjusted inputs) finds the *one* clearing trajectory. The gate's #4b/#4c demand the trajectory survive jitter and admit alternatives — those approximate human reactive play. If Pattern C clears but #4b/#4c fail, the design has only a pinpoint clearance and is not human-playable; fix the design constants in this table, not the gate thresholds.
 
+### Hazard Distribution (gate #4d)
+
+If hazards spawn from the same column / one side / one path every time, the player only learns one dodge motion — the game is a memorization shortcut, not reactive play. Quality-gate #4d enforces hazards spread across ≥70% of usable playfield width with stddev ≥18% (no clustering).
+
+**Avoid:**
+
+```python
+# Anti-pattern: every barrel spawns at boss x-position, rolls right
+if self.frame % BARREL_PERIOD == 0:
+    self.spawn_barrel(x=self.boss.x, vx=+BARREL_SPEED)
+```
+
+The boss is at one fixed x; every barrel originates there; player learns "always dodge from left". Clustered, fails #4d.
+
+**Use one of these patterns:**
+
+```python
+# Pattern 1: multi-spawn point — boss has 2-3 throw positions, randomize per spawn
+SPAWN_POINTS = [40, 112, 184]  # left/center/right of usable width
+if self.frame % BARREL_PERIOD == 0:
+    spawn_x = SPAWN_POINTS[(self.frame // BARREL_PERIOD) % len(SPAWN_POINTS)]
+    self.spawn_barrel(x=spawn_x, vx=+BARREL_SPEED)
+```
+
+```python
+# Pattern 2: deterministic-by-frame randomized spawn x within boss reach
+import random
+if self.frame % BARREL_PERIOD == 0:
+    rng = random.Random(self.frame)
+    spawn_x = self.boss.x + rng.randint(-32, +32)
+    self.spawn_barrel(x=spawn_x, vx=+BARREL_SPEED)
+```
+
+```python
+# Pattern 3: alternating-direction barrels — left-rolling and right-rolling alternate
+if self.frame % BARREL_PERIOD == 0:
+    n = self.frame // BARREL_PERIOD
+    if n % 2 == 0:
+        self.spawn_barrel(x=USABLE_LEFT,  vx=+BARREL_SPEED)
+    else:
+        self.spawn_barrel(x=USABLE_RIGHT, vx=-BARREL_SPEED)
+```
+
+**Telegraph the distribution.** Player must be able to see / predict where the next hazard comes from (boss animation faces the throw direction, audio cue, etc.) so reaction is informed, not blind. A hazard that appears at random with no warning isn't reactive — it's a chance dice roll.
+
+**Multi-strategy implication.** When you tune for #4c (≥2 distinct winning strategies), at least one strategy should naturally use the hazard distribution: e.g. Strategy A favors the left ladder (catches right-spawn barrels with hammer), Strategy B favors the right ladder (catches left-spawn barrels). If hazards cluster on one side, only one strategy is viable — #4d FAIL is also a #4c FAIL trigger.
+
 ### Ladder Mechanics
 
 Climbing a ladder needs three things, in order:
