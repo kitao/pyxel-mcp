@@ -168,6 +168,11 @@ read_image(script="main.py", image=0, x=0, y=0, w=8, h=8)
 
 If non-zero pixels are at (0,0), move the offending sprite to a different bank location and update ASSETS.md.
 
+## Quirks worth knowing before you start
+
+- **`pyxel.sounds[N].mml(...)` does not populate `.notes` and produces a silent WAV via `.save()`.** If this stage produces audio cues that need to clear quality-gate check #7, use `pyxel.sounds[N].set(notes=..., tones=..., volumes=..., effects=..., speed=N)` instead. See `knowledge/audio.md` "Gate compatibility" for the gate-passable BGM template. (Friction surfaced in β2 e2e validation.)
+- **`gen_bgm` returns MML strings.** Loading them via `.mml()` runs into the same problem. Hand-author shipping BGM via `.set()`, or transcribe `gen_bgm` output by hand.
+
 ## Anti-patterns in this stage
 
 - **Generating sprites in `update()` instead of `_build_assets()`.** Either runs every frame (perf disaster) or runs after `pyxel.run()` starts and is invisible to `read_image` for the first few frames.
