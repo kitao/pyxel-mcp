@@ -21,6 +21,8 @@ This skill assumes `pyxel-mcp` ≥ 1.0.0 is installed and registered as an MCP s
 
 Quality verification is the **agent's** responsibility, not a tool's. The 9 tools above capture observations; the agent asserts predicates directly in Python and uses the host's `Read` tool to inspect captured PNGs (the Pyxel canvas is small enough that the multimodal LLM reads every pixel). The Layer 3 quality gate (`quality-gate.md`) lays out the 11 stop conditions the agent runs before declaring done.
 
+> **Transitional note (until pyxel-mcp 1.0.0 reaches PyPI).** The previous PyPI release exposed 8 additional `judge_*` tools (`judge_palette`, `judge_sprite`, `judge_animation`, `judge_milestone`, `judge_genre`, `judge_bundle`, `judge_audio`, `judge_layout`). Until this release ships, hosts with the older PyPI install will surface those `judge_*` names too. **Do not call them** — this skill expects the agent to assert predicates directly. They will disappear from the tool list once pyxel-mcp 1.0.0 publishes.
+
 If the namespace is missing, the user can get the install snippet by running:
 
 ```bash
