@@ -11,16 +11,7 @@
 - Drop lazy hatchling import in build_hooks.py; hatch's plugin loader
   needs the BuildHookInterface subclass discoverable via `dir()`
 - Score palette hierarchy off `used_indices`, not palette capacity
-  (default-palette games no longer score 2/2 vacuously — the gate
-  finally enforces "did the script actually use bg + env + interactive")
-- judge_bundle dead-time check uses max pairwise diff across all
-  frames, not first-vs-mid alphabetical (sparse-content games no
-  longer require GAME_OVER to look intentionally distinct)
-- judge_bundle records and surfaces frame-size mismatches as a
-  loud bundle failure (capture.md mandates uniform scale)
-- judge_sprite default `min_distinct_colors` scales with sprite area
-  (4×4 ≤ 2, 8×8 ≤ 3, larger ≤ 4) — small balls/bullets no longer
-  need a contract override to clear gate check #4
+  (default-palette games no longer score 2/2 vacuously)
 - skill/SKILL.md: bump version to 1.0.0 + pyxel-mcp pin to ≥ 1.0.0
 - skill/SKILL.md: drop host-specific `mcp__pyxel__*` tool-name
   references in favour of generic namespace-only descriptions
@@ -32,106 +23,71 @@
   empirical refinement targets, not Stage 2 commitments
 - skill/quality-gate.md: document `## Difficulty floor override` as
   the legitimate way to deviate from the default 10-14 s band
-- Bump Pyxel minimum dependency to 2.9.5 (was 2.9.4); 405 tests pass
-  under 2.9.5 in the local venv with no compatibility regressions
-- judge_palette: raise `max_contrast_warnings` default 1 → 5
-  (3-color-per-material rule produces 9-12 warnings naturally;
-  the old 1 forced an override on every multi-material retro game)
-- judge_palette: return shape now includes `sub_verdicts.hierarchy`
-  + `sub_verdicts.contrast` so quality-gate's #8 and #9 rows can
-  reflect each axis independently instead of doubling up on a
-  contrast-only failure
-- judge_palette: hierarchy "warn" tier — score one below required
-  is no longer a hard fail
-- judge_animation: lower `min_palette_consistency` default 1.0 → 0.83
-  (5/6) so single-color additions like flame pulse / hit flash
-  pass without an explicit override
+- Bump Pyxel minimum dependency to 2.9.5 (was 2.9.4)
 - state snapshot: `attrs` not-found warnings now include hints for
   the two common mistakes — `self.` prefix and inline `len(...)`
 - run-snapshots-schema.md: mandate absolute paths for snapshot
   `output` / `output_pattern`; document `state.attrs` path syntax
-- skill/capture.md + quality-gate.md: clarify that audio rendering
-  for `judge_audio` must use `target={"sound": N}` (music targets
-  produce no `notes` and cannot be judge_audio-verified)
-- skill/quality-gate.md: row #8/#9 reference `sub_verdicts` so the
-  rows fill independently; row #8/#9 also call for runtime
-  `screen_grid` ∪ pre-loop `read_palette` merge before judging
-- skill/quality-gate.md: warning box on judge_milestone /
-  judge_genre predicate sandbox constraints (no calls, no Pow,
-  literal cap, must return bool) with workaround recipes
 
 - Integrate pyxel-skill source into skill/ subdir (Phase 0)
-- Add Layer 2: judge/ with 8 policy primitive tools
-- Add judge_palette / judge_sprite / judge_animation
-- Add judge_milestone (Pattern D, sandboxed predicate eval)
-- Add judge_genre for PLAN.md ## Genre Identity rules
-- Add judge_bundle (Pattern G, proof bundle + dead-time)
-- Add judge_audio / judge_layout
-- Wire 8 judge_* into FastMCP server as in-process pure funcs
-- Document Layer 1 / Layer 2 split in instructions.md (17 tools)
-- Refactor quality-gate.md 17 checks into judge_* recipe table
-- Add 63 unit tests for judge/* (pass/fail/edge/contract)
-- Move _harnesses subtree under observe/_harnesses (Layer 1 home)
+- Move _harnesses subtree under observe/_harnesses
 - BREAKING: rename inspect_* tools to read_* (palette/image/...)
 - BREAKING: rename render_audio to read_audio
 - BREAKING: rename compare_frames to diff_frames
 - BREAKING: drop verdict field from read_palette + read_image
-  (judgment moves to Layer 2 judge_palette / judge_sprite)
-- Add workflow/ Layer 3 module + workflow_root() helper
+  (judgment is the agent's responsibility, asserted directly in Python)
+- Add workflow/ module + workflow_root() helper
 - Expose skill/*.md as pyxel://workflow/* MCP resources (16 URIs)
 - Add hatch custom build hook to embed skill/ in wheel artifact
 - gitignore src/pyxel_mcp/workflow/_content/ (build-time output)
 - Add `pyxel-mcp install` — print MCP config snippet + guide
-- Add `pyxel-mcp publish-skill DIR` — deploy Layer 3 to host
+- Add `pyxel-mcp publish-skill DIR` — deploy workflow skill to host
 - Add `pyxel-mcp serve` (default) — back-compat with bare invocation
 - Switch console script entry point to pyxel_mcp.cli:main
 - Add server startup diagnostic to stderr (workflow path)
 - Rewrite README for v1.0.0 user journey (7 stages)
-- Reject Pow + huge int literals + dunder access in predicate eval
-- Reject non-bool predicate result (catch typo'd method refs)
-- Add adversarial sandbox tests (DoS / escape / non-bool)
 - Refuse publish-skill into ~, ~/.claude, ~/.cursor, ~/.codex, etc
 - Refuse publish-skill overwrite of non-skill dir even with --force
 - Refuse publish-skill into a target that is a file
 - publish-skill emits friendly error when workflow content missing
 - Server starts in degraded mode when workflow content missing
 - Strip YAML front matter from workflow resource descriptions
-- Move judge_bundle off observe import (4-layer invariant)
 - Replace pyxel-skill repo link with pyxel://workflow guidance
 - Switch startup diagnostic to live FastMCP tool count
 - README: update section uses `uvx --refresh-package` form
 - Refresh stale path in anti_patterns.py docstring
-- Drop Layer 2 entirely — agent visual primacy is the gate
-- Remove 8 judge_* tools and 12 hardcoded numerical defaults
-- Replace 17-check matrix with 11-step flat stop-conditions list
-- Win/lose path predicates become agent-direct Python asserts
-- Genre Identity rules become agent-written Python (no sandbox)
-- Drop predicate AST sandbox (no abs/len/min/max friction)
+- Quality verification is the agent's responsibility (godogen-style)
+- 9 observation tools (run, validate, pyxel_info, read_palette,
+  read_image, read_animation, read_tilemap, read_audio, diff_frames)
+- 11-step flat quality gate in skill/quality-gate.md (no numerical
+  defaults; agent asserts predicates directly in Python and reads
+  bundle PNGs with the host's Read tool to verbalize against
+  PLAN.md milestones / ASSETS.md represents: anchors)
+- Win/lose path Verify predicates and Genre Identity rules are
+  agent-written Python (no AST sandbox; abs/len/min/max all available)
 - Stop hook simplifies to bundle-existence tripwire only
-- Drop 104 judge unit tests (309 remain, was 413)
+  (gate-report.json content is the agent's responsibility)
 - Add closing rationale to instructions.md (no judge_* by design)
-- β2 e2e patch: drop check #8 dead-time numerical threshold (0.05)
-- β2 e2e patch: fold dead-time enforcement into check #11 (agent
-  visual review — if two gameplay frames verbalize identically,
-  bundle is static and FAILs)
-- β2 e2e patch: knowledge/audio.md gate-compat section warns that
-  pyxel.sounds[N].mml() does not populate .notes and .save() emits
-  silent WAV; recommends .set() for any sound feeding the gate
-- β2 e2e patch: task-execution.md spawn-determinism subsection
-  (random_seed alone insufficient under varying frames=; integer-
-  modular spawn or random.Random(self.frame) per spawn frame)
-- β2 e2e patch: asset-gen.md cross-references MML / gen_bgm gate
-  compatibility quirks upfront
-- β2 e2e patch: SKILL.md transitional note on pre-1.0.0 PyPI hosts
-  surfacing old judge_* tools (skill says ignore them)
-- β-DK e2e patch: audio.md note syntax — every note in set(notes=)
-  needs explicit octave digit (C2 not C); range C0-B4
-- β-DK e2e patch: knowledge/game-feel.md adds Ladder Mechanics
-  (engage / disengage tolerance, snap-on-release at top/bottom,
-  jump must not bypass girder for genre L1)
-- β-DK e2e patch: validate.py adds ragged_image_set anti-pattern
-  detector — catches pyxel.images[N].set(x, y, [...]) with rows
-  of differing hex-string length before runtime; +3 tests (312 total)
+- skill/SKILL.md: transitional note on pre-1.0.0 PyPI hosts surfacing
+  old judge_* tools (skill says ignore them)
+- skill/capture.md: audio rendering must use target={"sound": N}
+  (music targets produce no notes and cannot satisfy gate audio check)
+- knowledge/audio.md: pyxel.sounds[N].mml() does not populate .notes
+  and .save() emits silent WAV; use .set() for any sound feeding gate
+- knowledge/audio.md: every note in set(notes=) needs explicit octave
+  digit (C2 not C); range C0-B4
+- knowledge/game-feel.md: Ladder Mechanics — engage tolerance,
+  snap-on-release at top/bottom, jump must not bypass girder for L1
+- task-execution.md: spawn-determinism subsection (random_seed alone
+  insufficient under varying frames=; use integer-modular spawn or
+  random.Random(self.frame) per spawn frame)
+- asset-gen.md: cross-references MML / gen_bgm gate-compat quirks
+  upfront so the agent doesn't burn time discovering them at gate
+- validate.py: ragged_image_set anti-pattern detector — catches
+  pyxel.images[N].set(x, y, [...]) with rows of differing hex-string
+  length before runtime
+- 312 tests pass under Pyxel 2.9.5 (was 413 in pre-godogen-refactor;
+  104 deleted with judge layer, 3 added with ragged_image_set)
 
 ## 0.11.0
 
