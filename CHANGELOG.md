@@ -110,6 +110,28 @@
 - Stop hook simplifies to bundle-existence tripwire only
 - Drop 104 judge unit tests (309 remain, was 413)
 - Add closing rationale to instructions.md (no judge_* by design)
+- β2 e2e patch: drop check #8 dead-time numerical threshold (0.05)
+- β2 e2e patch: fold dead-time enforcement into check #11 (agent
+  visual review — if two gameplay frames verbalize identically,
+  bundle is static and FAILs)
+- β2 e2e patch: knowledge/audio.md gate-compat section warns that
+  pyxel.sounds[N].mml() does not populate .notes and .save() emits
+  silent WAV; recommends .set() for any sound feeding the gate
+- β2 e2e patch: task-execution.md spawn-determinism subsection
+  (random_seed alone insufficient under varying frames=; integer-
+  modular spawn or random.Random(self.frame) per spawn frame)
+- β2 e2e patch: asset-gen.md cross-references MML / gen_bgm gate
+  compatibility quirks upfront
+- β2 e2e patch: SKILL.md transitional note on pre-1.0.0 PyPI hosts
+  surfacing old judge_* tools (skill says ignore them)
+- β-DK e2e patch: audio.md note syntax — every note in set(notes=)
+  needs explicit octave digit (C2 not C); range C0-B4
+- β-DK e2e patch: knowledge/game-feel.md adds Ladder Mechanics
+  (engage / disengage tolerance, snap-on-release at top/bottom,
+  jump must not bypass girder for genre L1)
+- β-DK e2e patch: validate.py adds ragged_image_set anti-pattern
+  detector — catches pyxel.images[N].set(x, y, [...]) with rows
+  of differing hex-string length before runtime; +3 tests (312 total)
 
 ## 0.11.0
 
