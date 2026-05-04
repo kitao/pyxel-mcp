@@ -138,7 +138,7 @@ for cue in audio_manifest:  # one entry per SE / per BGM channel
 
 FAIL routes to: `sprite-quality` (slot empty) or `scaffolding` (slot wrong).
 
-### 8. Proof bundle + dead-time
+### 8. Proof bundle
 
 PASS condition: `screenshots/result/<N>/` contains the bundle layout from `capture.md`:
 - `win-path.gif` (or `.mp4`)
@@ -147,7 +147,7 @@ PASS condition: `screenshots/result/<N>/` contains the bundle layout from `captu
 - `audio/*.wav` per ASSETS.md audio manifest
 - `notes.md`
 
-PASS condition (dead-time check): the bundle proves motion across its full duration. Pick two PNGs that are visually mid-game (NOT title vs game_over — alphabetical first-vs-mid pairs frequently land on backgrounds-only frames that are legitimately similar) and use `diff_frames` to confirm they differ.
+PASS condition (no frame-size mismatch): all `frames/*.png` were captured at the same `scale` so they can be compared. Use `diff_frames` on adjacent files and assert `size_match: True`.
 
 ```python
 import os
@@ -159,24 +159,15 @@ for r in required:
 png_files = sorted((bundle / "frames").glob("*.png"))
 assert len(png_files) >= 5, f"only {len(png_files)} frame PNGs"
 
-# Dead-time: pick the largest pairwise diff across the bundle, must exceed 0.05.
-# (Alphabetical first-vs-mid is unreliable — see commit abed9fe.)
-max_diff = 0.0
-for i in range(len(png_files)):
-    for j in range(i + 1, len(png_files)):
-        r = diff_frames(frame_a=str(png_files[i]), frame_b=str(png_files[j]))
-        if not r.get("size_match", True):
-            assert False, f"frame size mismatch: {png_files[i].name} vs {png_files[j].name}"
-        if not r.get("identical", False):
-            d = r.get("diff_ratio", 0.0)
-            if d > max_diff:
-                max_diff = d
-assert max_diff >= 0.05, f"all bundle frames within 5% diff — bundle is static"
+# Size mismatch is a capture defect (capture.md mandates uniform scale).
+for i in range(len(png_files) - 1):
+    r = diff_frames(frame_a=str(png_files[i]), frame_b=str(png_files[i + 1]))
+    assert r.get("size_match", True), f"size mismatch: {png_files[i].name} vs {png_files[i+1].name}"
 ```
 
-A bundle whose first 3 seconds are correct and the rest is static is FAIL, not partial pass (Anti-shortcut #4).
+**Dead-time / static-bundle detection moved to check #11**, where the agent's per-frame verbalizations against PLAN.md milestones inherently catch "frames look identical" — a stalled entity or frozen camera produces verbalizations that contradict the milestone's expected motion. Numerical diff thresholds are genre-dependent (sparse-canvas avoidance shooters legitimately hit 5% even with full action; dense platformers easily hit 20%) — encoding "static = FAIL" as agent visual judgment instead of a universal threshold avoids the recurring tuning trap.
 
-FAIL routes to: `bundle` (missing artifacts) or `playthrough` (frozen entity / frozen camera).
+FAIL routes to: `bundle` (missing artifacts).
 
 ### 9. Tilemap trap clean
 
@@ -244,7 +235,9 @@ After all bundle artifacts exist (#8 PASS), the agent (you) must:
 
 4. Compare each verbalization against the corresponding PLAN.md milestone description. Note divergences explicitly: "milestone says barrel near floor at frame 200, observation: barrel still on girder 1".
 
-5. **If any frame shows a defect** — missing sprite, wrong scene, static animation, placeholder rectangle, illegible HUD, recognizability failure — return to the owning stage:
+5. **Dead-time / static-bundle catch.** Read the verbalizations across `play_start`, `mid_game`, and other gameplay frames. If two gameplay frames produce essentially the same verbalization (same sprite at same position, same hazard placement, same HUD), the bundle is static — entity / camera frozen, broken state, or capture replayed the same frame. This is a FAIL even if every individual frame looks correct in isolation. Anti-shortcut #4 ("a bundle whose first 3 seconds are correct and the rest is static is FAIL, not partial pass") is enforced here, not in #8.
+
+6. **If any frame shows a defect** — missing sprite, wrong scene, static animation, placeholder rectangle, illegible HUD, recognizability failure, or two gameplay frames verbalize identically — return to the owning stage:
    - `asset-gen.md` for sprite identity
    - `scaffold.md` for scene routing / HUD layout
    - `decomposer.md` for milestone alignment
@@ -252,7 +245,7 @@ After all bundle artifacts exist (#8 PASS), the agent (you) must:
 
    Do NOT proceed to mark the gate PASS.
 
-6. The verbalizations populate `gate-report.json["agent_review"]`. Empty / boilerplate ("scene shown", "looks fine") / contradictory verbalizations are **themselves a FAIL** — the gate is built to catch this exact shortcut.
+7. The verbalizations populate `gate-report.json["agent_review"]`. Empty / boilerplate ("scene shown", "looks fine") / contradictory verbalizations are **themselves a FAIL** — the gate is built to catch this exact shortcut.
 
 FAIL routes to: `playthrough` / `sprite-quality` / `scaffolding`.
 
@@ -284,8 +277,8 @@ One row per check. The gate writes this file regardless of overall PASS/FAIL.
      "evidence": "GAME_OVER at frame 372 (12.4s @ 30fps, in 10-14s band)"},
     {"id": 7, "label": "Audio", "result": "PASS",
      "evidence": "5 WAVs rendered, all peak >= 0.02, all sounds have notes"},
-    {"id": 8, "label": "Proof bundle + dead-time", "result": "PASS",
-     "evidence": "12 PNGs; max pairwise diff 0.18"},
+    {"id": 8, "label": "Proof bundle", "result": "PASS",
+     "evidence": "5 frame PNGs + 8 audio WAVs + 2 GIFs + notes.md, all sizes match"},
     {"id": 9, "label": "Tilemap trap clean", "result": "PASS"},
     {"id": 10, "label": "Genre identity", "result": "PASS",
      "evidence": "3 of 3 rules passed"},
@@ -310,7 +303,7 @@ These are the cheats the gate is built to catch. Read them before writing `gate-
 
 1. **"It compiles and runs, looks fine."** Checks #2 / #3 only certify no-crash. Checks #4 / #5 (direct Python asserts on state snapshots) are the gameplay certifications.
 2. **"I added a sprite."** Without check #11 (agent reads the PNG and matches against ASSETS.md `represents:`), the sprite is unverified.
-3. **"Bundle exists."** Without check #8's max-pairwise-diff dead-time test, the bundle could be a 30-frame loop with stale frames.
+3. **"Bundle exists."** Bundle artifact presence (#8) only certifies all the files are there. Dead-time / static-bundle is caught by #11's per-frame agent verbalization comparison — if two gameplay frames verbalize identically, the bundle is static.
 4. **"Audio plays."** Without check #7's peak ≥ 0.02 + notes ≥ 1 per slot, the slot may be silent or empty. A `play()` call alone passes #2 and #3 but fails #7.
 5. **Adjusting milestones to fit.** *Most important.* If the game can't reach WIN by the planned frame, fix the game, not the milestone. Loosening the spec to dodge a FAIL is the failure mode this gate exists to prevent. The `## Difficulty floor override` (and any other override declared in PLAN.md) **locks before the run begins**, not after a failing run.
 6. **`trap_warning: True` is a silent killer.** Tilemap (0,0) trap = stair-step pattern across the whole screen. Check #9 catches it.
@@ -334,7 +327,7 @@ If multiple checks FAIL, route to the earliest-stage owner first (e.g., #11 spri
 - **#5 reaches PLAY and stays past the lose-path window.** Hazard / collision too soft → `playthrough`.
 - **#6 GAME_OVER frame outside FPS band.** Hazards too aggressive (frame < lo) or too gentle (frame > hi) → `playthrough`.
 - **#7 audio peak == 0.0 with `slot empty` warning.** Sound slot was never assigned → `sprite-quality`.
-- **#8 max pairwise diff < 0.05.** Mid-bundle frames identical (frozen entity / camera) → `playthrough`.
+- **#11 two gameplay frames verbalize identically.** Frozen entity / frozen camera / capture replayed the same frame → `playthrough`.
 - **#9 `trap_warning: True`.** Source-bank `(0,0)` has visible pixels and tilemap uses `(0,0)` → `sprite-quality` (clear source) or `scaffolding` (remap empty cells).
 - **#11 verbalization contradicts ASSETS.md `represents:`.** Sprite drawn doesn't match the design — wrong sprite swapped in, or the sprite was implemented as a placeholder rectangle → `sprite-quality` or `asset-gen`.
 
