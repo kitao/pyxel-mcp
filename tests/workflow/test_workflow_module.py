@@ -30,35 +30,24 @@ def test_workflow_root_dev_fallback_to_repo_skill():
     assert "_content" not in root.as_posix()
 
 
-def test_list_workflow_files_includes_known_stages():
-    """list_workflow_files() should at least include the 7 pipeline stages
-    + SKILL.md + 5 knowledge files."""
-    files = workflow.list_workflow_files()
-    names = {p.name for p in files}
-    expected_subset = {
-        "SKILL.md",
-        "visual-target.md", "decomposer.md", "scaffold.md",
-        "asset-planner.md", "asset-gen.md", "task-execution.md",
-        "quality-gate.md",
-        "test-harness.md", "capture.md", "quirks.md",
-    }
-    missing = expected_subset - names
-    assert not missing, f"missing workflow files: {missing}"
-
-
-def test_list_workflow_files_includes_knowledge():
-    """knowledge/*.md should be discoverable via the recursive walk."""
+def test_list_workflow_files_includes_lean_skill_surface():
+    """list_workflow_files() exposes the lean skill plus optional strict notes."""
     files = workflow.list_workflow_files()
     rels = {f.relative_to(workflow.workflow_root()).as_posix() for f in files}
-    expected = {
-        "knowledge/pixel-art.md",
-        "knowledge/background.md",
-        "knowledge/game-feel.md",
-        "knowledge/audio.md",
-        "knowledge/patterns.md",
+    assert {"SKILL.md", "strict-mode.md", "pyxel-notes.md"} <= rels
+
+
+def test_list_workflow_files_excludes_old_pipeline_surface():
+    files = workflow.list_workflow_files()
+    rels = {f.relative_to(workflow.workflow_root()).as_posix() for f in files}
+    forbidden = {
+        "visual-target.md", "decomposer.md", "scaffold.md",
+        "asset-planner.md", "asset-gen.md", "task-execution.md",
+        "quality-gate.md", "test-harness.md", "capture.md", "quirks.md",
+        "knowledge/pixel-art.md", "knowledge/background.md",
+        "knowledge/game-feel.md", "knowledge/audio.md", "knowledge/patterns.md",
     }
-    missing = expected - rels
-    assert not missing, f"missing knowledge files: {missing}"
+    assert forbidden.isdisjoint(rels)
 
 
 def test_list_workflow_files_returns_sorted():
@@ -89,3 +78,8 @@ def test_workflow_root_raises_when_neither_path_exists(tmp_path, monkeypatch):
     monkeypatch.setattr(workflow, "_HERE", fake_here)
     with pytest.raises(RuntimeError, match="workflow content not found"):
         workflow.workflow_root()
+
+def test_superpowers_scratch_dirs_are_not_present():
+    repo_root = Path(__file__).resolve().parents[2]
+    assert not (repo_root / "superpowers").exists()
+    assert not (repo_root / "docs" / "superpowers").exists()

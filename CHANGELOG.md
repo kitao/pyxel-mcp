@@ -20,7 +20,7 @@
   `self.` prefixes and inline expressions.
 - Document absolute path requirements and `state.attrs` path syntax in the
   run snapshot schema resource.
-- Integrate the workflow skill under `skill/` and expose it through
+- Integrate the lean workflow skill under `skill/` and expose it through
   `pyxel://workflow/*` MCP resources.
 - Embed workflow content into wheels via the hatch build hook and force-include
   packaging rule; `src/pyxel_mcp/workflow/_content/` remains a generated,
@@ -28,19 +28,13 @@
 - Add `pyxel-mcp install`, `pyxel-mcp publish-skill DIR`, and `pyxel-mcp serve`.
 - Harden `publish-skill` against unsafe targets, files, and non-skill
   overwrite attempts.
-- Rewrite README and workflow guidance around the 7-stage Pyxel game workflow.
+- Rewrite README and workflow guidance around a compact observe-and-iterate
+  loop, with strict proof bundles reserved for release/audit requests.
 - Keep quality verification in the workflow skill: agents assert predicates
   directly in Python and inspect captured PNG/audio artifacts rather than
   relying on taste-scoring tools.
-- Use an 11-condition quality gate with 14 report rows after win-path check
-  #4 expands to #4a/#4b/#4c/#4d.
-- Add multi-seed, jitter-tolerance, strategy-diversity, and hazard-distribution
-  checks for win-path playability.
-- Extend lose-path verification to multi-seed runs.
-- Add proof-bundle checks for win/lose media, milestone frames, audio renders,
-  notes, and agent visual review.
-- Make the optional Stop hook a non-blocking proof-bundle presence tripwire;
-  gate-report content remains the agent's responsibility.
+- Remove the old stage pipeline, topical knowledge directory, and Stop hook
+  from the public skill surface.
 - Remove obsolete internal planning material from the public tree and ignore
   future scratch directories.
 - Replace DK-specific smoke fixtures with neutral route-navigation smoke coverage.

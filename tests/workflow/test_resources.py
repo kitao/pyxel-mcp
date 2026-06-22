@@ -42,43 +42,26 @@ def test_skill_md_at_root_uri(mcp):
     assert "pyxel://workflow" in mcp.resources
 
 
-def test_stage_files_are_registered(mcp):
-    """Each pipeline stage gets its own URI."""
+def test_lean_workflow_files_are_registered(mcp):
+    """The bundled skill exposes a small default surface plus opt-in strict notes."""
     expected = {
-        "pyxel://workflow/visual-target",
-        "pyxel://workflow/decomposer",
-        "pyxel://workflow/scaffold",
-        "pyxel://workflow/asset-planner",
-        "pyxel://workflow/asset-gen",
-        "pyxel://workflow/task-execution",
-        "pyxel://workflow/quality-gate",
-    }
-    missing = expected - set(mcp.resources)
-    assert not missing, f"missing stage URIs: {missing}"
-
-
-def test_reference_files_are_registered(mcp):
-    """The 3 reference files (test-harness, capture, quirks) are exposed."""
-    expected = {
-        "pyxel://workflow/test-harness",
-        "pyxel://workflow/capture",
-        "pyxel://workflow/quirks",
+        "pyxel://workflow",
+        "pyxel://workflow/strict-mode",
+        "pyxel://workflow/pyxel-notes",
     }
     missing = expected - set(mcp.resources)
     assert not missing
 
 
-def test_knowledge_files_are_registered_under_subpath(mcp):
-    """knowledge/pixel-art.md → pyxel://workflow/knowledge/pixel-art."""
-    expected = {
-        "pyxel://workflow/knowledge/pixel-art",
-        "pyxel://workflow/knowledge/background",
-        "pyxel://workflow/knowledge/game-feel",
-        "pyxel://workflow/knowledge/audio",
-        "pyxel://workflow/knowledge/patterns",
-    }
-    missing = expected - set(mcp.resources)
-    assert not missing
+def test_stage_and_knowledge_resources_are_not_registered(mcp):
+    """The old 7-stage harness is intentionally absent from the default resources."""
+    forbidden_fragments = (
+        "visual-target", "decomposer", "scaffold", "asset-planner",
+        "asset-gen", "task-execution", "quality-gate", "knowledge/",
+        "test-harness", "capture", "quirks",
+    )
+    offenders = [uri for uri in mcp.resources if any(f in uri for f in forbidden_fragments)]
+    assert offenders == []
 
 
 def test_readme_is_not_registered(mcp):
@@ -92,7 +75,8 @@ def test_resource_handler_returns_file_content(mcp):
     handler = mcp.resources["pyxel://workflow"]["fn"]
     content = handler()
     assert isinstance(content, str)
-    assert "SKILL" in content or "skill" in content.lower()
+    assert "# pyxel" in content
+    assert "## Default Loop" in content
 
 
 def test_each_resource_has_mime_type_text_markdown(mcp):

@@ -1,169 +1,63 @@
 ---
 name: pyxel
-description: Build complete retro games with Pyxel through a verified, gated pipeline. TRIGGER when the user wants to make a Pyxel / retro / 8-bit / pixel-art game, or asks to recreate a classic arcade title. DO NOT TRIGGER on general Python work, on existing non-Pyxel projects, or when a different game engine (Pygame, Godot, Unity) is mentioned.
+description: Use when the user asks to make, modify, or verify a Pyxel game or retro/pixel-art game in Python. Do not use for non-Pyxel engines or general Python work.
 license: MIT
 compatibility: "Requires pyxel-mcp >= 1.0.0, Pyxel >= 2.9.6, and Python >= 3.10."
 metadata:
   version: "1.0.0"
 ---
 
-# pyxel — Retro Game Production Harness
+# pyxel
 
-Build playable, clearable, recognizable-sprite Pyxel games via a phased pipeline that prevents shortcut "done" declarations. Every stage gates the next; the agent cannot self-certify completion without observable artifacts.
+Build Pyxel games with the smallest workflow that can honestly prove the game works. Modern models do not need a ceremony-heavy pipeline; use pyxel-mcp to observe reality, then apply game-specific judgment.
 
-## Required runtime
+## Runtime
 
-This skill assumes `pyxel-mcp` ≥ 1.0.0 is installed and registered as an MCP server reachable at the namespace `pyxel`. The exact tool-invocation syntax depends on the host (Claude Code surfaces them as `mcp__pyxel__<tool>`, other clients differ); what matters is that the host's MCP tool list shows these names under the `pyxel` namespace:
+The host should expose the `pyxel` MCP namespace from `pyxel-mcp >= 1.0.0`. Use these tools as observation verbs, not judges:
 
-- `pyxel_info` (discovery — versions + paths + resource URIs)
-- `validate` (static analysis — 10 anti-pattern detectors including ragged hex-string rows)
-- `run` (dynamic execution — N frames, scheduled inputs, snapshots)
-- `read_palette` / `read_image` / `read_animation` / `read_tilemap` / `read_audio` (raw observation)
-- `diff_frames` (PNG pixel diff)
+- `validate` before the first run or after structural edits.
+- `run` as the primary loop: scheduled inputs plus `state`, `screen_image`, `screen_grid`, `layout`, or `video` snapshots.
+- `read_image`, `read_animation`, `read_audio`, `read_palette`, `read_tilemap`, and `diff_frames` only when the current task needs that specific observation.
+- `pyxel_info` when debugging setup or finding bundled examples/resources.
 
-Quality verification is the **agent's** responsibility, not a tool's. The 9 tools above capture observations; the agent asserts predicates directly in Python and visually inspects captured PNGs. The quality gate (`quality-gate.md`) lays out the stop conditions the agent runs before declaring done.
+If pyxel-mcp is missing, ask the user to run `uvx pyxel-mcp install` and register the printed MCP config.
 
-If the namespace is missing, the user can get the install snippet by running:
+## Default Loop
 
-```bash
-uvx pyxel-mcp install
-```
+1. Pick the smallest playable scope that satisfies the user's request. Ask only for missing constraints that materially change the game.
+2. Build a complete first slice: title or start state, controls, one objective, one failure/retry path when the genre needs it.
+3. Run `validate`. Fix syntax and Pyxel footguns before dynamic runs.
+4. Run the game headlessly with `run`; capture at least one `state` snapshot and one `screen_image` on the path being verified.
+5. Inspect the captured PNG yourself. State values prove mechanics; pixels prove what the player actually sees.
+6. Iterate on observed defects. Do not create PLAN/STRUCTURE/ASSETS/MEMORY files unless the project is large enough that they reduce confusion.
+7. Hand off with controls, changed files, and exact verification commands/results.
 
-The skill cannot proceed without these tools. Bail with a clear message if Claude Code's permission prompt for `uvx` is denied.
+## Minimum Verification
 
-## Pipeline
+Every game needs:
 
-```
-User request: "make a Pyxel game ..."
-        |
-        +-- PLAN.md exists? (Resume Detection — see below)
-        |     |
-        |     +-- yes: read PLAN.md / STRUCTURE.md / MEMORY.md / ASSETS.md, jump to Stage 6
-        |     +-- no: continue
-        |
-        +-- Stage 1  visual-target  -> ASSETS.md "Art direction" + STRUCTURE.md "Vision"
-        +-- Stage 2  decomposer     -> PLAN.md (Risk Tasks + Main Build + Win/Lose milestones)
-        +-- Stage 3  scaffold       -> STRUCTURE.md complete + skeleton main.py + .pyxel-skill/ marker
-        +-- Stage 4  asset-planner  -> ASSETS.md sprite manifest
-        +-- Stage 5  asset-gen      -> _build_assets() populated, per-sprite verified
-        |
-        +-- Show user a concise plan summary (risk tasks if any, main build scope)
-        |
-        +-- Stage 6  task-execution
-        |     +-- Risk Slice: implement each PLAN.md risk task in isolation, verify, commit
-        |     +-- Main Build: implement remainder, verify, commit
-        |     +-- (calls test-harness.md and capture.md as references when needed)
-        |
-        +-- Stage 7  quality-gate   -> flat stop-conditions list; FAIL -> loop back to phase that owns the failure
-        |
-        +-- Proof bundle present at screenshots/result/<N>/
-        +-- Pre-handoff agent visual review: Read each key frame PNG, verbalize, compare to PLAN.md milestones (capture.md)
-        +-- Stop hook fires (non-blocking presence tripwire for the proof bundle)
-        +-- Summary to user
-```
+- `validate` clean.
+- A smoke `run` that reaches the intended frame count.
+- At least one captured frame inspected visually.
+- One task-specific predicate checked from `state` snapshots.
 
-Each stage file is read **only when entering that stage** (JIT loading). Reference files (`quirks.md`, `test-harness.md`, `capture.md`, and any `knowledge/*`) are loaded on demand from within stage files, not eagerly.
+Add only genre-relevant checks:
 
-## Capabilities
+- Puzzle: solvable path, invalid move rejection, reset/undo if present.
+- Platformer/action: win/fail path, collision consequence, input timing tolerance where precision matters.
+- Shooter/runner: spawn determinism, projectile/hazard consequence, no long static dead time.
+- Asset-heavy work: `read_image`/`read_animation` plus visual inspection of sprites.
+- Audio work: `read_audio(script=..., target={"sound": N}, output_path=...)`, non-empty notes, audible peak.
 
-| File | Purpose | When to read |
-|------|---------|--------------|
-| `visual-target.md` | Stage 1: art direction + Vision section | Pipeline start (no PLAN.md) |
-| `decomposer.md` | Stage 2: PLAN.md authoring | After Stage 1 |
-| `scaffold.md` | Stage 3: STRUCTURE.md + skeleton + marker | After Stage 2 |
-| `asset-planner.md` | Stage 4: ASSETS.md sprite manifest | After Stage 3 |
-| `asset-gen.md` | Stage 5: hex-string sprite implementation + verify | After Stage 4 |
-| `task-execution.md` | Stage 6: gameplay implementation loop | After Stage 5 (or on resume) |
-| `quality-gate.md` | Stage 7: stop-conditions + PASS/FAIL report | At end of Stage 6 |
+## When to Escalate
 
-### Phase names ↔ stage files
+Read `strict-mode.md` only when the user asks for release-quality evidence, a proof bundle, a long multi-session build, or an adversarial audit. Otherwise keep the loop light.
 
-The quality gate's `gate-report.json` writes abstract phase names in `fail_route` so the artifact stays stable across stage-file renames. Use this table to route a FAIL to the right file:
+Read `pyxel-notes.md` when Pyxel behavior is surprising or when implementing input, drawing, sprites, audio, tilemaps, or deterministic replays.
 
-| Abstract phase    | Stage file          |
-|-------------------|---------------------|
-| `visual-design`   | `visual-target.md`  |
-| `spec`            | `decomposer.md`     |
-| `scaffolding`     | `scaffold.md`       |
-| `asset-planning`  | `asset-planner.md`  |
-| `sprite-quality`  | `asset-gen.md`      |
-| `playthrough`     | `task-execution.md` |
-| `bundle`          | `capture.md`        |
+## Boundaries
 
-### Reference and knowledge files
-
-Loaded on demand from stage files (not eagerly at skill-activation time):
-
-| File | Purpose | Read from |
-|------|---------|-----------|
-| `quirks.md` | Pyxel API gotchas | When Pyxel behaves unexpectedly |
-| `test-harness.md` | Milestone playthrough verification | Stage 6 |
-| `capture.md` | Proof bundle production | Stages 6 + 7 |
-| `knowledge/pixel-art.md` | Sprite + palette + colour hierarchy | Stages 4, 5, 7 |
-| `knowledge/background.md` | Background + parallax + screen layout | Stages 1, 3, 7 |
-| `knowledge/game-feel.md` | Physics + jumps + hitboxes + camera + shake | Stage 6 |
-| `knowledge/audio.md` | SE cookbook + MML + channel discipline | Stages 3, 6 |
-| `knowledge/patterns.md` | Title screen, scene SM, level / enemy, animation timing | Stages 3, 6 |
-
-## Persistent state
-
-Four files at project root, written across stages, read on resume:
-
-| File | First written by | Purpose |
-|------|------------------|---------|
-| `PLAN.md` | Stage 2 | Risk Tasks (Approach + Verify) + Main Build modules + Win/Lose milestone tables |
-| `STRUCTURE.md` | Stage 3 | Architecture: modules, scene state machine, tuning constants, Vision (from Stage 1) |
-| `ASSETS.md` | Stage 1 (Art direction line) → Stage 4 (sprite manifest) | Art direction + sprite manifest |
-| `MEMORY.md` | Stage 6+ | Discoveries, gotchas, what worked / didn't |
-
-If the conversation grows long, summarize relevant state into these files and continue from artifacts instead of conversational memory.
-
-## Resume Detection
-
-`ASSETS.md` is touched by **both** Stage 1 (writes the `**Art direction:**` line) and Stage 4 (appends the sprite manifest with `## Sprites` / `## Player` / etc. headings). Resume must inspect content, not just existence:
-
-On entry, check (in order):
-
-1. `PLAN.md` exists at project root → resume mode. Read PLAN / STRUCTURE / MEMORY / ASSETS, route to Stage 6 unless `screenshots/result/<latest>/gate-report.json` shows incomplete earlier stages.
-
-2. `ASSETS.md` exists but `PLAN.md` does not:
-   - If `ASSETS.md` contains any sprite-manifest heading (`## Player`, `## Sprites`, `## Hazard`, etc.) → re-enter Stage 2 (Stage 4 was started without Stage 2; reconcile: PLAN.md milestones must reference assets actually planned).
-   - Else (only `**Art direction:**` line) → re-enter Stage 2.
-
-3. `STRUCTURE.md` exists but `PLAN.md` and `ASSETS.md` do not → unusual. Treat as corrupted state; ask the user whether to discard and restart.
-
-4. None exist → fresh pipeline, start at Stage 1.
-
-## Anti-shortcut rules
-
-These are the cheats this harness exists to catch. Do not commit any of them.
-
-1. **Visual primacy.** When code says X happened but a captured frame shows Y, trust the capture.
-2. **Trust media over code.** A passing `validate` and a non-crashing `run` only certify the script does not crash. They do not certify gameplay.
-3. **No asset fallback.** A solid rectangle in place of a declared sprite means asset generation was skipped. Use Pyxel's drawing primitives intentionally, but do not pass off placeholders as finished art.
-4. **Bundle integrity.** A `screenshots/result/<N>/` bundle whose first 3 seconds are correct and the rest is static is FAIL, not partial pass.
-5. **Bias toward failure.** If behavior is not clearly visible in the capture, treat as not-done. Hidden or inferred behavior does not count.
-6. **Closed-loop input only.** Open-loop scripted input drifts past ~200 frames. Issue `run` calls in segments per Pattern C (cumulative-replay), reading observed `state` snapshots between segments and recomputing the next input schedule from the actual position.
-7. **No "looks fine".** Every verify is a specific Python predicate the agent writes against an observed value, not a vibe check. No tool wraps the predicate; you assert it directly against `result["snapshots"]` values.
-8. **No bundle, no done.** A `screenshots/result/<N>/` directory containing win-path.gif, lose-path.gif, frames, audio WAVs is the precondition for declaring "done". A green gate report without a bundle is FAIL.
-9. **No user-handoff without agent visual review.** Before reporting "done" to the user, agent (you) must inspect every key frame in the proof bundle, verbalize observations in 1–2 sentences each, and confirm against PLAN.md milestones. A passing gate is necessary but not sufficient; tool checks certify mechanics, while visual review certifies recognizability and playability. See `capture.md` "Pre-handoff agent review".
-
-## Quality gate is the contract
-
-Done is whatever `quality-gate.md`'s 11 stop conditions say is done. The agent cannot skip ahead, cannot self-certify, and cannot claim "done" with unaddressed FAILs. Re-enter whichever phase the FAIL points to, remediate, re-run the gate.
-
-The Stop hook (`hooks/stop_check_bundle.py`) fires at session boundary as a non-blocking tripwire. It surfaces missing bundles to the user — it does not replace the agent running the gate.
-
-## What is NOT this skill's job
-
-- Generic Python work, library development, non-game scripts.
-- Non-Pyxel game engines (Godot, Unity, Pygame).
-- Pure pyxel-mcp connector usage. If a user only needs verification tools without the harness, they should invoke `pyxel-mcp` directly without this skill.
-
-## Reference
-
-- Pyxel API: fetch via `pyxel://api-reference` MCP resource.
-- Pyxel examples: `pyxel://examples/<name>` MCP resources (e.g., `02_jump_game`, `09_shooter`).
-- Pyxel default palette: `pyxel://palette/default` MCP resource.
-- `run` snapshot schema: `pyxel://run-snapshots-schema` MCP resource. Read before constructing complex `run` snapshot lists.
-- pyxel-mcp tool catalog: see its loaded `instructions`.
+- Do not invent universal quality scores or `judge_*` behavior.
+- Do not require proof bundles for small games.
+- Do not keep a broken visual result because the code state passed.
+- Do not use placeholder rectangles for declared sprites unless the design explicitly calls for primitive geometry.

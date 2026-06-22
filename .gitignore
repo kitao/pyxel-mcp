@@ -10,5 +10,4 @@ uv.lock
 superpowers/
 docs/superpowers/
 tests/fixtures/images/*.png
-skill/hooks/__pycache__/
 src/pyxel_mcp/workflow/_content/

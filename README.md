@@ -1,16 +1,18 @@
 # pyxel-mcp
 
-MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for Python. Gives AI agents the verbs to **run and observe** Pyxel programs without a window — headless, deterministic, and scriptable. Includes an optional workflow skill for agents that need a full game-production loop.
+MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for Python. It gives AI agents a compact set of verbs to run and observe Pyxel programs without a window: headless, deterministic, and scriptable.
+
+The server is deliberately an observation adapter. It does not judge whether a game is good. Agents use the returned state, pixels, audio, docs, and diffs to make task-specific decisions.
 
 ## Why this exists
 
-LLM agents writing Pyxel code without verification produce shortcut games: placeholder rectangles, stalled play loops, missing assets, scripts that compile but render black. pyxel-mcp is the verb library that lets the agent **see** what its code actually does — and the workflow skill is the recipe that keeps it honest from concept to playable bundle.
+LLM agents writing Pyxel code without feedback often stop at "the script runs". pyxel-mcp closes that loop:
 
-- **Headless + fast-forward.** 600-frame run < 1 second. Pyxel's internal fps is overridden so `flip()` doesn't pace real-time.
-- **Subprocess isolation.** Each tool call is a fresh Python subprocess. No leaked Pyxel state; deterministic with `random_seed=`.
-- **Structured output.** Every tool returns JSON with a uniform `ok` / error shape — agents chain calls predicating on observed values, not stdout strings.
-- **Pyxel footguns caught structurally.** (0,0) tilemap trap, draw-without-cls ghost trails, palette animation in `update`, run-outside-init — flagged by `validate` and `read_*`, not by squinting at screenshots.
-- **Quality is the agent's responsibility, not a tool's.** No `judge_*` tools and no universal quality thresholds — the agent runs the 9 observation tools, asserts task-specific predicates against state snapshots, and visually reviews captured PNGs before claiming a game is done.
+- **Headless runs.** Drive frame counts and scheduled inputs without opening a window.
+- **Subprocess isolation.** Each tool call starts fresh; Pyxel state cannot leak between calls.
+- **Structured output.** Tools return JSON with uniform `ok` / `errors` fields.
+- **Pyxel footguns.** `validate` and resource readers expose common mistakes such as missing `cls`, missing `colkey`, tilemap `(0, 0)` traps, and ragged image rows.
+- **No universal quality score.** The agent writes the predicates that matter for the current game and visually inspects captured PNGs.
 
 ## Install
 
@@ -22,11 +24,11 @@ uvx pyxel-mcp install
 
 Paste the printed JSON into your client's MCP config:
 
-- **Claude Code**: `~/.claude/.mcp.json` (or per-project `.mcp.json`)
+- **Claude Code**: `~/.claude/.mcp.json` or per-project `.mcp.json`
 - **Cursor**: `~/.cursor/mcp.json`
 - **Codex CLI**: `~/.codex/mcp.json`
 
-The snippet itself:
+Snippet:
 
 ```json
 {
@@ -39,92 +41,80 @@ The snippet itself:
 }
 ```
 
-Restart your client. On startup the server logs one line to stderr (visible in your client's logs) so you can confirm it's loaded:
+Restart your client. The server logs a startup line to stderr so you can confirm it loaded:
 
+```text
+[pyxel-mcp] starting - 9 tools, workflow=/path/to/skill
 ```
-[pyxel-mcp] starting — 9 tools, workflow=/path/to/skill
-```
 
-Pyxel ≥ 2.9.6 is fetched as a transitive dependency.
+Pyxel >= 2.9.6 is installed as a dependency.
 
-### Optional: publish the workflow skill (Layer 3)
+## Optional skill
 
-The MCP server already exposes the workflow content as `pyxel://workflow/*` resources. To **also** install it as a host-native skill (Claude Code skills, etc.) so it activates automatically on Pyxel-related prompts:
+The package also ships a small Pyxel workflow skill. Use it when you want host-native skill activation instead of reading MCP resources manually:
 
 ```bash
 uvx pyxel-mcp publish-skill ~/.claude/skills/pyxel
 ```
 
-Restart your client; the skill activates on phrases like "make a Pyxel game", "build a retro shooter", or "create a pixel-art platformer in Pyxel".
+The same content is available as MCP resources:
 
-## First use
+- `pyxel://workflow` - skill entry point.
+- `pyxel://workflow/strict-mode` - opt-in release/audit evidence.
+- `pyxel://workflow/pyxel-notes` - concise Pyxel gotchas.
 
-Three prompts that exercise the full pipeline (try them in order; each later one builds on the last):
+## Tools
 
-1. **Discovery / smoke test** — "What tools does pyxel-mcp expose? Run a tiny Pyxel script and screenshot frame 30."
-2. **Asset workflow** — "Design a 16x16 player sprite for a platformer; render it; show me the bank pixels and contrast warnings."
-3. **End-to-end (skill activates)** — "Make a compact Pyxel platformer. Walk the full visual-target → quality-gate pipeline."
-
-Without the skill installed, prompt 3 still works but the agent has no enforced playthrough / asset / bundle gate — outputs degrade to "compiles cleanly" rather than "playable + clearable". `publish-skill` is the difference between verbs and a workflow.
-
-## Tools (9 observation tools)
-
-Run the script, read raw Pyxel state, diff frames. Each call is a fresh subprocess.
-
-| Tool | What it returns |
+| Tool | Purpose |
 |---|---|
-| `run` | Drives N frames headless. Snapshots: `screen_image`, `screen_grid`, `state`, `layout`, `video`. Inputs schedule with `buttons`, `axes`, and `mouse_pos`. `ASSERT` parsing. `random_seed` for determinism. |
-| `validate` | Static analysis: syntax + 10 anti-pattern detectors (`cls_missing`, `palette_animation`, `tilemap_zero_zero`, `update_in_draw`, `iter_modify`, `ragged_image_set`, …). |
-| `pyxel_info` | Versions, example paths, resource URIs. |
-| `read_palette` | `pyxel.colors` analysis: 3-layer hierarchy (bg/env/interactive), WCAG contrast warnings filtered to **co-located** pairs only. |
-| `read_image` | Image-bank region pixels + `color_count`, `fill_ratio`, `symmetry`, `edge_density`. Optional PNG render. |
-| `read_animation` | Cross-region Jaccard / per-pair diff for paired sprite frames. |
-| `read_tilemap` | Tilemap usage map + (0,0)-tile trap detection. |
-| `read_audio` | Render `pyxel.sounds[N]` / `pyxel.musics[N]` to WAV; return `notes`, `peak_amplitude`, `warnings`. |
-| `diff_frames` | Pixel-wise diff of two PNGs: `identical`, `ratio`, bounding box. |
+| `run` | Drive N frames headlessly. Supports inputs plus `screen_image`, `screen_grid`, `state`, `layout`, and `video` snapshots. |
+| `validate` | Syntax and common Pyxel anti-pattern checks. |
+| `pyxel_info` | Version, path, example, and resource discovery. |
+| `read_palette` | Palette state, used indices, hierarchy hints, and contrast warnings. |
+| `read_image` | Image-bank region pixels and optional rendered PNG. |
+| `read_animation` | Adjacent sprite-frame consistency and per-pair diffs. |
+| `read_tilemap` | Tile usage, non-empty region, and `(0, 0)` trap warning. |
+| `read_audio` | Render a sound or music target to WAV and return duration, peak, notes, warnings. |
+| `diff_frames` | Pixel-wise diff between two PNG files. |
 
-## Quality verification belongs to the agent
+## Minimal loop
 
-No `judge_*` tools and no engine-wide taste scores. The 9 tools above capture observations; the agent decides whether each observation satisfies the current game's intent by writing predicates against snapshot values and by visually reading captured PNGs. The workflow skill (`pyxel://workflow`) provides a production loop for agents that need one, but the MCP server remains an observation adapter.
+1. Run `validate` before the first dynamic run.
+2. Use `run` with a `state` snapshot and a `screen_image` at the frame being verified.
+3. Inspect the captured PNG yourself; pixels are the player-facing truth.
+4. Add `read_*` or `diff_frames` only when the task needs that specific observation.
+5. Keep proof bundles and long reports for release/audit requests, not for every small game.
 
-## Workflow skill and resources
+## Resources
 
-The workflow skill ships inside this package. Its 7-stage pipeline (visual-target → decomposer → scaffold → asset-planner → asset-gen → task-execution → quality-gate) plus reference and knowledge files are exposed two ways:
-
-- **MCP resource channel** — `pyxel://workflow` (entry: SKILL.md), `pyxel://workflow/<stage>`, `pyxel://workflow/knowledge/<topic>`. Read directly with `@pyxel:workflow` style references in clients that surface MCP resources.
-- **Host skill channel** — `uvx pyxel-mcp publish-skill <dir>` deploys the same content into the host's skill system so it activates from natural-language triggers.
-
-Other resources (also under `pyxel://`):
-
-- `pyxel://run-snapshots-schema` — Full grammar for `run`'s `snapshots` parameter (5 kinds × multi-frame syntax).
-- `pyxel://api-reference`, `pyxel://user-guide`, `pyxel://mml-commands`, `pyxel://pyxres-format` — official Pyxel docs (24h cache).
-- `pyxel://anti-patterns` — Categorised reference for `validate` issue codes.
-- `pyxel://palette/default` — 16-color default palette table with hex/RGB/use hints.
-- `pyxel://examples/<name>` — Pyxel's bundled example scripts (`02_jump_game`, `09_shooter`, …).
-
-In Claude Code, reference any of them with `@pyxel:run-snapshots-schema`, `@pyxel:workflow`, `@pyxel:workflow/quality-gate`, etc.
+- `pyxel://run-snapshots-schema` - full grammar for `run.snapshots`.
+- `pyxel://anti-patterns` - `validate` issue catalog.
+- `pyxel://workflow` - bundled lean skill.
+- `pyxel://api-reference`, `pyxel://user-guide`, `pyxel://mml-commands`, `pyxel://pyxres-format` - Pyxel docs.
+- `pyxel://palette/default` - default palette table.
+- `pyxel://examples/<name>` - bundled Pyxel examples.
 
 ## Update
 
-`uvx` caches the package; force a refresh by passing the cache flag:
+`uvx` caches packages. Force a refresh with:
 
 ```bash
 uvx --refresh-package pyxel-mcp pyxel-mcp install
 ```
 
-After upgrading, re-run `publish-skill` if you have the host-skill channel installed — the workflow content version is pinned to the server version it shipped with.
+After upgrading, re-run `publish-skill` if you installed the host-native skill.
 
 ## Troubleshooting
 
-**Tools don't appear in the client.** Confirm the server started: look for `[pyxel-mcp] starting — 9 tools` in your client's MCP server logs. If absent, the snippet wasn't picked up — re-check the path you pasted into. If present but tools are missing, restart the client (some clients cache the tool list across config edits).
+**Tools do not appear.** Look for `[pyxel-mcp] starting - 9 tools` in client logs, then restart the client if the config changed.
 
-**Skill doesn't activate on prompts.** The skill must be in the host's skill directory and the host must be restarted. Verify with `ls ~/.claude/skills/pyxel/SKILL.md`. If absent, run `uvx pyxel-mcp publish-skill ~/.claude/skills/pyxel`.
+**The skill does not activate.** Verify `~/.claude/skills/pyxel/SKILL.md` exists and restart the host.
 
-**Pyxel script crashes on `pyxel.init()`.** The harness already wraps `init()` in headless mode; user scripts should call it once, in `App.__init__`. Calling it twice in the same process raises — but each tool call is its own subprocess, so this only bites when a custom test fixture re-imports the user module.
+**A script crashes on `pyxel.init()`.** User scripts should call `pyxel.init()` once. Tool calls are isolated subprocesses, so repeated runs should go through pyxel-mcp rather than re-importing a script in the same process.
 
-**`validate` reports `tilemap_zero_zero` / `cls_missing` / etc. — what does it mean?** Read `@pyxel:anti-patterns` for the catalog (severity, rationale, canonical fix per category).
+**A validation issue is unfamiliar.** Read `pyxel://anti-patterns`.
 
-**Diagnostic line says `workflow=<unavailable: …>`.** The wheel was installed without the workflow build artifact (rare — usually means a pip-from-sdist install with the build hook disabled). Server still works for the 9 tools; only `pyxel://workflow/*` resources and `publish-skill` require the workflow content. Reinstall via `uvx pyxel-mcp` to pick up the wheel.
+**Workflow resource is unavailable.** Reinstall through the wheel path, for example `uvx --refresh-package pyxel-mcp pyxel-mcp install`.
 
 ## MCP Registry
 

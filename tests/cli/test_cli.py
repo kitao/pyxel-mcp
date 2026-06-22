@@ -68,7 +68,9 @@ def test_publish_skill_copies_workflow_files(tmp_path):
     rc = cli.main(["publish-skill", str(target)])
     assert rc == 0
     assert (target / "SKILL.md").is_file()
-    assert (target / "knowledge" / "pixel-art.md").is_file()
+    assert (target / "strict-mode.md").is_file()
+    assert (target / "pyxel-notes.md").is_file()
+    assert not (target / "knowledge").exists()
 
 
 def test_publish_skill_refuses_existing_target_without_force(tmp_path, capsys):

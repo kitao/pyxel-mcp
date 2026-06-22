@@ -76,7 +76,8 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
             "run_snapshots_schema": "pyxel://run-snapshots-schema",
             "anti_patterns": "pyxel://anti-patterns",
             "workflow": "pyxel://workflow",
-            "workflow_stage": "pyxel://workflow/<stage-or-reference>",
+            "workflow_strict_mode": "pyxel://workflow/strict-mode",
+            "workflow_pyxel_notes": "pyxel://workflow/pyxel-notes",
         },
         "errors": errors,
     }
