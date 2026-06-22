@@ -8,9 +8,9 @@ def test_minimal_script_is_ok():
     assert result["issues"] == []
 
 
-def test_syntax_error_reported():
+def test_syntax_error_reported(tmp_path):
     """A script with bad syntax should produce a 'syntax' category error."""
-    bad = SCRIPTS / "syntax_error.py"
+    bad = tmp_path / "syntax_error.py"
     bad.write_text("def foo(:\n    pass\n")
     try:
         result = validate_run({"script": str(bad)})
@@ -39,8 +39,8 @@ def test_tilemap_zero_zero_detected():
 
 
 def test_ragged_image_set_detected():
-    """β-DK validation surfaced: pyxel.images[N].set() with hex-string rows of
-    differing length raises a runtime error. Detector should warn statically."""
+    """pyxel.images[N].set() with hex-string rows of differing length raises a
+    runtime error. Detector should warn statically."""
     result = validate_run({"script": str(SCRIPTS / "anti_ragged_image_set.py")})
     cats = [i["category"] for i in result["issues"]]
     assert "anti_pattern.ragged_image_set" in cats
@@ -93,9 +93,9 @@ def test_image_set_with_variable_rows_not_flagged(tmp_path):
     assert "anti_pattern.ragged_image_set" not in cats
 
 
-def test_issues_sorted_by_line_then_severity():
+def test_issues_sorted_by_line_then_severity(tmp_path):
     """Per spec §8.1, issues sorted by line ascending, then severity error > warning > info."""
-    src = SCRIPTS / "mixed_issues.py"
+    src = tmp_path / "mixed_issues.py"
     src.write_text(
         "import pyxel\n"
         "class App:\n"
@@ -121,11 +121,11 @@ def test_missing_script_returns_validation_error():
     assert any(e["phase"] == "validation" for e in result["errors"])
 
 
-def test_nested_class_in_draw_not_flagged():
+def test_nested_class_in_draw_not_flagged(tmp_path):
     """`self.X = ...` inside a class nested within draw() refers to the inner class's
     self, not the outer App.self — must not trigger update_in_draw.
     """
-    src = SCRIPTS / "draw_with_nested_class.py"
+    src = tmp_path / "draw_with_nested_class.py"
     src.write_text(
         "import pyxel\n"
         "class App:\n"
@@ -147,12 +147,12 @@ def test_nested_class_in_draw_not_flagged():
         src.unlink()
 
 
-def test_non_utf8_script_returns_validation_error():
+def test_non_utf8_script_returns_validation_error(tmp_path):
     """Non-UTF8 bytes in the script should surface as a validation-phase error
     (with path populated), not as a script_import-phase error from main.py's
     catch-all (which would lose the path field).
     """
-    bad = SCRIPTS / "non_utf8.py"
+    bad = tmp_path / "non_utf8.py"
     bad.write_bytes(b"\xff\xfe# bad bytes\n")
     try:
         result = validate_run({"script": str(bad)})
@@ -175,9 +175,9 @@ def test_assets_in_update_detected():
     assert "anti_pattern.assets_in_update" in cats
 
 
-def test_assets_in_draw_detected():
+def test_assets_in_draw_detected(tmp_path):
     """pyxel.images[N].set inside draw() is also flagged."""
-    src = SCRIPTS / "_assets_in_draw_tmp.py"
+    src = tmp_path / "_assets_in_draw_tmp.py"
     src.write_text(
         "import pyxel\n"
         "class App:\n"
@@ -197,9 +197,9 @@ def test_assets_in_draw_detected():
         src.unlink()
 
 
-def test_assets_in_init_not_flagged():
+def test_assets_in_init_not_flagged(tmp_path):
     """pyxel.images[N].set inside __init__ is the correct place — must not fire."""
-    src = SCRIPTS / "_assets_in_init_tmp.py"
+    src = tmp_path / "_assets_in_init_tmp.py"
     src.write_text(
         "import pyxel\n"
         "class App:\n"
@@ -224,9 +224,9 @@ def test_iter_modify_detected():
     assert "anti_pattern.iter_modify" in cats
 
 
-def test_iter_modify_different_list_not_flagged():
+def test_iter_modify_different_list_not_flagged(tmp_path):
     """`for x in lst_a: lst_b.remove(x)` mutates a different list — must not fire."""
-    src = SCRIPTS / "_iter_modify_diff_tmp.py"
+    src = tmp_path / "_iter_modify_diff_tmp.py"
     src.write_text(
         "import pyxel\n"
         "class App:\n"
@@ -248,9 +248,9 @@ def test_iter_modify_different_list_not_flagged():
         src.unlink()
 
 
-def test_iter_modify_nested_for_no_duplicate():
+def test_iter_modify_nested_for_no_duplicate(tmp_path):
     """Nested for over the same list shouldn't double-report a single mutation."""
-    src = SCRIPTS / "_iter_modify_nested_tmp.py"
+    src = tmp_path / "_iter_modify_nested_tmp.py"
     src.write_text(
         "import pyxel\n"
         "class App:\n"
@@ -276,9 +276,9 @@ def test_iter_modify_nested_for_no_duplicate():
         src.unlink()
 
 
-def test_iter_range_not_flagged():
+def test_iter_range_not_flagged(tmp_path):
     """Iterating over range() is safe -- no false positive for iter_modify."""
-    src = SCRIPTS / "_iter_range_tmp.py"
+    src = tmp_path / "_iter_range_tmp.py"
     src.write_text(
         "import pyxel\n"
         "class App:\n"
@@ -306,9 +306,9 @@ def test_btn_one_shot_detected():
     assert "anti_pattern.btn_one_shot" in cats
 
 
-def test_btnp_not_flagged():
+def test_btnp_not_flagged(tmp_path):
     """pyxel.btnp() is the correct API for one-shot actions -- must not be flagged."""
-    src = SCRIPTS / "_btnp_tmp.py"
+    src = tmp_path / "_btnp_tmp.py"
     src.write_text(
         "import pyxel\n"
         "class App:\n"
@@ -335,9 +335,9 @@ def test_palette_animation_detected():
     assert "anti_pattern.palette_animation" in cats
 
 
-def test_palette_outside_loop_not_flagged():
+def test_palette_outside_loop_not_flagged(tmp_path):
     """pyxel.colors[N] = X outside a loop (e.g., in __init__) is fine."""
-    src = SCRIPTS / "_palette_init_tmp.py"
+    src = tmp_path / "_palette_init_tmp.py"
     src.write_text(
         "import pyxel\n"
         "class App:\n"
@@ -363,9 +363,9 @@ def test_cls_missing_detected():
     assert "anti_pattern.cls_missing" in cats
 
 
-def test_cls_present_not_flagged():
+def test_cls_present_not_flagged(tmp_path):
     """A draw() that calls cls() before any pixel-emitting API is clean."""
-    src = SCRIPTS / "_cls_present_tmp.py"
+    src = tmp_path / "_cls_present_tmp.py"
     src.write_text(
         "import pyxel\n"
         "class App:\n"
@@ -391,9 +391,9 @@ def test_degree_radian_mix_detected():
     assert "anti_pattern.degree_radian_mix" in cats
 
 
-def test_only_math_sin_not_flagged():
+def test_only_math_sin_not_flagged(tmp_path):
     """Using only math.sin (no pyxel.sin/cos) should not trigger degree_radian_mix."""
-    src = SCRIPTS / "_math_only_tmp.py"
+    src = tmp_path / "_math_only_tmp.py"
     src.write_text(
         "import pyxel, math\n"
         "class App:\n"

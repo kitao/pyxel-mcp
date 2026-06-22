@@ -23,6 +23,7 @@ _EXPECTED_FIXED_URIS = {
     "pyxel://palette/default",
     "pyxel://run-snapshots-schema",
     "pyxel://anti-patterns",
+    "pyxel://workflow",
 }
 
 _DOC_SLUGS = ("api-reference", "user-guide", "mml-commands", "pyxres-format")
@@ -63,6 +64,7 @@ async def test_pyxel_info_uris_are_registered():
         info["resources"]["default_palette"],
         info["resources"]["run_snapshots_schema"],
         info["resources"]["anti_patterns"],
+        info["resources"]["workflow"],
     }
     assert advertised == _EXPECTED_FIXED_URIS
 
@@ -77,9 +79,9 @@ async def test_pyxel_info_uris_are_registered():
     assert any(uri.startswith("pyxel://examples/") for uri in registered), \
         "no example resources registered"
 
-    # 8 distinct categories total: 4 docs + palette + examples + run-snapshots-schema + anti-patterns.
+    # Distinct categories: docs + palette + examples + schema + anti-patterns + workflow.
     categories = _EXPECTED_FIXED_URIS | {"pyxel://examples/<any>"}
-    assert len(categories) >= 8
+    assert len(categories) >= 9
 
 
 async def test_anti_patterns_resource_reads_nonempty():
@@ -93,12 +95,19 @@ async def test_anti_patterns_resource_reads_nonempty():
     assert "Pyxel anti-patterns" in text
     assert "Category" in text and "Severity" in text
     # Every detector category from validate.py must have a row.
-    for cat in (
-        "missing_colkey", "update_in_draw", "tilemap_zero_zero",
-        "assets_in_update", "iter_modify", "btn_one_shot",
-        "palette_animation", "cls_missing", "degree_radian_mix",
-    ):
-        assert cat in text, f"anti-patterns table is missing row for {cat!r}"
+    expected = {
+        "anti_pattern.missing_colkey", "anti_pattern.update_in_draw",
+        "anti_pattern.tilemap_zero_zero", "anti_pattern.assets_in_update",
+        "anti_pattern.iter_modify", "anti_pattern.btn_one_shot",
+        "anti_pattern.palette_animation", "anti_pattern.cls_missing",
+        "anti_pattern.degree_radian_mix", "anti_pattern.ragged_image_set",
+    }
+    categories = {
+        line.split("|")[1].strip()
+        for line in text.splitlines()
+        if line.startswith("| anti_pattern.")
+    }
+    assert categories == expected
 
 
 async def test_palette_resource_reads_nonempty():
@@ -116,6 +125,13 @@ async def test_run_snapshots_schema_resource_reads_nonempty():
     blobs = list(result)
     assert blobs and blobs[0].content
     assert "snapshot" in blobs[0].content.lower()
+
+
+async def test_workflow_resource_reads_nonempty():
+    result = await mcp.read_resource("pyxel://workflow")
+    blobs = list(result)
+    assert blobs and blobs[0].content
+    assert "pyxel" in blobs[0].content.lower()
 
 
 async def test_examples_resource_reads_nonempty():
@@ -142,3 +158,18 @@ async def test_docs_resource_reads_nonempty(slug):
         blobs = list(result)
         assert blobs and blobs[0].content
         assert "stub doc" in blobs[0].content
+
+
+@pytest.mark.parametrize("slug", _DOC_SLUGS)
+async def test_docs_resource_first_fetch_failure_returns_markdown(slug):
+    from pyxel_mcp._resources import docs as docs_mod
+
+    def _fail(url, timeout=None):
+        raise OSError("offline")
+
+    with patch("pyxel_mcp._resources.docs.urlopen", _fail):
+        docs_mod._CACHE.clear()
+        result = await mcp.read_resource(f"pyxel://{slug}")
+        blobs = list(result)
+        assert blobs and blobs[0].content
+        assert "documentation unavailable" in blobs[0].content.lower()

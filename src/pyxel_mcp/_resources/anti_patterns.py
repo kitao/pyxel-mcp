@@ -16,58 +16,64 @@ from __future__ import annotations
 # Order mirrors `_DETECTORS` in validate.py for easy cross-reference.
 _ROWS: list[tuple[str, str, str, str]] = [
     (
-        "missing_colkey",
+        "anti_pattern.missing_colkey",
         "warning",
         "pyxel.blt without colkey= renders the sprite's index-0 background as opaque pixels.",
         "Pass colkey=0 (or your transparent index) to blt(); make this the default for all sprite draws.",
     ),
     (
-        "update_in_draw",
+        "anti_pattern.update_in_draw",
         "warning",
         "Mutating self.X inside draw() couples logic to render cadence and breaks frame skip.",
         "Move the assignment to update(); draw() should be a pure function of state.",
     ),
     (
-        "tilemap_zero_zero",
+        "anti_pattern.tilemap_zero_zero",
         "warning",
         "Tilemap data referencing source tile (0,0) makes every uninitialized cell render that tile, flooding the map.",
         "Reserve source-bank (0,0) as a fully transparent 8x8 tile; route real content to (1,0) or beyond.",
     ),
     (
-        "assets_in_update",
+        "anti_pattern.assets_in_update",
         "warning",
         "Calling images[N].set/load or tilemaps[N].set inside update()/draw() reloads assets every frame.",
         "Move asset loading to __init__ or a one-shot setup helper called before pyxel.run().",
     ),
     (
-        "iter_modify",
+        "anti_pattern.iter_modify",
         "warning",
         "Calling .append/.remove/.pop/.insert/.clear/.extend on a list while iterating it skips or doubles entries.",
         "Iterate a copy (for x in lst[:]:) or collect indices to remove and apply after the loop.",
     ),
     (
-        "btn_one_shot",
+        "anti_pattern.btn_one_shot",
         "info",
         "pyxel.btn(K) re-fires every frame the key is held — wrapping pyxel.play() in btn() retriggers the SE per frame.",
         "Use pyxel.btnp(K) for one-shot triggers (sounds, scene transitions, jumps).",
     ),
     (
-        "palette_animation",
+        "anti_pattern.palette_animation",
         "warning",
         "pyxel.colors[N] = X inside a for/while loop body mutates the global palette every frame.",
         "Use pyxel.pal() for per-draw color remap, or compute the palette once outside the loop.",
     ),
     (
-        "cls_missing",
+        "anti_pattern.cls_missing",
         "warning",
         "Calling any pixel-emitting API (blt, bltm, pset, line, rect, rectb, circ, circb, tri, trib, text) before pyxel.cls() in draw() leaves last frame's pixels behind, producing ghost trails.",
         "Make pyxel.cls(BG) the first statement of draw() (only assignments, conditional return, pal/dither calls may precede it).",
     ),
     (
-        "degree_radian_mix",
+        "anti_pattern.degree_radian_mix",
         "warning",
         "math.sin/cos take radians; pyxel.sin/cos take degrees. Using both in the same module silently produces wrong angles.",
         "Pick one convention per module; if you need both, convert explicitly with math.radians/degrees at the boundary.",
+    ),
+    (
+        "anti_pattern.ragged_image_set",
+        "warning",
+        "pyxel.images[N].set() with hex-string rows of different widths can fail at runtime with misleading low-level errors.",
+        "Make every string row in the image data the same length before passing it to images[N].set().",
     ),
 ]
 

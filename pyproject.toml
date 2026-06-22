@@ -17,7 +17,7 @@ keywords = [
     "model-context-protocol",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -29,7 +29,7 @@ classifiers = [
     "Topic :: Games/Entertainment",
     "Topic :: Software Development :: Libraries",
 ]
-dependencies = ["mcp>=1.0.0,<2.0.0", "pyxel>=2.9.5", "numpy", "Pillow"]
+dependencies = ["mcp>=1.0.0,<2.0.0", "pyxel>=2.9.6", "numpy", "Pillow"]
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-asyncio"]

@@ -1,6 +1,6 @@
 # pyxel-mcp
 
-MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for Python. Gives AI agents the verbs to **run, observe, and ship** Pyxel programs end-to-end without a window — headless, deterministic, gate-able. Includes a bundled production workflow skill so the agent has a phased pipeline, not just isolated verbs.
+MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for Python. Gives AI agents the verbs to **run and observe** Pyxel programs without a window — headless, deterministic, and scriptable. Includes an optional workflow skill for agents that need a full game-production loop.
 
 ## Why this exists
 
@@ -10,7 +10,7 @@ LLM agents writing Pyxel code without verification produce shortcut games: place
 - **Subprocess isolation.** Each tool call is a fresh Python subprocess. No leaked Pyxel state; deterministic with `random_seed=`.
 - **Structured output.** Every tool returns JSON with a uniform `ok` / error shape — agents chain calls predicating on observed values, not stdout strings.
 - **Pyxel footguns caught structurally.** (0,0) tilemap trap, draw-without-cls ghost trails, palette animation in `update`, run-outside-init — flagged by `validate` and `read_*`, not by squinting at screenshots.
-- **Quality is the agent's responsibility, not a tool's.** No `judge_*` tools, no hardcoded numerical defaults — the agent runs the 9 observation tools, asserts predicates directly in Python against state snapshots, and uses `Read` on captured PNGs to verbalize against PLAN.md / ASSETS.md anchors. The workflow skill's 11-step quality gate enforces this end-to-end so "done" requires every milestone, asset, audio slot, proof bundle, and visual review to clear.
+- **Quality is the agent's responsibility, not a tool's.** No `judge_*` tools and no universal quality thresholds — the agent runs the 9 observation tools, asserts task-specific predicates against state snapshots, and visually reviews captured PNGs before claiming a game is done.
 
 ## Install
 
@@ -45,7 +45,7 @@ Restart your client. On startup the server logs one line to stderr (visible in y
 [pyxel-mcp] starting — 9 tools, workflow=/path/to/skill
 ```
 
-Pyxel ≥ 2.9.5 is fetched as a transitive dependency.
+Pyxel ≥ 2.9.6 is fetched as a transitive dependency.
 
 ### Optional: publish the workflow skill (Layer 3)
 
@@ -55,7 +55,7 @@ The MCP server already exposes the workflow content as `pyxel://workflow/*` reso
 uvx pyxel-mcp publish-skill ~/.claude/skills/pyxel
 ```
 
-Restart your client; the skill activates on phrases like "make a Pyxel game", "build a retro shooter", "remake Donkey Kong in Pyxel".
+Restart your client; the skill activates on phrases like "make a Pyxel game", "build a retro shooter", or "create a pixel-art platformer in Pyxel".
 
 ## First use
 
@@ -63,7 +63,7 @@ Three prompts that exercise the full pipeline (try them in order; each later one
 
 1. **Discovery / smoke test** — "What tools does pyxel-mcp expose? Run a tiny Pyxel script and screenshot frame 30."
 2. **Asset workflow** — "Design a 16x16 player sprite for a platformer; render it; show me the bank pixels and contrast warnings."
-3. **End-to-end (skill activates)** — "Make a Donkey-Kong-style platformer in Pyxel. Walk the full visual-target → quality-gate pipeline."
+3. **End-to-end (skill activates)** — "Make a compact Pyxel platformer. Walk the full visual-target → quality-gate pipeline."
 
 Without the skill installed, prompt 3 still works but the agent has no enforced playthrough / asset / bundle gate — outputs degrade to "compiles cleanly" rather than "playable + clearable". `publish-skill` is the difference between verbs and a workflow.
 
@@ -73,7 +73,7 @@ Run the script, read raw Pyxel state, diff frames. Each call is a fresh subproce
 
 | Tool | What it returns |
 |---|---|
-| `run` | Drives N frames headless. Snapshots: `screen_image`, `screen_grid`, `state`, `layout`, `video`. Inputs schedule (`set_btn`/`set_btnv`/`set_mouse_pos`). `ASSERT` parsing. `random_seed` for determinism. |
+| `run` | Drives N frames headless. Snapshots: `screen_image`, `screen_grid`, `state`, `layout`, `video`. Inputs schedule with `buttons`, `axes`, and `mouse_pos`. `ASSERT` parsing. `random_seed` for determinism. |
 | `validate` | Static analysis: syntax + 10 anti-pattern detectors (`cls_missing`, `palette_animation`, `tilemap_zero_zero`, `update_in_draw`, `iter_modify`, `ragged_image_set`, …). |
 | `pyxel_info` | Versions, example paths, resource URIs. |
 | `read_palette` | `pyxel.colors` analysis: 3-layer hierarchy (bg/env/interactive), WCAG contrast warnings filtered to **co-located** pairs only. |
@@ -85,9 +85,7 @@ Run the script, read raw Pyxel state, diff frames. Each call is a fresh subproce
 
 ## Quality verification belongs to the agent
 
-No `judge_*` tools, no hardcoded numerical thresholds. The 9 tools above capture observations; the agent decides whether the observation is acceptable for the current task by writing Python predicates directly against snapshot values and by reading captured PNGs with the host's `Read` tool. The workflow skill (`pyxel://workflow`) lays out the 11 stop conditions an agent runs before declaring done — see its `quality-gate.md`.
-
-This is a deliberate design choice. An earlier prototype had 8 `judge_*` tools with hardcoded `DEFAULT_CONTRACT` numerical thresholds (`min_distinct_colors`, `max_contrast_warnings`, `min_palette_consistency`, etc.). Every game type surfaced a default that fought a legitimate idiom (3-material palette ↔ contrast budget; flame-pulse ↔ palette-consistency floor; 4×4 sprite ↔ distinct-color minimum), and the tuning was unbounded. Removing the judges put the predicate where the multimodal context is — the agent — and ended the recurring tuning cycle.
+No `judge_*` tools and no engine-wide taste scores. The 9 tools above capture observations; the agent decides whether each observation satisfies the current game's intent by writing predicates against snapshot values and by visually reading captured PNGs. The workflow skill (`pyxel://workflow`) provides a production loop for agents that need one, but the MCP server remains an observation adapter.
 
 ## Workflow skill and resources
 

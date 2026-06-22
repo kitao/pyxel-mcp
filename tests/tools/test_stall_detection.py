@@ -30,6 +30,7 @@ def test_stall_detected_via_state_buffer():
         f"expected stalled, got {result['exit_status']}; "
         f"frame_count={result['frame_count']}"
     )
+    assert result["ok"] is False
     # Loop should break partway — not all 60 frames executed.
     assert result["frame_count"] < 60
 
@@ -49,6 +50,7 @@ def test_stall_detected_via_grid_buffer():
     # frozen_value stops changing at frame 30, so screen_grid (which depends
     # on frozen_value) freezes too.
     assert result["exit_status"] == "stalled"
+    assert result["ok"] is False
     assert result["frame_count"] < 60
 
 

@@ -9,8 +9,8 @@ class _AppMock:
         self.lives = 3
         self.message = "hello"
         self.player = type("P", (), {"x": 10, "y": 20})()
-        self.barrels = [type("B", (), {"x": 50, "y": 100})(),
-                        type("B", (), {"x": 60, "y": 110})()]
+        self.hazards = [type("H", (), {"x": 50, "y": 100})(),
+                        type("H", (), {"x": 60, "y": 110})()]
         self.scores = [100, 200, 300]
 
 
@@ -22,7 +22,7 @@ def test_attrs_none_returns_top_level_scalars():
     assert "message" in result["values"]
     # Composite types skipped
     assert "player" not in result["values"]
-    assert "barrels" not in result["values"]
+    assert "hazards" not in result["values"]
 
 
 def test_attrs_empty_list_returns_empty():
@@ -44,11 +44,11 @@ def test_dotted_path():
 def test_indexed_path():
     app = _AppMock()
     result = capture(
-        {"frame": 0, "kind": "state", "attrs": ["barrels[0].y", "barrels[1].x"]},
+        {"frame": 0, "kind": "state", "attrs": ["hazards[0].y", "hazards[1].x"]},
         app_instance=app, module=None,
     )
-    assert result["values"]["barrels[0].y"] == 100
-    assert result["values"]["barrels[1].x"] == 60
+    assert result["values"]["hazards[0].y"] == 100
+    assert result["values"]["hazards[1].x"] == 60
 
 
 def test_missing_attr_warning():

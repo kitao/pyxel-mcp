@@ -16,7 +16,7 @@ Drive the script through `frames` game frames. Collects snapshots
 assertions. The full result dict includes:
 
 - `ok` — boolean shortcut: `exit_status == "ok"` and no fatal errors
-- `exit_status` — `"ok"`, `"crashed"`, `"timeout"`, or `"stalled"`
+- `exit_status` — `"ok"`, `"crashed"`, `"timeout"`, `"stalled"`, or `"invalid"`
 - `snapshots` — captured snapshots, one entry per requested frame/range
 - `assertions` — `ASSERT PASS` / `ASSERT FAIL` lines parsed from stdout
 - `frame_count` — actual frame count reached (may be `< frames` on early break)
@@ -170,13 +170,15 @@ slot during gameplay.
 
 Capture a golden screenshot with `run` + `screen_image`. In subsequent runs,
 use `diff_frames` against the golden file and assert `identical: true` or
-`ratio < 0.01`.
+another task-specific predicate.
 
-Use `diff_frames` also for **dead-time detection**: capture frames spanning
-the full bundle window and compute the maximum pairwise diff. A bundle whose
-all-pairs diff is < 5% indicates a stall (frozen entity, frozen camera,
-broken state) even when the final scene reaches WIN. Alphabetical
-first-vs-mid pairs are unreliable — pick the max across all pairs.
+Use `diff_frames` as supporting evidence for **dead-time detection**, not as
+an engine-wide quality score. Capture representative gameplay frames and look
+for contradictions between expected motion and observed pixels: if the same
+sprite, hazard placement, camera, and HUD appear unchanged across gameplay
+milestones, the bundle is static even when the final state reaches WIN.
+Numerical diff thresholds are genre-dependent, so write the predicate from
+the current PLAN.md and confirm it by reading the captured PNGs.
 
 ### Multimodal frame review
 
@@ -185,8 +187,8 @@ Open them with the host's `Read` tool (Claude Code, Codex, etc.) and verbalize
 observations directly — at typical Pyxel resolutions (≤ 256×256) the
 multimodal LLM can read every pixel. This complements `read_image`
 aggregate fields (`color_count`, `fill_ratio`): aggregates certify mechanics
-("5 colors used, 40% fill"), the Read certifies recognizability ("Mario in
-red cap, mid-stride"). Both are needed for an honest pass.
+("5 colors used, 40% fill"), the Read certifies recognizability ("red-jacket
+explorer, mid-stride"). Both are needed for an honest pass.
 
 ### Multi-frame snapshot syntax
 

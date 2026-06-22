@@ -43,7 +43,7 @@ TITLE  -- press_start -->  PLAY  -- die -->  GAME_OVER  -- press_start --> TITLE
                             PLAY  -- win -->  WIN        -- press_start --> TITLE
 ```
 
-Some games add INTRO ("HOW HIGH CAN YOU GET?") between TITLE and PLAY.
+Some games add INTRO (short goal or wave preview) between TITLE and PLAY.
 
 ## STRUCTURE.md sections to add
 
@@ -55,10 +55,10 @@ After the existing `## Vision` section, append:
 - `main.py`
   - `App` class — entry point, scene dispatch, asset build.
   - `Player` class — physics, animation state, draw.
-  - `<Hazard>` class (e.g., `Barrel`) — pattern + draw.
+  - `<Hazard>` class (project-specific obstacle) — pattern + draw.
   - `<Boss>` class (if applicable) — simple state machine for spawn timer.
   - module-level constants (see Tuning).
-  - module-level layout (`PLATFORMS`, `LADDERS`).
+  - module-level layout (`WALLS`, `ROUTES`, `HAZARD_ZONES`).
 
 ## Scene state machine
 

@@ -29,10 +29,10 @@ mistakes worth flagging up front:
 
 - **Do not include `self.`**. The path is evaluated against the App
   instance directly, so write `player.x`, not `self.player.x`.
-- **No function calls or expressions**. `len(barrels)` and similar
+- **No function calls or expressions**. `len(hazards)` and similar
   derived values are not allowed in the path. Expose the value as a
-  plain attribute first (`self.n_barrels = len(self.barrels)` in
-  `update`), then read it as `n_barrels`.
+  plain attribute first (`self.n_hazards = len(self.hazards)` in
+  `update`), then read it as `n_hazards`.
 
 Both mistakes are reported in the snapshot's `warnings` list with a
 specific hint message, so they surface without having to trace silent
@@ -134,7 +134,7 @@ game logic (scores, positions, flags) without image comparison.
 {
   "kind": "state",
   "frame": <int>,
-  "attrs": ["player.x", "score", "barrels[0].y"]
+  "attrs": ["player.x", "score", "hazards[0].y"]
 }
 ```
 
@@ -159,7 +159,7 @@ game logic (scores, positions, flags) without image comparison.
 
 **Attr path syntax:**
 - Dotted: `"player.x"` resolves to `app.player.x`
-- Indexed: `"barrels[0].y"` resolves to `app.barrels[0].y`
+- Indexed: `"hazards[0].y"` resolves to `app.hazards[0].y`
 - Combinations: `"enemies[2].pos.x"` resolves to `app.enemies[2].pos.x`
 - `attrs: null` (or omit key): returns the App's top-level scalar primitives only
   (int, float, str, bool, None). Lists, dicts, and custom objects are skipped.

@@ -20,10 +20,10 @@ Pyxel's default has 3 image banks, each 256x256, storing 8-bit (palette index) p
 ```
 Image bank 0 layout (256x256):
   (0,   0)–(95,  15):   player walk cycle (6 × 16x16)
-  (96,  0)–(127, 15):   hammer states (2 × 16x16)
-  (128, 0)–(159, 31):   boss (32x32)
-  (160, 0)–(175, 23):   princess (16x24)
-  (0,  32)–(31,  47):   barrel rolling (2 × 16x16)
+  (96,  0)–(127, 15):   pickup or tool states (2 × 16x16)
+  (128, 0)–(159, 31):   large enemy / boss if requested (32x32)
+  (160, 0)–(175, 23):   goal or NPC if requested (16x24)
+  (0,  32)–(31,  47):   hazard animation (2 × 16x16)
   (0,  48)–(7,   55):   score digit "0" through (72, 48)–(79, 55) digit "9"
   ...
 ```
@@ -38,14 +38,14 @@ For every named asset, write:
 ### player_walk_1
 
 - **bank/region:** 0 / (0, 0, 16, 16)
-- **represents:** "Mario in red cap and blue overalls, mid-stride, facing right. Visible: cap, eye dot, mustache silhouette, two arms (one extended), two legs (one forward)."
-- **palette:** [0 outline, 8 cap, 12 overalls, 14 skin, 15 highlight, 7 buttons]
-- **min distinct color regions:** 5 (cap / face / overalls / arms-or-legs / outline)
+- **represents:** "red-jacket explorer, mid-stride, facing right. Visible: head, eye dot, backpack shape, two arms, two separated legs."
+- **palette:** [0 outline, 8 jacket, 12 pants, 14 skin, 15 highlight, 7 backpack]
+- **min distinct color regions:** 5 (head / jacket / pants / arms-or-legs / outline)
 - **silhouette:** non-transparent pixels < 95% of 16x16 box, > 15% of box
 - **frame relations:** paired with `player_walk_2`; paired-frame diff must be 5–50% of pixels
 ```
 
-The `represents:` field is the asset-gen identity contract. After implementation, a stranger shown the rendered sprite without the label must be able to identify it as "Mario walking". The quality gate (#4) tests against this constraint via `read_image` (color count, fill ratio) and `read_animation` (per-frame diff via `region_count` + `direction` matching the bank layout).
+The `represents:` field is the asset-gen identity contract. After implementation, a stranger shown the rendered sprite without the label must be able to identify the subject and action. Stage 5 verifies each sprite with `read_image` (color count, fill ratio, rendered PNG) and animation pairs with `read_animation` (per-frame diff via `region_count` + `direction` matching the bank layout). The final gate re-checks recognizability in check #11 by reading the proof-bundle frames against ASSETS.md.
 
 ## Palette discipline per asset
 
@@ -58,14 +58,14 @@ Each sprite uses 3–6 colors from the global palette. Patterns from `knowledge/
 | Blue creature   | 1 (navy)  | 6 (light blue) | 12 (cyan) |
 | Red creature    | 2 (purple)| 8 (red)    | 9 (orange) |
 | Metal           | 5 (dark blue) | 13 (gray) | 7 (white) |
-| Wood / barrel   | 4 (brown) | 9 (orange) | 15 (peach) |
+| Wood            | 4 (brown) | 9 (orange) | 15 (peach) |
 | Foliage         | 3 (green) | 11 (lime)  | 7 (white) |
 
 Single-color sprites ("a brown rectangle") FAIL the identity contract.
 
 **Palette budget — runtime, not pre-loop.** `read_palette` only sees colours that appear in **image-bank pixels** at the pre-loop checkpoint. It does not see colours emitted by `pyxel.text`, `pyxel.rect`, `pyxel.line`, or any drawing call inside `update`/`draw`. Many games use 3-4 colours in `_build_assets()` for sprites and another 5-7 only via runtime drawing (HUD, scoreboards, scene overlays). The "10-14 of 16 colours" budget recorded in STRUCTURE.md is the **runtime** total, so verify it against a `screen_grid` snapshot from a representative gameplay frame, not against `read_palette`'s `used_indices` alone.
 
-Practical recipe at quality-gate time (#8 "Palette hierarchy"):
+Practical recipe during final visual review:
 
 ```python
 # 1. Pre-loop palette state — covers sprite-bank colours.
@@ -88,7 +88,7 @@ The agent has to construct the merged `used_indices` set explicitly at gate time
 
 ## Required asset categories
 
-For an arcade-style platformer like Donkey Kong, minimum manifest:
+Choose categories from the current game's PLAN.md. Do not force a single-genre manifest onto shooters, puzzlers, runners, or toys.
 
 ```markdown
 ## Player
@@ -96,44 +96,38 @@ For an arcade-style platformer like Donkey Kong, minimum manifest:
 - player_idle (16x16)
 - player_walk_1 (16x16)
 - player_walk_2 (16x16)
-- player_jump (16x16)
-- player_climb_1 (16x16)
-- player_climb_2 (16x16)
-- player_dead (16x16) — optional spinning frame
+- player_action_or_hit (16x16) — jump, shoot, push, bank, or damage state
 
-## Antagonist (boss)
+## Enemy / Hazard
 
-- boss_idle (32x32)
-- boss_throw_1 (32x32) — optional, animation when spawning hazard
-- boss_throw_2 (32x32)
+- enemy_idle_or_move_1 (16x16)
+- enemy_idle_or_move_2 (16x16)
+- projectile_or_hazard_1 (8x8 or 16x16)
+- projectile_or_hazard_2 (optional animation frame)
 
-## Goal (princess)
+## Goal / Pickup / NPC
 
-- princess (16x24)
+- goal_or_exit (16x16 or 16x24)
+- pickup_1 (8x8 or 16x16)
 
-## Hazard (barrel)
+## Tool / Power-up (optional)
 
-- barrel_1 (16x16)
-- barrel_2 (16x16) — second roll frame, must differ from barrel_1
-
-## Power-up (optional)
-
-- hammer_carry (16x16)
-- hammer_swing (16x16)
+- tool_idle (16x16)
+- tool_active (16x16)
 
 ## HUD
 
 - life_icon (8x8)
 - digit_0 .. digit_9 (8x8) — only if drawing custom score font
 
-## Environment (optional, can be `pyxel.rect()` if hand-drawn)
+## Environment (optional, can be `pyxel.rect()` if intentionally procedural)
 
-- girder_tile (8x8 tileable)
-- ladder_tile (8x8 tileable)
-- rivet (4x4)
+- terrain_tile (8x8 tileable)
+- obstacle_tile (8x8 tileable)
+- background_detail (8x8 or 16x16)
 ```
 
-The princess and barrel are minimums; without them the game isn't the genre. Hammer can be deferred.
+The required set is whatever the design promises. A shooter may need ship/enemy/projectile/explosion frames; a puzzle game may need board tiles, cursor, pieces, and feedback states. Declared sprites must be drawn and verified; intentionally procedural geometry is allowed when ASSETS.md says so.
 
 ## Generation strategy: hex strings
 

@@ -31,7 +31,7 @@ pyxel.sounds[11].set(
 )
 # Ch2: Harmony
 pyxel.sounds[12].set(
-    notes="EGCG ECEG",
+    notes="E2G2C3G2E2C3E2G2",
     tones="p", volumes="3", effects="s", speed=10,
 )
 pyxel.musics[0].set([10], [11], [12])
@@ -142,7 +142,7 @@ Design rules:
 
 ```python
 pyxel.sounds[0].set(
-    notes="c2e2g2c3", tones="s", volumes="7776", effects="nnnn", speed=8,
+    notes="C2E2G2C3", tones="s", volumes="7776", effects="nnnn", speed=8,
 )
 ```
 
@@ -150,7 +150,7 @@ pyxel.sounds[0].set(
 
 ```python
 pyxel.sounds[1].set(
-    notes="c3e3g3c4c4", tones="s", volumes="44444",
+    notes="C3E3G3C4C4", tones="s", volumes="44444",
     effects="nnnnf", speed=7,
 )
 ```
@@ -159,7 +159,7 @@ pyxel.sounds[1].set(
 
 ```python
 pyxel.sounds[2].set(
-    notes="g3c3", tones="s", volumes="74", effects="nn", speed=5,
+    notes="G3C3", tones="s", volumes="74", effects="nn", speed=5,
 )
 ```
 
@@ -167,7 +167,7 @@ pyxel.sounds[2].set(
 
 ```python
 pyxel.sounds[4].set(
-    notes="f3b2f2b1f1f1f1f1", tones="p",
+    notes="F3B2F2B1F1F1F1F1", tones="p",
     volumes="44444321", effects="nnnnnnnf", speed=9,
 )
 ```

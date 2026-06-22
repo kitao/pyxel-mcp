@@ -21,7 +21,7 @@ def test_errors_empty_on_success():
     assert result["errors"] == []
 
 
-def test_resources_has_all_eight_uris():
+def test_resources_has_expected_uris():
     """Verify every advertised resource URI is present and correct.
 
     Was 7 in spec §8.2; the 8th URI `anti-patterns` was added so agents can
@@ -37,6 +37,8 @@ def test_resources_has_all_eight_uris():
         "examples": "pyxel://examples/<name>",
         "run_snapshots_schema": "pyxel://run-snapshots-schema",
         "anti_patterns": "pyxel://anti-patterns",
+        "workflow": "pyxel://workflow",
+        "workflow_stage": "pyxel://workflow/<stage-or-reference>",
     }
 
 

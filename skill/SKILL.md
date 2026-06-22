@@ -2,7 +2,9 @@
 name: pyxel
 description: Build complete retro games with Pyxel through a verified, gated pipeline. TRIGGER when the user wants to make a Pyxel / retro / 8-bit / pixel-art game, or asks to recreate a classic arcade title. DO NOT TRIGGER on general Python work, on existing non-Pyxel projects, or when a different game engine (Pygame, Godot, Unity) is mentioned.
 license: MIT
-version: 1.0.0
+compatibility: "Requires pyxel-mcp >= 1.0.0, Pyxel >= 2.9.6, and Python >= 3.10."
+metadata:
+  version: "1.0.0"
 ---
 
 # pyxel — Retro Game Production Harness
@@ -19,9 +21,7 @@ This skill assumes `pyxel-mcp` ≥ 1.0.0 is installed and registered as an MCP s
 - `read_palette` / `read_image` / `read_animation` / `read_tilemap` / `read_audio` (raw observation)
 - `diff_frames` (PNG pixel diff)
 
-Quality verification is the **agent's** responsibility, not a tool's. The 9 tools above capture observations; the agent asserts predicates directly in Python and uses the host's `Read` tool to inspect captured PNGs (the Pyxel canvas is small enough that the multimodal LLM reads every pixel). The Layer 3 quality gate (`quality-gate.md`) lays out the 11 stop conditions the agent runs before declaring done.
-
-> **Transitional note (until pyxel-mcp 1.0.0 reaches PyPI).** The previous PyPI release exposed 8 additional `judge_*` tools (`judge_palette`, `judge_sprite`, `judge_animation`, `judge_milestone`, `judge_genre`, `judge_bundle`, `judge_audio`, `judge_layout`). Until this release ships, hosts with the older PyPI install will surface those `judge_*` names too. **Do not call them** — this skill expects the agent to assert predicates directly. They will disappear from the tool list once pyxel-mcp 1.0.0 publishes.
+Quality verification is the **agent's** responsibility, not a tool's. The 9 tools above capture observations; the agent asserts predicates directly in Python and visually inspects captured PNGs. The quality gate (`quality-gate.md`) lays out the stop conditions the agent runs before declaring done.
 
 If the namespace is missing, the user can get the install snippet by running:
 
@@ -58,7 +58,7 @@ User request: "make a Pyxel game ..."
         |
         +-- Proof bundle present at screenshots/result/<N>/
         +-- Pre-handoff agent visual review: Read each key frame PNG, verbalize, compare to PLAN.md milestones (capture.md)
-        +-- Stop hook fires (best-effort assertion that bundle is well-formed)
+        +-- Stop hook fires (non-blocking presence tripwire for the proof bundle)
         +-- Summary to user
 ```
 
@@ -140,13 +140,13 @@ These are the cheats this harness exists to catch. Do not commit any of them.
 
 1. **Visual primacy.** When code says X happened but a captured frame shows Y, trust the capture.
 2. **Trust media over code.** A passing `validate` and a non-crashing `run` only certify the script does not crash. They do not certify gameplay.
-3. **No procedural fallback.** `pyxel.rect(x, y, 16, 16, 8)` in place of a declared sprite means asset-gen was skipped. Go back. The `pyxel.rect()` calls for player/enemy bodies are a red flag.
+3. **No asset fallback.** A solid rectangle in place of a declared sprite means asset generation was skipped. Use Pyxel's drawing primitives intentionally, but do not pass off placeholders as finished art.
 4. **Bundle integrity.** A `screenshots/result/<N>/` bundle whose first 3 seconds are correct and the rest is static is FAIL, not partial pass.
 5. **Bias toward failure.** If behavior is not clearly visible in the capture, treat as not-done. Hidden or inferred behavior does not count.
 6. **Closed-loop input only.** Open-loop scripted input drifts past ~200 frames. Issue `run` calls in segments per Pattern C (cumulative-replay), reading observed `state` snapshots between segments and recomputing the next input schedule from the actual position.
 7. **No "looks fine".** Every verify is a specific Python predicate the agent writes against an observed value, not a vibe check. No tool wraps the predicate; you assert it directly against `result["snapshots"]` values.
 8. **No bundle, no done.** A `screenshots/result/<N>/` directory containing win-path.gif, lose-path.gif, frames, audio WAVs is the precondition for declaring "done". A green gate report without a bundle is FAIL.
-9. **No user-handoff without agent visual review.** Before reporting "done" to the user, agent (you) must `Read` every key frame in the proof bundle, verbalize observations in 1–2 sentences each, and confirm against PLAN.md milestones. Bundle existence + 15-check gate PASS is necessary but not sufficient — the agent's own multimodal judgment is the final gate. "Did I look at the screenshot?" is a precondition for "is this done?". Tool-based checks (`read_image` verdicts, `state` snapshots) certify mechanics; only the agent's own eyes certify *recognizability* and *playability*. See `capture.md` "Pre-handoff agent review".
+9. **No user-handoff without agent visual review.** Before reporting "done" to the user, agent (you) must inspect every key frame in the proof bundle, verbalize observations in 1–2 sentences each, and confirm against PLAN.md milestones. A passing gate is necessary but not sufficient; tool checks certify mechanics, while visual review certifies recognizability and playability. See `capture.md` "Pre-handoff agent review".
 
 ## Quality gate is the contract
 
@@ -167,4 +167,3 @@ The Stop hook (`hooks/stop_check_bundle.py`) fires at session boundary as a non-
 - Pyxel default palette: `pyxel://palette/default` MCP resource.
 - `run` snapshot schema: `pyxel://run-snapshots-schema` MCP resource. Read before constructing complex `run` snapshot lists.
 - pyxel-mcp tool catalog: see its loaded `instructions`.
-- Design rationale: `docs/superpowers/specs/2026-05-01-pyxel-harness-design.md`.

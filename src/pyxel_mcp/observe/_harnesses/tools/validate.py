@@ -358,7 +358,8 @@ def _detect_cls_missing(tree: ast.AST) -> list[dict[str, Any]]:
     Permitted before cls(): assignments, conditional return, pal/dither calls,
     and any other non-pixel-emitting statements.
 
-    Note: helper-method inlining (one-level deep) is not implemented in v0.9.3.
+    Note: helper-method inlining (one-level deep) is intentionally not
+    implemented here.
     Only direct pixel-emitting calls in the draw body are checked.
     """
     issues: list[dict[str, Any]] = []
@@ -410,8 +411,8 @@ def _detect_ragged_image_set(tree: ast.AST) -> list[dict[str, Any]]:
     constants whose lengths differ — Pyxel raises `Invalid sound note` /
     `byte index out of bounds` at runtime when reading mismatched rows.
 
-    Catches the trap of a 32x32 sprite written with some 30-char rows
-    (β-DK validation surfaced this).
+    Catches the trap of a sprite written with mismatched row widths, which can
+    otherwise surface only at runtime.
 
     Heuristic: all-string elements must share the same length. A list with
     any non-string-constant element is skipped (can't statically check).

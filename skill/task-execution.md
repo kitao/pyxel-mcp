@@ -46,7 +46,7 @@ For each task in `PLAN.md`:
 5. **`validate` clean.** Catches syntax errors and Pyxel anti-patterns before runtime.
 6. **One `run` call covers smoke + milestone verification.** Build a `snapshots` list with: (a) `{"frame": K, "kind": "screen_image", "output": "tmp/smoke.png"}` at one early frame to catch black-screen / import failures, and (b) one multi-frame `{"frames": [...], "kind": "state", "attrs": [...]}` covering every frame the task's predicates reference. Pass the task's input schedule via `inputs`. The single call returns `snapshots`, `assertions`, `exit_status`, and `log` — **read them all**. The `log` field captures stdout/stderr from the script; scan it for warnings, missing-asset errors, unexpected `print` output, and any line containing `WARN`, `ERROR`, `Failed`, or `Traceback` even when `exit_status == "ok"`. A clean `exit_status` with a noisy `log` is a yellow flag worth investigating before declaring PASS. Predicates are Python expressions you write against the returned snapshot values — there is no judge tool that wraps them.
 
-6.5. **Read the captured PNG with `Read` tool (visual primacy enforcement).** For each frame where you took a `screen_image` snapshot, open the PNG with the `Read` tool and verbalize what you see in 1–2 sentences (e.g., `"at frame 60: Mario is on girder 4, barrel mid-air at x≈140, score=300 in HUD"`). Compare against the task's expected visual outcome. If the verbalized observation contradicts the predicate, **trust the observation** — the predicate may pass on `state.player.y` while the rendered frame shows the player drawn behind the HUD, swapped to the wrong sprite, or invisible due to `colkey` collision. Skipping this step is the failure mode the harness exists to catch: tool-based gate PASS while the agent never looked at a single frame. See SKILL.md Anti-shortcut rule #9.
+6.5. **Read the captured PNG with `Read` tool (visual primacy enforcement).** For each frame where you took a `screen_image` snapshot, open the PNG with the `Read` tool and verbalize what you see in 1–2 sentences (e.g., `"at frame 60: player is on platform 4, hazard mid-air at x≈140, score=300 in HUD"`). Compare against the task's expected visual outcome. If the verbalized observation contradicts the predicate, **trust the observation** — the predicate may pass on `state.player.y` while the rendered frame shows the player drawn behind the HUD, swapped to the wrong sprite, or invisible due to `colkey` collision. Skipping this step is the failure mode the harness exists to catch: tool-based gate PASS while the agent never looked at a single frame. See SKILL.md Anti-shortcut rule #9.
 
 7. **Evaluate the task's Verify predicates against the returned snapshots and assertions.** Each Verify clause maps to either (a) a `state` snapshot value at a specific frame (Python `assert` from the agent), or (b) a named `ASSERT` line in `result["assertions"]` (Pattern B — script-side `print("ASSERT PASS: ...")`). For complex tasks, use both: state for the agent's predicate evaluation, ASSERT for the script's self-check. If the script-side ASSERT disagrees with the agent-side predicate evaluation, OR the visual observation from step 6.5 disagrees with either, that's a divergence — investigate before declaring PASS.
 8. **If FAIL** — read the captured state, find the divergence, fix. Don't move on. Don't lower the threshold. Don't retry the same input expecting a different result.
@@ -106,8 +106,8 @@ Read the state output. If `player.y[48] - player.y[31] == -10` instead of ~-24, 
 When the code says X happened but the capture shows Y, the capture is right. Don't argue with the pixels. Three concrete divergence cases:
 
 - "I drew the player at (40, 100)" but the screenshot shows nothing at (40, 100). Probable causes: `colkey` makes the sprite invisible against background; the sprite is drawn but at a different layer ordering and is overdrawn; `pyxel.cls()` is called *after* the player's draw and erases it. Use a `run` call snapshotting `screen_grid` at that frame and look at the palette indices around (40, 100); the truth is in the grid.
-- "I incremented score on barrel-jump" but a `state` snapshot inside `run` at frame 150 shows `score == 0`. The collision check never fires; either the hitbox rectangle is wrong (bounds inverted, off-by-one) or the trigger condition has a strict-equality bug (`y == barrel.y` instead of `abs(y - barrel.y) < EPS`).
-- "Mario climbs the ladder" but `run` with `KEY_UP` inputs shows Mario stuck. The climb-eligibility check has a strict bound (`x == ladder.x` instead of `ladder.x <= x <= ladder.x + ladder.w`), or `on_ladder` is set in `update()` *after* the input read.
+- "I incremented score on hazard dodge" but a `state` snapshot inside `run` at frame 150 shows `score == 0`. The trigger check never fires; either the hitbox rectangle is wrong (bounds inverted, off-by-one) or the trigger condition has a strict-equality bug (`y == hazard.y` instead of `abs(y - hazard.y) < EPS`).
+- "The player takes the upper route" but `run` with `KEY_UP` inputs shows the player stuck. The route-eligibility check has a strict bound (`x == route.x` instead of `route.x <= x <= route.x + route.w`), or `in_route_zone` is set in `update()` *after* the input read.
 
 In each case the fix is to look at observed state, not to re-explain the code. `screen_grid` and `state` snapshots inside `run` are the witnesses; the code is the suspect.
 
@@ -125,7 +125,7 @@ The references at the top of this stage are not all loaded for every task. Choos
 - **No "looks fine".** Each Verify is a specific predicate against an observed value. If you cannot name the predicate, it is not a Verify — go fix PLAN.md.
 - **Don't skip lose-path verification.** Win path is exciting; lose path is forgotten. Both must verify with `run` with `inputs` and reach their target scene by the milestone frame.
 - **Don't comment out failing assertions.** Fix the code.
-- **Don't lower the threshold to make it pass.** If `lives reaches 0` doesn't happen by frame 360 in lose path, either barrels are too slow (PLAN.md is wrong → re-decompose) or collision is broken (code is wrong → fix). Don't move the milestone to frame 600.
+- **Don't lower the threshold to make it pass.** If `lives reaches 0` doesn't happen by frame 360 in lose path, either hazards are too slow (PLAN.md is wrong → re-decompose) or collision is broken (code is wrong → fix). Don't move the milestone to frame 600.
 - **Don't trust subprocess returncode alone.** A script can run cleanly and produce a black screen, no audio, frozen state. Always observe captured state — that's what `state` snapshots inside `run` are for.
 - **Don't replace ASSERT lines with comments.** If the script writes `print("ASSERT PASS: ...")` to confirm a milestone, removing the print to "clean up" silently breaks Pattern B verification. Either keep the ASSERT or migrate to an explicit `state` snapshot agent-side.
 
@@ -138,7 +138,7 @@ Open-loop input (timed press / release) drifts. Over 200+ frames the player posi
 3. Compute the next input segment from the observed state.
 4. Issue a **new** `run` call with the **cumulative** input schedule from frame 0 to the next milestone.
 
-Do NOT try to resume `run` from a mid-game state. Each `run` is a fresh subprocess init — pyxel-mcp's isolation model (spec §5.1) makes each call start from frame 0. The cumulative-replay approach is the correct trade-off: slower than continuation but deterministic. This differs from godogen, where Bevy's persistent `World` allows `Update`-loop continuation.
+Do NOT try to resume `run` from a mid-game state. Each `run` is a fresh subprocess init, so each call starts from frame 0. The cumulative-replay approach is the correct trade-off: slower than continuation but deterministic.
 
 ### Spawn determinism — `random_seed` alone is not enough
 
@@ -169,7 +169,7 @@ A second pattern, useful when input would have to thread a precise needle: tempo
 
 ```python
 # Production code:
-if pyxel.btn(pyxel.KEY_UP) and self.on_ladder:
+if pyxel.btn(pyxel.KEY_UP) and self.in_route_zone:
     self.y -= CLIMB_SPEED
 
 # Deterministic test (in an instrumented build):
@@ -231,8 +231,8 @@ for seed in [42, 99, 1]:
 # --- #4c — find a second strategy that also clears ---
 # The 'distinct' strategy is up to you. Common shapes:
 #  - take a different path (skip a pickup, take a longer-but-safer route)
-#  - use jumps where Strategy A used hammers (or vice versa)
-#  - climb a different ladder column
+#  - use jumps where Strategy A used tools/power-ups (or vice versa)
+#  - take a different route column
 # Document both in PLAN.md ## Win Path Strategies.
 inputs_strategy_b = <agent-designed alternate input schedule>
 result_b = run(script="main.py", frames=final + 1, random_seed=42,
@@ -284,5 +284,5 @@ The Stop hook (`hooks/stop_check_bundle.py`) fires at session end and warns on a
 
 - Every PLAN.md task is marked done with a one-line `verified by:` note.
 - `MEMORY.md` records the gotchas worth keeping.
-- The proof bundle exists at `screenshots/result/<N>/` (win-path GIF, lose-path GIF, milestone frames, audio renders) — see `capture.md` for the bundle contract.
+- The proof bundle exists at `screenshots/result/<N>/` (win/lose path GIF or MP4 media, milestone frames, audio renders) — see `capture.md` for the bundle contract.
 - Move to Stage 7 (read `quality-gate.md`).

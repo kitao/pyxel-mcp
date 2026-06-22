@@ -106,7 +106,7 @@ Layout rules:
 - **Center the play area**: For games without side panels, center both axes: `GAME_X = (SCR_W - GAME_W) // 2; GAME_Y = (SCR_H - GAME_H) // 2`.
 - **Symmetric margins**: Left ≈ right, top ≈ bottom. Compute with `(SCR_W - content_w) // 2`.
 - **No overlap**: HUD must not intrude into the play area.
-- **Verify with the layout-inspection tool**: Fix all ⚠ warnings. Margins should be symmetric (ratio < 2x), balance > 70% on both axes, no near-empty quadrants.
+- **Verify with a `layout` snapshot from `run`**: margins should be symmetric (ratio < 2x), balance should be roughly above 70% on both axes for static screens, and no quadrant should be near-empty unless the game intentionally uses empty space.
 
 ### Text Positioning
 

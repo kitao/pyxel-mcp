@@ -2,132 +2,51 @@
 
 ## 1.0.0 (unreleased)
 
-- Add hatch wheel `force-include` for src/pyxel_mcp/workflow/_content
-  (the build hook regenerates it; .gitignore would otherwise exclude
-  it from the wheel — verified by `unzip -l` against a real `python
-  -m build` artifact)
-- Bump version to 1.0.0 in pyproject.toml + server.json (PyPI publish
-  intentionally not yet performed — verification pending)
-- Drop lazy hatchling import in build_hooks.py; hatch's plugin loader
-  needs the BuildHookInterface subclass discoverable via `dir()`
-- Score palette hierarchy off `used_indices`, not palette capacity
-  (default-palette games no longer score 2/2 vacuously)
-- skill/SKILL.md: bump version to 1.0.0 + pyxel-mcp pin to ≥ 1.0.0
-- skill/SKILL.md: drop host-specific `mcp__pyxel__*` tool-name
-  references in favour of generic namespace-only descriptions
-- skill/SKILL.md: split phase ↔ stage table from reference / knowledge
-  table that had bled into it
-- skill/asset-planner.md: palette budget is runtime, not pre-loop —
-  document `read_palette` ∪ `screen_grid` merge recipe for #8/#9
-- skill/decomposer.md: declare milestone frame numbers as Stage 6
-  empirical refinement targets, not Stage 2 commitments
-- skill/quality-gate.md: document `## Difficulty floor override` as
-  the legitimate way to deviate from the default 10-14 s band
-- Bump Pyxel minimum dependency to 2.9.5 (was 2.9.4)
-- state snapshot: `attrs` not-found warnings now include hints for
-  the two common mistakes — `self.` prefix and inline `len(...)`
-- run-snapshots-schema.md: mandate absolute paths for snapshot
-  `output` / `output_pattern`; document `state.attrs` path syntax
-
-- Integrate pyxel-skill source into skill/ subdir (Phase 0)
-- Move _harnesses subtree under observe/_harnesses
-- BREAKING: rename inspect_* tools to read_* (palette/image/...)
-- BREAKING: rename render_audio to read_audio
-- BREAKING: rename compare_frames to diff_frames
-- BREAKING: drop verdict field from read_palette + read_image
-  (judgment is the agent's responsibility, asserted directly in Python)
-- Add workflow/ module + workflow_root() helper
-- Expose skill/*.md as pyxel://workflow/* MCP resources (16 URIs)
-- Add hatch custom build hook to embed skill/ in wheel artifact
-- gitignore src/pyxel_mcp/workflow/_content/ (build-time output)
-- Add `pyxel-mcp install` — print MCP config snippet + guide
-- Add `pyxel-mcp publish-skill DIR` — deploy workflow skill to host
-- Add `pyxel-mcp serve` (default) — back-compat with bare invocation
-- Switch console script entry point to pyxel_mcp.cli:main
-- Add server startup diagnostic to stderr (workflow path)
-- Rewrite README for v1.0.0 user journey (7 stages)
-- Refuse publish-skill into ~, ~/.claude, ~/.cursor, ~/.codex, etc
-- Refuse publish-skill overwrite of non-skill dir even with --force
-- Refuse publish-skill into a target that is a file
-- publish-skill emits friendly error when workflow content missing
-- Server starts in degraded mode when workflow content missing
-- Strip YAML front matter from workflow resource descriptions
-- Replace pyxel-skill repo link with pyxel://workflow guidance
-- Switch startup diagnostic to live FastMCP tool count
-- README: update section uses `uvx --refresh-package` form
-- Refresh stale path in anti_patterns.py docstring
-- Quality verification is the agent's responsibility (godogen-style)
-- 9 observation tools (run, validate, pyxel_info, read_palette,
-  read_image, read_animation, read_tilemap, read_audio, diff_frames)
-- 11-step flat quality gate in skill/quality-gate.md (no numerical
-  defaults; agent asserts predicates directly in Python and reads
-  bundle PNGs with the host's Read tool to verbalize against
-  PLAN.md milestones / ASSETS.md represents: anchors)
-- Win/lose path Verify predicates and Genre Identity rules are
-  agent-written Python (no AST sandbox; abs/len/min/max all available)
-- Stop hook simplifies to bundle-existence tripwire only
-  (gate-report.json content is the agent's responsibility)
-- Add closing rationale to instructions.md (no judge_* by design)
-- skill/SKILL.md: transitional note on pre-1.0.0 PyPI hosts surfacing
-  old judge_* tools (skill says ignore them)
-- skill/capture.md: audio rendering must use target={"sound": N}
-  (music targets produce no notes and cannot satisfy gate audio check)
-- knowledge/audio.md: pyxel.sounds[N].mml() does not populate .notes
-  and .save() emits silent WAV; use .set() for any sound feeding gate
-- knowledge/audio.md: every note in set(notes=) needs explicit octave
-  digit (C2 not C); range C0-B4
-- knowledge/game-feel.md: Ladder Mechanics — engage tolerance,
-  snap-on-release at top/bottom, jump must not bypass girder for L1
-- task-execution.md: spawn-determinism subsection (random_seed alone
-  insufficient under varying frames=; use integer-modular spawn or
-  random.Random(self.frame) per spawn frame)
-- asset-gen.md: cross-references MML / gen_bgm gate-compat quirks
-  upfront so the agent doesn't burn time discovering them at gate
-- validate.py: ragged_image_set anti-pattern detector — catches
-  pyxel.images[N].set(x, y, [...]) with rows of differing hex-string
-  length before runtime
-- 312 tests pass under Pyxel 2.9.5 (was 413 in pre-godogen-refactor;
-  104 deleted with judge layer, 3 added with ragged_image_set)
-- Variability gate: split check #4 (Win path) into 4a (multi-seed,
-  ≥3 seeds same input must all clear), 4b (±3 frame input jitter,
-  4/5 trials must clear), 4c (≥2 distinct winning strategies); a
-  single Pattern-C-found clearance proves clearability not playability
-- Variability gate: extend check #5 (Lose path) to multi-seed (jitter
-  and strategy-diversity not meaningful for passive failure path)
-- knowledge/game-feel.md: Variability Budget section with design
-  constants (hazard reaction window ≥15 frames, adjacent-input spacing
-  ≥10 frames, hazard period ≥30 frames, invuln ≥30 frames, pickup
-  reach ≥20 frames, ≥2 viable winning paths) and worked math example
-- task-execution.md: variability test worked example showing the
-  jitter / multi-seed / strategy-B Pattern after Pattern C convergence
-- gate-report.json: 13 rows total after #4 splits into 4a/4b/4c
-- Visual + balance gate (round 3 structural fix): user playtest of
-  the variability-gate DK confirmed clearable but visuals "haphazard,
-  headish/faceish" + barrels biased to one side. Pattern: gate PASS
-  != actual quality dimension — needs mechanical enforcement of the
-  feedback loop, not claim of it. User-in-loop discarded ("AIの意義
-  消す"); structural skill-side fix:
-- asset-gen.md: multi-draft mandate (≥3 hex-string drafts per
-  character sprite, recorded in ASSETS.md with literal verbalizations
-  + selection reasoning), blind read protocol (Step B1 literal
-  pixel-position description without represents: in context, Step B2
-  recognition check against represents:), concrete-feature
-  verbalization required (vague labels like "Mario-like" rejected;
-  pixel-position concrete required like "4-pixel red region at
-  rows 0-2 cols 5-10"). Counters multimodal generous interpretation
-  bias by separating literal description from recognition.
-- quality-gate.md #11: extended to verify ASSETS.md draft history
-  evidence (≥3 drafts per character sprite, literal verbalizations,
-  selection reasoning) + concrete-feature verbalization in agent_review
-- quality-gate.md #4d (new): hazard spatial distribution check —
-  win-path hazard x positions must span ≥70% of usable width AND
-  stddev ≥18% of usable width. Catches single-side-bias barrel
-  patterns that turn the game into one-direction-dodge memorization.
-  gate-report.json: 14 rows total after #4 expands to 4a/4b/4c/4d.
-- knowledge/game-feel.md Hazard Distribution section: 3 spawn
-  patterns (multi-spawn-point / deterministic-by-frame randomized x /
-  alternating-direction), telegraph requirement, multi-strategy
-  implication (single-side hazards block #4c too)
+- Bump package and server metadata to 1.0.0; PyPI publish is still pending.
+- Bump minimum Pyxel dependency to 2.9.6.
+- Mark package classifier as Production/Stable.
+- Keep the public MCP surface to 9 observation tools: `run`, `validate`,
+  `pyxel_info`, `read_palette`, `read_image`, `read_animation`,
+  `read_tilemap`, `read_audio`, and `diff_frames`.
+- Add tool-specific structured output schemas for all 9 MCP tools while
+  preserving common `ok` / `errors` fields.
+- Standardize `run` dispatch failures so timeout, subprocess failure,
+  invalid JSON, and empty payload all return a full RunResult-shaped payload.
+- Treat `exit_status == "stalled"` as `ok: false`, matching the public
+  contract that `run.ok` means the requested frame budget completed.
+- Add `ragged_image_set` to the static anti-pattern detector set and
+  document exact `anti_pattern.*` resource categories.
+- Improve state snapshot not-found warnings for common mistakes such as
+  `self.` prefixes and inline expressions.
+- Document absolute path requirements and `state.attrs` path syntax in the
+  run snapshot schema resource.
+- Integrate the workflow skill under `skill/` and expose it through
+  `pyxel://workflow/*` MCP resources.
+- Embed workflow content into wheels via the hatch build hook and force-include
+  packaging rule; `src/pyxel_mcp/workflow/_content/` remains a generated,
+  gitignored build artifact.
+- Add `pyxel-mcp install`, `pyxel-mcp publish-skill DIR`, and `pyxel-mcp serve`.
+- Harden `publish-skill` against unsafe targets, files, and non-skill
+  overwrite attempts.
+- Rewrite README and workflow guidance around the 7-stage Pyxel game workflow.
+- Keep quality verification in the workflow skill: agents assert predicates
+  directly in Python and inspect captured PNG/audio artifacts rather than
+  relying on taste-scoring tools.
+- Use an 11-condition quality gate with 14 report rows after win-path check
+  #4 expands to #4a/#4b/#4c/#4d.
+- Add multi-seed, jitter-tolerance, strategy-diversity, and hazard-distribution
+  checks for win-path playability.
+- Extend lose-path verification to multi-seed runs.
+- Add proof-bundle checks for win/lose media, milestone frames, audio renders,
+  notes, and agent visual review.
+- Make the optional Stop hook a non-blocking proof-bundle presence tripwire;
+  gate-report content remains the agent's responsibility.
+- Remove obsolete internal planning material from the public tree and ignore
+  future scratch directories.
+- Replace DK-specific smoke fixtures with neutral route-navigation smoke coverage.
+- Add stale public-content guards for the workflow skill and Agent Skill
+  frontmatter schema checks.
+- Full verification currently passes with 332 pyxel-mcp tests.
 
 ## 0.11.0
 

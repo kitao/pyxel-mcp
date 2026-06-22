@@ -49,13 +49,8 @@ def _empty_result(*, exit_status: str = "ok", errors: list | None = None) -> dic
 
 
 def _is_ok(exit_status: str, errors: list) -> bool:
-    """run is ok iff no errors AND exit_status reflects a non-failure outcome.
-
-    "stalled" is treated as ok=True because the run completed without crashing —
-    the agent gets diagnostic data (snapshots, log) and can decide whether the
-    stall is acceptable. Crashes / invalid payloads / timeouts are ok=False.
-    """
-    return len(errors) == 0 and exit_status in {"ok", "stalled"}
+    """run is ok iff no errors AND execution reached the requested frame budget."""
+    return len(errors) == 0 and exit_status == "ok"
 
 
 _VALID_SNAPSHOT_KINDS = {"screen_image", "screen_grid", "state", "layout", "video"}
@@ -67,7 +62,8 @@ def _parse_assertions(log: str) -> list[dict]:
     """Parse ASSERT lines from script output into structured assertion dicts.
 
     Each matching line yields one entry. Lines are retained in log verbatim.
-    frame is always None in v0.9.3 (interleaved capture deferred).
+    frame is currently None because assertion parsing reads plain log lines
+    after execution.
     """
     out = []
     for m in ASSERT_RE.finditer(log):
@@ -331,8 +327,8 @@ def _is_asset_load_error(tb_text: str) -> bool:
 
     Caveat: this is a string-match heuristic — a user script that raises a
     custom exception whose message happens to contain these phrases will be
-    misclassified as asset_load. Acceptable for v0.9.3 since Pyxel doesn't
-    expose typed exceptions; revisit if a typed asset-error API ships.
+    misclassified as asset_load. Revisit if Pyxel exposes a typed asset-error
+    API.
     """
     lower = tb_text.lower()
     return (
@@ -351,8 +347,8 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     raised, so callers always receive a well-formed result dict.
 
     The result includes `ok: bool` — True iff `len(errors) == 0` AND
-    `exit_status in {"ok", "stalled"}` (a stalled run still produces diagnostic
-    data the agent can act on; crashes / invalid / timeouts are False).
+    `exit_status == "ok"`. A stalled run still returns diagnostic data, but
+    `ok` is false because the requested frame budget was not reached.
     """
     try:
         (

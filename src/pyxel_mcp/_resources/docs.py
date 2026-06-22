@@ -26,7 +26,9 @@ def _fetch(url: str) -> str:
 def _get(url: str) -> str:
     """Return cached content; refetch if expired or absent.
 
-    On fetch failure, fall back to stale cache if present, else raise.
+    On fetch failure, fall back to stale cache if present. If this is the
+    first fetch and the network is unavailable, return a readable markdown
+    diagnostic instead of failing the MCP resource read.
     """
     now = time.time()
     cached = _CACHE.get(url)
@@ -40,7 +42,12 @@ def _get(url: str) -> str:
     except Exception:
         if cached:
             return cached[1]
-        raise
+        return (
+            "# Pyxel documentation unavailable\n\n"
+            f"pyxel-mcp could not fetch `{url}` and no cached copy is available. "
+            "Check network access, or use the Pyxel package's installed docs/examples "
+            "if your environment includes them.\n"
+        )
 
 
 def _make_reader(url):

@@ -116,9 +116,9 @@ def capture(
                     msg += (
                         " — note: state.attrs paths do not support "
                         "function calls; expose a derived value as a "
-                        "plain attribute (e.g. set self.n_barrels = "
-                        "len(self.barrels) in update, then read "
-                        "'n_barrels')"
+                        "plain attribute (e.g. set self.n_hazards = "
+                        "len(self.hazards) in update, then read "
+                        "'n_hazards')"
                     )
                 warnings.append(msg)
                 continue

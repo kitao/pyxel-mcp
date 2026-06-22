@@ -1,4 +1,4 @@
-"""Minimal DK fixture for integration smoke. ~100 lines."""
+"""Minimal route-navigation fixture for integration smoke. ~100 lines."""
 import pyxel
 
 # Platform definitions: (x, y, width)
@@ -14,7 +14,7 @@ _SPRITE_COLOR = 11   # cyan
 
 class App:
     def __init__(self):
-        pyxel.init(128, 128, title="MiniDK", fps=30)
+        pyxel.init(128, 128, title="MiniRoute", fps=30)
 
         # Minimal image-bank population: a few pixels so read_image has data
         pyxel.images[0].pset(0, 0, 11)   # player color sample

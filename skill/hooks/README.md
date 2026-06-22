@@ -6,7 +6,7 @@ This directory contains the Claude Code Stop hook used by `pyxel-skill`. The hoo
 
 | File | Purpose |
 |------|---------|
-| `stop_check_bundle.py` | The Stop hook itself. Reads `cwd` from the Stop event, checks for `.pyxel-skill/` project marker, walks `screenshots/result/<latest>/` for proof bundle integrity, and warns to stderr if the bundle is missing or `gate-report.json` shows FAILs. Always exits 0 with `{}` on stdout (non-blocking). |
+| `stop_check_bundle.py` | The Stop hook itself. Reads `cwd` from the Stop event, checks for `.pyxel-skill/` project marker, walks `screenshots/result/<latest>/` for proof bundle shape, and warns to stderr if required artifacts or `gate-report.json` are missing. Always exits 0 with `{}` on stdout (non-blocking). |
 | `test_stop_check_bundle.py` | pytest suite for the hook (6 cases). Run: `python -m pytest hooks/`. |
 | `install.sh` | Idempotent installer. Adds an entry to `~/.claude/settings.json` under `hooks.Stop`. Requires `jq`. |
 | `README.md` | This file. |
@@ -33,8 +33,8 @@ Edit `~/.claude/settings.json` and remove the entry under `hooks.Stop` whose `co
 |---------------|-------------|
 | cwd has no `.pyxel-skill/` directory | silent no-op |
 | `.pyxel-skill/` exists, no `screenshots/result/` | warns "no proof bundle found" |
-| `screenshots/result/<N>/` exists, no `win-path.gif` | warns "bundle is incomplete" |
-| `gate-report.json` exists with FAILs | warns "gate report shows unaddressed FAIL(s)" |
+| `screenshots/result/<N>/` exists but win/lose media, frame PNGs, audio WAVs, or `notes.md` are missing | warns "bundle is incomplete" |
+| Complete proof bundle shape plus `gate-report.json` exists | silent; the hook does not parse gate contents |
 | All clean | silent |
 
 In every case the hook prints `{}` on stdout and exits 0. It cannot block Claude Code from terminating.
@@ -46,4 +46,4 @@ cd /Users/takashi/repos/pyxel-skill
 python -m pytest hooks/test_stop_check_bundle.py -v
 ```
 
-Six tests cover: no-marker no-op, missing-bundle warning, incomplete-bundle warning, FAIL-in-gate-report warning, clean-pass silence, malformed-input non-blocking.
+Six tests cover: no-marker no-op, missing-bundle warning, incomplete-bundle warning, missing-gate-report warning, complete-bundle silence, malformed-input non-blocking.

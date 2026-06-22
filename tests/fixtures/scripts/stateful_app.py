@@ -2,7 +2,7 @@
 import pyxel
 
 
-class Barrel:
+class Hazard:
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -14,7 +14,7 @@ class App:
         self.lives = 3
         self.message = "hello"
         self.player = type("P", (), {"x": 10, "y": 20})()
-        self.barrels = [Barrel(50, 100), Barrel(60, 110)]
+        self.hazards = [Hazard(50, 100), Hazard(60, 110)]
         self.scores = [100, 200, 300]
         pyxel.init(64, 64)
         pyxel.run(self.update, self.draw)

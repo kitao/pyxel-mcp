@@ -9,7 +9,7 @@ that the game functions end-to-end.
 
 - `pyxel://run-snapshots-schema` (MCP resource) — full schema for `video`, `screen_image`, `screen_grid`, `state`, `layout` snapshot kinds used in bundle production.
 - `task-execution.md` — calls into this file for intermediate captures.
-- `quality-gate.md` — gates final bundle existence + dead-time (check #8) and agent visual review of bundle frames (check #11).
+- `quality-gate.md` — gates final bundle existence (check #8) and catches dead-time/static bundles during agent visual review (check #11).
 
 ## Bundle structure
 
@@ -183,23 +183,21 @@ Procedure:
 2. For each PNG, use the `Read` tool to open it. The Pyxel canvas is
    small (e.g., 224×256), so the multimodal LLM can read every pixel.
 3. Verbalize observation in 1–2 sentences per frame, covering:
-   - **Sprite identity** — does the player sprite look like Mario /
-     Princess / declared character per ASSETS.md `represents:`? Or is
-     it a single-color rectangle, an unrecognizable blob, or the wrong
-     sprite swapped in?
+   - **Sprite identity** — does each declared character sprite match
+     ASSETS.md `represents:`? Or is it a single-color rectangle, an
+     unrecognizable blob, or the wrong sprite swapped in?
    - **Scene state** — is this TITLE / PLAY / WIN / GAME_OVER as the
      PLAN.md milestone for this frame implies?
    - **HUD content** — score, lives, level, "PRESS SPACE" prompts —
      all visible, legible, no overflow, no overlap with gameplay sprites?
    - **Animation state** — is the player mid-stride / climbing / jumping
      / falling / dead as the milestone implies?
-   - **Background and hazards** — is the playfield populated (girders,
-     ladders, pickups, hazards) or mostly empty? Are barrels / enemies
-     in plausible positions?
+   - **Background and hazards** — is the playfield populated with the
+     requested terrain, pickups, hazards, and enemies, or mostly empty?
 4. Compare each verbalization against the corresponding PLAN.md
    milestone description. Note divergences explicitly: "milestone
-   says barrel near floor at frame 200, observation: barrel still on
-   girder 1".
+   says hazard near player at frame 200, observation: hazard still
+   in the upper lane".
 5. **If any frame shows a defect** — missing sprite, wrong scene,
    static animation, placeholder rectangle, illegible HUD, unexpected
    color blob, recognizability failure, dead-time signature — return
@@ -211,10 +209,9 @@ Procedure:
    become input to the gate's check #11 (Agent visual review),
    which records them in `gate-report.json["agent_review"]`.
 
-The previous validation cycle taught the project that 15/15
-mechanics PASS can still produce "100 中 5" gameplay if the agent
-never looked at a single frame. This step is the harness's
-correction. It is NOT optional.
+Mechanical state checks can still miss poor visual communication if the agent
+never looks at a single frame. This review step is the correction. It is NOT
+optional.
 
 ## When this is done
 

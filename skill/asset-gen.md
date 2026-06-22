@@ -16,7 +16,7 @@ For every entry in `ASSETS.md`, write the `pyxel.images[N].set()` call in `_buil
 
 ## Loop per asset — multi-draft, blind read, concrete-feature
 
-Single-draft sprite shipping is the most common failure mode here. The multimodal LLM has a **generous interpretation bias** when reading its own output ("yes that 5-pixel blob is a head, that red shape is a cap, this is Mario"). One draft + permissive verbalization passes the loop ritual without producing a recognizable sprite. Three structural rules counteract this:
+Single-draft sprite shipping is the most common failure mode here. The multimodal LLM has a **generous interpretation bias** when reading its own output ("yes that 5-pixel blob is a head, that red shape is a hat, this is the declared hero"). One draft + permissive verbalization passes the loop ritual without producing a recognizable sprite. Three structural rules counteract this:
 
 ### Rule A — Multi-draft mandate (≥3 drafts per character sprite)
 
@@ -24,7 +24,7 @@ For each character sprite (`player_*`, antagonist, NPC — anything an ASSETS.md
 
 The drafts and selection are part of the artifact: ASSETS.md's entry for the sprite must list the 3 hex-strings, the literal verbalization of each draft, and a 1-line **selection reasoning** ("v2 picked: cap clearer at top because 4-pixel-wide vs v1's 2-pixel; eyes more legible because pixel positions don't blend with background"). The chosen draft becomes the `_build_assets()` data; the others stay in ASSETS.md as evidence the loop ran.
 
-Background / decoration / abstract sprites (girder tile, ladder rung, single-tone pickup) can be 1 draft if the represented subject is a geometric primitive. Only character sprites (subject + features expected) need ≥3.
+Background / decoration / abstract sprites (platform tile, rung tile, single-tone pickup) can be 1 draft if the represented subject is a geometric primitive. Only character sprites (subject + features expected) need ≥3.
 
 ### Rule B — Blind read protocol (separate literal description from recognition)
 
@@ -34,7 +34,7 @@ The verbalization step splits into two strictly-separated sub-steps. Generous bi
 
 > "16×16 grid. Top region (rows 0-3): 4-pixel-wide red shape spanning columns 6-9 at row 1, narrowing to 2 pixels at row 3. Mid region (rows 4-9): brown 8×6 block centered, with 1-pixel black dots at (row 4, col 5) and (row 4, col 10). Bottom region (rows 10-15): blue 6×4 region with 2-pixel-wide separation forming two leg-like columns at cols 5-7 and cols 9-11."
 
-**Step B2 — Recognition check.** Now bring the entry's `represents:` into focus (e.g., `"Mario, red-cap plumber, mid-stride"`). Ask: *given only the Step B1 literal description, would a reader with no prior knowledge identify this as `[represents:]`?* Show reasoning explicitly:
+**Step B2 — Recognition check.** Now bring the entry's `represents:` into focus (e.g., `"red-jacket explorer, mid-stride"`). Ask: *given only the Step B1 literal description, would a reader with no prior knowledge identify this as `[represents:]`?* Show reasoning explicitly:
 
 > "Step B1 mentions: red shape on top, brown center, blue lower with two columns. Mapping to represents: red cap → ✓ (top red), face → ~ (brown center plausible), eyes → ✓ (black dots), overalls → ✓ (blue lower), legs in stride → ~ (two columns visible but no clear stride asymmetry). 4 of 5 features present, stride ambiguous. Pass with caveat: redraw legs to show offset stride."
 
@@ -48,9 +48,9 @@ Both Step B1 and B2 outputs must use **pixel-position-concrete** language. Rejec
 
 | Anti-pattern (vague) | Replace with (concrete) |
 |---|---|
-| "Mario-like figure" | "16×16 sprite, top has 4-pixel red region, middle has 8-pixel brown region, bottom has two 4-pixel blue legs" |
-| "Looks like a barrel" | "8×8 sprite, brown 8×6 oval, 2 horizontal black bands at rows 3 and 5" |
-| "Identifiable as the boss" | "32×32 sprite, brown body 24×24 centered, white eyes 1-pixel at (rows 8, cols 10/14), red bow-tie 4×2 at row 18" |
+| "Hero-like figure" | "16×16 sprite, top has 4-pixel red region, middle has 8-pixel brown region, bottom has two 4-pixel blue legs" |
+| "Looks like a rolling hazard" | "8×8 sprite, brown 8×6 oval, 2 horizontal black bands at rows 3 and 5" |
+| "Identifiable as the large enemy" | "32×32 sprite, brown body 24×24 centered, white eyes 1-pixel at (rows 8, cols 10/14), red accent 4×2 at row 18" |
 | "Recognizable" / "good enough" / "decent" | replaced by the concrete description that justifies the claim |
 
 If the agent's verbalization slides into vague labels, the recognizability test isn't honest — quality-gate.md #11 catches this and the gate FAILs.
@@ -58,7 +58,7 @@ If the agent's verbalization slides into vague labels, the recognizability test 
 ### Concrete loop for one character asset
 
 ```python
-# Per ASSETS.md row "player_idle, represents: Mario red-cap plumber idle":
+# Per ASSETS.md row "player_idle, represents: red-jacket explorer idle":
 # 1. Three drafts:
 draft_v1 = ["00088000", "00111000", ...]   # minimal, 5 colors
 draft_v2 = ["08888880", "01111110", ...]   # detailed, 8 colors
@@ -69,7 +69,7 @@ for v, hex in [("v1", draft_v1), ("v2", draft_v2), ("v3", draft_v3)]:
     read_image(script="main.py", image=7, x=0, y=0, w=16, h=16,
                render_path=f"tmp/player_idle_{v}.png")
     # 2. Step B1 — literal Read of each PNG, no represents: in context
-    # 3. Step B2 — recognition check against "Mario red-cap plumber"
+    # 3. Step B2 — recognition check against "red-jacket explorer"
 
 # 4. Pick best (e.g., v2). Reasoning recorded in ASSETS.md:
 #    "v2: cap clearer at top (4-px vs v1's 2-px); eyes legible at (4,5)+(4,10);
@@ -84,7 +84,7 @@ validate(script="main.py")
 
 ### Background / abstract assets (1 draft acceptable)
 
-Tilemap girders, ladders, pickup icons (hammer, coin, key), bullets — these are geometric primitives. Single hex-string draft is acceptable if the represented subject has no sub-features. Still render, still Read once, but no multi-draft is required.
+Tilemap platforms, rung tiles, pickup icons, bullets — these are geometric primitives. Single hex-string draft is acceptable if the represented subject has no sub-features. Still render, still Read once, but no multi-draft is required.
 
 The rule of thumb: *if `represents:` names a subject with anatomy (head, body, limbs, face), it's a character sprite and needs ≥3 drafts. If `represents:` names a shape or material (rectangle, line, geometric tile), 1 draft is fine.*
 
@@ -130,7 +130,7 @@ pyxel.images[0].set(0, 0, [
 ])
 ```
 
-This is illustrative — exact pixels depend on art direction. The point is: 16x16 is enough room for cap, face, eyes, mustache hint, overalls with two buttons, arm in distinguishable position, two separated legs, and shoes. A "Mario-shaped blob" with one or two colors does not satisfy the contract.
+This is illustrative — exact pixels depend on art direction. The point is: 16x16 is enough room for headgear, face/eye hints, clothing regions, an arm in distinguishable position, two separated legs, and shoes or feet. A one- or two-color blob does not satisfy the contract.
 
 After writing this block:
 
@@ -154,7 +154,7 @@ Conventions worth holding to:
 
 ## Animation pairs
 
-When ASSETS.md declares paired frames (`walk_1` / `walk_2`, `barrel_1` / `barrel_2`, swing-left / swing-right), implement both before verifying. `read_animation` is the only tool that reports the per-frame diff cleanly:
+When ASSETS.md declares paired frames (`walk_1` / `walk_2`, hazard_1 / hazard_2, swing-left / swing-right), implement both before verifying. `read_animation` is the tool that reports the per-frame diff cleanly:
 
 ```python
 read_animation(
@@ -177,11 +177,11 @@ REGIONS = {
     "player_walk_1": (0,   0),
     "player_walk_2": (16,  0),
     "player_jump":   (32,  0),
-    "hammer_idle":   (96,  0),
-    "hammer_swing":  (112, 0),
-    "boss":          (128, 0),
-    "barrel_1":      (0,  32),
-    "barrel_2":      (16, 32),
+    "tool_idle":     (96,  0),
+    "tool_active":   (112, 0),
+    "large_enemy":   (128, 0),
+    "hazard_1":      (0,  32),
+    "hazard_2":      (16, 32),
 }
 
 def _build_assets(self):
@@ -234,7 +234,7 @@ If non-zero pixels are at (0,0), move the offending sprite to a different bank l
 - **Generating sprites in `update()` instead of `_build_assets()`.** Either runs every frame (perf disaster) or runs after `pyxel.run()` starts and is invisible to `read_image` for the first few frames.
 - **"Add it later" placeholders:** `pyxel.rect(x, y, 8, 8, 8)` in `draw()` instead of `pyxel.blt(...)`. The asset manifest declares a sprite; the draw call must `blt` from it. Asset-gen was skipped — the agent visual review (quality-gate.md check #11) will catch the placeholder rectangle and route to `sprite-quality`.
 - **Bulk-edit then bulk-verify.** Edit one sprite, run `read_image` with `render_path=`, `Read` the PNG, verbalize observation, fix, then move on. Editing 10 sprites before reviewing means 10 broken sprites to triage at once. The Read step is non-negotiable — see SKILL.md rule #9.
-- **Trusting `color_count` / `fill_ratio` without Reading the PNG.** Aggregate metrics certify "5 colors used" but not "the sprite reads as Mario". A 5-color sprite of a random pattern passes the aggregate check; the multimodal `Read` is the recognizability gate.
+- **Trusting `color_count` / `fill_ratio` without Reading the PNG.** Aggregate metrics certify "5 colors used" but not "the sprite matches ASSETS.md". A 5-color random pattern passes the aggregate check; the multimodal `Read` is the recognizability gate.
 - **Forgetting `colkey=0` in `blt()` calls.** The transparent background of the sprite renders opaque (palette index 0). `validate` warns about missing `colkey` — fix it.
 - **Computing diffs yourself.** `read_animation` returns `diff_ratio` via `region_diffs[0]["diff_ratio"]`; always specify `region_count` and `direction` explicitly. Don't read raw `pixels` arrays and XOR them — the harness already did the math.
 

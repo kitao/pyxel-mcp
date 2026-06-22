@@ -37,6 +37,20 @@ def test_run_ok_false_on_crash():
     assert result["exit_status"] == "crashed"
 
 
+def test_run_ok_false_on_stall():
+    result = run_run({
+        "script": str(SCRIPTS / "freezing_after_30.py"),
+        "frames": 60,
+        "random_seed": 42,
+        "stall_window_frames": 10,
+        "snapshots": [
+            {"frames": "10:50", "kind": "state", "attrs": ["frozen_value"]},
+        ],
+    })
+    assert result["ok"] is False
+    assert result["exit_status"] == "stalled"
+
+
 def test_validate_ok_true_on_clean_script():
     result = validate_run({"script": str(SCRIPTS / "minimal.py")})
     assert result["ok"] is True

@@ -88,13 +88,13 @@ ASCII map at one cell per 8 px (or coarser if the screen is large). Mark static 
 
 ```
 .................................   y=0
-......BBB.HELP!.PP...............   y=8   B = boss, P = princess
+......EEE.GOAL.GG...............    y=8   E = enemy, G = goal
 ......BBB.......PP...............
-=================================   y=16  girder 0
-.....l...........l...............   y=24  l = ladder
-=================================   y=48  girder 1
-.....l...........l...............
-M================================   y=136 girder 4 (Mario start, M)
+....#######......#######.........   y=16  # = platform / wall
+....#.....#......#.....#.........
+....#..K..########..H..#.........   y=48  K = key, H = hazard
+....#..................#.........
+P...####################.........   y=136 player start, P
                                     y=144 (screen bottom)
 ```
 
@@ -109,7 +109,7 @@ For every distinct object in the layout, list once with:
   - represents: "<one-sentence description an outsider would identify>"
   - sprite size: <WxH> pixels
   - palette: <list of 3-5 palette indices used>
-  - quantity in scene: <int> (e.g., 1 for player, "spawned by boss" for barrels)
+  - quantity in scene: <int> (e.g., 1 for player, "spawned by enemy" for hazards)
   - initial position: (x, y)
   - states/frames: <e.g., "idle, walk1, walk2, jump, climb1, climb2">
 ```
@@ -125,9 +125,9 @@ Every text/UI element with screen position:
 - highscore: "HIGH / <digits>"  at (W/2-12, 4), color 7
 - level:     "L=<dd>"           at (W-32, 4),  color 10
 - bonus:     "BONUS <dddd>"     at (W-48, 12), color 10
-- lives:     mini-Mario icons   at (4, 12),    color 14
-- "HELP!" above princess         blinking, color 8
-- "HOW HIGH CAN YOU GET?"        intro screen, color 10
+- lives:     small player icons at (4, 12),     color 14
+- goal text / marker             blinking, color 8
+- goal prompt / wave preview      intro screen, color 10
 ```
 
 ### Audio
@@ -141,8 +141,8 @@ ch2 (BGM harmony): pairs with ch0
 ch3 (SE):
   - SE jump:        on btnp(KEY_SPACE), ascending square wave
   - SE climb step:  on btn(UP/DOWN) every 8 frames while climbing
-  - SE death:       on barrel collision, descending tone
-  - SE win:         on princess reach, ascending arpeggio
+  - SE death:       on hazard collision, descending tone
+  - SE win:         on goal reach, ascending arpeggio
 ```
 
 BGM uses ch0–ch2; SE uses ch3 only. Volume 5–7 for SE so it cuts through BGM. Square or pulse tone for melodic SE; noise tone is inaudible over BGM and fails verification. See `knowledge/audio.md` for SE cookbook recipes.
@@ -150,22 +150,22 @@ BGM uses ch0–ch2; SE uses ch3 only. Volume 5–7 for SE so it cuts through BGM
 ### Win / lose conditions
 
 ```
-Win condition:  player.y <= <int> AND |player.x - princess.x| < <int>
+Win condition:  player reaches goal region: <state predicate>
                  → scene = WIN within 30 frames
 Lose condition: lives == 0
                  → scene = GAME_OVER within 30 frames
-Death event:    barrel collision → lives -= 1, respawn at start, barrels cleared
+Death event:    hazard collision → lives -= 1, respawn at start, hazards reset
 ```
 
 These predicates feed the win/lose milestone tables that Stage 2 (decomposer) writes into PLAN.md.
 
 ## Anti-patterns in this stage
 
-- **"Mario or Mario-like character"** — vague reference. The asset planner can't generate for vague references; commit to a specific look in `represents:`.
+- **"Famous character or similar"** — vague reference. The asset planner can't generate for vague references; commit to a specific look in `represents:`.
 - **"Pretty background"** without enumerating *what* fills it. The background gets forgotten downstream and the result is plain navy.
 - **Listing colors but not their role.** The contrast rule needs roles. Without them, palette hierarchy can't be checked.
 - **Skipping HUD because "we'll add it later".** Layout coordinates change under HUD; plan it now.
-- **Marking the screen as small (e.g., 128x128) and then trying to fit 4 platforms + ladders + HUD + DK + princess.** Pixel budget runs out. Pick screen from content (see `knowledge/background.md`).
+- **Marking the screen as small (e.g., 128x128) and then trying to fit too many platforms, hazards, HUD, enemies, and goal sprites.** Pixel budget runs out. Pick screen from content (see `knowledge/background.md`).
 
 ## When this stage is done
 

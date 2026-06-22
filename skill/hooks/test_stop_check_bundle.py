@@ -44,8 +44,22 @@ def test_warns_when_marker_present_but_no_bundle(tmp_path: Path) -> None:
     assert "no proof bundle" in err.lower()
 
 
+def _write_minimal_bundle(bundle: Path) -> None:
+    bundle.mkdir(parents=True)
+    (bundle / "win-path.gif").write_bytes(b"GIF89a")
+    (bundle / "lose-path.gif").write_bytes(b"GIF89a")
+    frames = bundle / "frames"
+    frames.mkdir()
+    for name in ("title", "play_start", "mid_game", "win", "game_over"):
+        (frames / f"{name}.png").write_bytes(b"png")
+    audio = bundle / "audio"
+    audio.mkdir()
+    (audio / "jump.wav").write_bytes(b"wav")
+    (bundle / "notes.md").write_text("notes")
+
+
 def test_warns_when_bundle_lacks_video(tmp_path: Path) -> None:
-    """Hook warns if latest screenshots/result/<N>/ has no win-path.gif."""
+    """Hook warns if latest screenshots/result/<N>/ has no win-path media."""
     (tmp_path / ".pyxel-skill").mkdir()
     bundle = tmp_path / "screenshots" / "result" / "1"
     bundle.mkdir(parents=True)
@@ -60,8 +74,7 @@ def test_warns_when_bundle_lacks_gate_report(tmp_path: Path) -> None:
     (= quality gate did not run). The hook does NOT inspect gate-report content."""
     (tmp_path / ".pyxel-skill").mkdir()
     bundle = tmp_path / "screenshots" / "result" / "1"
-    bundle.mkdir(parents=True)
-    (bundle / "win-path.gif").write_bytes(b"GIF89a")
+    _write_minimal_bundle(bundle)
     out, err, rc = run_hook({"cwd": str(tmp_path)}, tmp_path)
     assert rc == 0
     assert json.loads(out) == {}
@@ -69,14 +82,12 @@ def test_warns_when_bundle_lacks_gate_report(tmp_path: Path) -> None:
 
 
 def test_silent_pass_on_complete_bundle(tmp_path: Path) -> None:
-    """Hook silently returns {} when bundle has win-path video AND gate-report.json
-    exists. The hook does NOT parse gate-report content — that is the agent's
+    """Hook silently returns {} when the bundle shape and gate-report.json exist.
+    The hook does NOT parse gate-report content — that is the agent's
     responsibility (the agent ran the gate and wrote the JSON)."""
     (tmp_path / ".pyxel-skill").mkdir()
     bundle = tmp_path / "screenshots" / "result" / "1"
-    bundle.mkdir(parents=True)
-    (bundle / "win-path.gif").write_bytes(b"GIF89a")
-    (bundle / "lose-path.gif").write_bytes(b"GIF89a")
+    _write_minimal_bundle(bundle)
     # Even a FAIL gate-report.json: the hook is content-agnostic.
     (bundle / "gate-report.json").write_text(json.dumps({
         "attempt": 1,

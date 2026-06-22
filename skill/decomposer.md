@@ -30,20 +30,19 @@ These features fail unpredictably and produce ambiguous bugs when mixed with oth
 | Variable-jump physics | Tuning gravity vs. initial velocity hits "can't reach platform" or "skips platform above" |
 | Sloped platform collision | Y has to follow `y = lerp(y0, y1, (x-x0)/(x1-x0))` while walking |
 | Ladder snap + transition | Off-by-one on platform transition causes either fall-through or refusal-to-mount |
-| Object-on-tilted-girder rolling | Direction depends on slope sign; flip at edge or fall when running off; AI implementations frequently get the off-edge fall wrong |
+| Slope-aware moving hazard | Direction depends on slope sign; flip at edge or fall when running off; AI implementations frequently get the off-edge fall wrong |
 | Multi-state animation transitions | walk → jump → land state machine with frame timing; easy to leave stuck-in-jump or flickering |
 
 Anything *not* in this list is Main Build — implement directly, no isolation. Note: closed-loop input simulation, headless audio determinism, and image-bank init order are **harness concerns**, not game features — `test-harness.md` (Pattern C), `read_audio`, and `validate` (`assets_in_update`) cover them. Do not allocate Risk Tasks for them.
 
 ## Genre identity
 
-A 15/17 mechanics PASS proves the game does not crash, has scenes,
+A mostly green mechanics gate proves the game does not crash, has scenes,
 reaches milestones, and has a non-empty background. It does NOT
-prove the game is the genre the user asked for. The previous
-validation cycle taught this: a 15/15 PASS "Donkey Kong style
-platformer" shipped without a hammer, with ladders that could be
-jump-bypassed, with barrels at unrealistic speed — and passed every
-mechanical check.
+prove the game is the genre the user asked for. A maze chase can still
+be wrong if enemies do not pursue, a shooter can be wrong if bullets
+are cosmetic, and a platformer can be wrong if jumps/collisions are not
+meaningful.
 
 The `## Genre Identity` section captures the genre-defining rules
 that mechanic checks miss.
@@ -55,36 +54,32 @@ Each gets a `Verify:` predicate testable via `run` snapshots.
 `quality-gate.md` check #10 evaluates each; if PLAN.md lacks the
 section or any predicate fails, the gate FAILs.
 
-Example for a Donkey Kong-style platformer:
+Example for a compact maze-chase game:
 
 ````markdown
 ## Genre Identity
 
-### L1. Ladders are the only floor-to-floor path.
-- **Why genre-defining:** DK's core risk/reward is choosing when to
-  climb. If the player can jump from floor N to floor N+1, ladders
-  become decorative.
-- **Verify:** at frame F (mid PLAY) hold `KEY_SPACE` for 5 frames
-  with no `KEY_UP`. Player.y must NOT decrease by more than one
-  floor height (`girder_pitch_y`) — a jump cannot bypass the next
-  girder up. Run with two starts: under a girder, and at the edge.
+### L1. Enemies reduce distance to the player when unobstructed.
+- **Why genre-defining:** chase pressure is the core threat. If enemies
+  wander randomly while the player stands still, the game is only a maze.
+- **Verify:** run with no inputs for 90 frames, snapshot
+  `player.x`, `player.y`, and `enemies[0].x/y` at frames 10, 50, 90.
+  When line-of-sight is clear, Manhattan distance from enemy to player
+  must decrease in at least two consecutive intervals.
 
-### L2. Hammer pickup grants temporary invincibility, visible.
-- **Why genre-defining:** DK's only offensive answer to barrels.
-  Without it the game has no risk-reward inversion.
-- **Verify:** at frame F where player overlaps the hammer pickup,
-  `read_image` at player position shows the hammer-carry sprite
-  (not walk). For the next K frames (PLAN.md `HAMMER_DURATION`),
-  barrel collisions do not decrement `lives` (assert via `state`
-  snapshot: `lives` at F+K-1 == `lives` at F).
+### L2. Collectibles drive score and progression.
+- **Why genre-defining:** the player needs a reason to enter risky spaces.
+  If collectibles are decorative, the route has no objective.
+- **Verify:** steer through the first collectible. Assert `score`
+  increases, the collectible disappears from state, and the frame PNG no
+  longer shows its sprite at the collected tile.
 
-### L3. Barrels respect girder slopes.
-- **Why genre-defining:** static barrels look like blocks; rolling
-  barrels are the genre's pace. Slopes signal gravity direction.
-- **Verify:** capture `state` with `attrs=["barrels[0].x",
-  "barrels[0].y"]` at frames F, F+30, F+60, F+90. `barrels[0].x`
-  must change monotonically along the slope sign of the girder
-  it is on.
+### L3. Contact with a hazard has immediate consequence.
+- **Why genre-defining:** visible threats must matter. If contact has no
+  state change, avoidance is unnecessary.
+- **Verify:** run a lose-path segment where the player remains on the
+  enemy route. Assert `lives` decreases or `scene == "GAME_OVER"` within
+  the declared contact window.
 ````
 
 If the genre's mechanics are unclear from the user brief, **ask the
@@ -93,8 +88,8 @@ the gate cannot recover from automatically.
 
 Genre identity rule starters worth considering:
 
-- **Platformer:** are ladders / pickups / power-ups present? Does
-  jump have a height cap (no double-jump, no skip-floor)?
+- **Platformer:** do jumps, moving platforms, pickups, or power-ups
+  affect traversal? Does jump height have a deliberate cap?
 - **Shoot-em-up:** do bullets persist a finite distance, not
   forever? Do enemies spawn from off-screen, not in the player's
   lap?
@@ -118,16 +113,16 @@ Verify (jump physics):
       frame 30: assert player.y < player_initial_y - 16
       frame 50: assert player.y == player_initial_y AND player.vy == 0
 
-Verify (sloped girder walk):
+Verify (moving platform ride):
   - run with inputs holding KEY_RIGHT for 60 frames,
     state snapshot at frames [20, 40, 60]:
-      for each: assert abs(player.y - expected_slope_y(player.x)) < 2
+      for each: assert abs(player.y - platform_top_y(player.x) + player_h) < 2
 
-Verify (ladder climb):
-  - run with inputs holding KEY_UP at ladder x for 60 frames,
+Verify (hazard patrol collision):
+  - run with no inputs while a patrol crosses the player spawn lane,
     state snapshot at frames [10, 20, 30, 40, 50, 60]:
-      assert player.y monotonically decreases across snapshots
-      assert player.y at frame 60 reaches platform_above.y - player_h
+      assert hazard.x changes monotonically along its lane
+      assert lives decreases once collision boxes overlap
 ```
 
 ## Win Path Milestones table
@@ -139,10 +134,10 @@ Verify (ladder climb):
 |-------|-----------------------------|---------|
 | 30    | KEY_SPACE press (start)     | scene == "PLAY", player.x ≈ <start_x>, player.y ≈ <start_y> |
 | 60    | KEY_RIGHT held              | player.x > <start_x> + 20 |
-| 120   | KEY_UP at ladder_a x        | player.y < <floor_y> - 8 |
-| 200   | (continuing climb)          | player.y < <floor_y> - 32 |
+| 120   | KEY_RIGHT toward pickup     | player.x > <pickup_x> - 8 |
+| 200   | KEY_RIGHT then KEY_UP       | score > 0, pickup_count decreased |
 | ...   | ...                         | ... |
-| 600   | KEY_UP near princess        | player.y < 32 |
+| 600   | KEY_RIGHT near goal         | player.x > <goal_x> - 8 |
 | 660   | (no input)                  | scene == "WIN" |
 ```
 
@@ -158,8 +153,8 @@ Closed-loop note: the test harness reads observed values; if they don't match th
 | Frame | Inputs       | Asserts |
 |-------|--------------|---------|
 | 30    | KEY_SPACE    | scene == "PLAY", lives == 3 |
-| 100   | (no input)   | a barrel exists somewhere on a girder below the boss |
-| 200   | (no input)   | barrel.y >= player.y - 8 (barrel close to floor) |
+| 100   | (no input)   | at least one hazard is active and moving |
+| 200   | (no input)   | hazard distance to player <= 16 |
 | 240   | (no input)   | lives <= 2 (player got hit at least once) |
 | 360   | (no input)   | lives == 0 |
 | 420   | (no input)   | scene == "GAME_OVER" |
@@ -225,7 +220,7 @@ Standing still must lead to GAME_OVER within 10–14 seconds at the configured f
 
 - **Verify lines that say "looks right", "feels good", "matches reference"** — these cannot be automated and the gate cannot enforce them.
 - **Milestones with no `inputs` column** — without scripted inputs there's no playthrough.
-- **Lose path with no death trigger** — if barrels are too slow / random / cannot actually hit a stationary player, the lose path can't be verified.
+- **Lose path with no death trigger** — if hazards are too slow / random / cannot actually hit a stationary player, the lose path can't be verified.
 - **Single milestone per path** — the gate needs intermediate milestones to detect early divergence (degenerate "first 30 frames look fine then static" bundles).
 - **Risk tasks without `Approach`** — the implementor will hit the same risky pitfall the isolation was meant to catch.
 

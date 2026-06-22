@@ -46,6 +46,29 @@ def warn(msg: str) -> None:
     print(f"[pyxel-skill] WARN: {msg}", file=sys.stderr)
 
 
+def _has_video(bundle: Path, stem: str) -> bool:
+    return (bundle / f"{stem}.gif").is_file() or (bundle / f"{stem}.mp4").is_file()
+
+
+def _bundle_warnings(bundle: Path) -> list[str]:
+    warnings: list[str] = []
+    if not _has_video(bundle, "win-path"):
+        warnings.append(f"bundle {bundle.name} is incomplete: missing win-path.gif/mp4.")
+    if not _has_video(bundle, "lose-path"):
+        warnings.append(f"bundle {bundle.name} is incomplete: missing lose-path.gif/mp4.")
+    frames = bundle / "frames"
+    if not frames.is_dir() or len(list(frames.glob("*.png"))) < 5:
+        warnings.append(f"bundle {bundle.name} is incomplete: expected at least 5 frame PNGs.")
+    audio = bundle / "audio"
+    if not audio.is_dir() or not any(audio.glob("*.wav")):
+        warnings.append(f"bundle {bundle.name} is incomplete: expected audio/*.wav.")
+    if not (bundle / "notes.md").is_file():
+        warnings.append(f"bundle {bundle.name} is incomplete: missing notes.md.")
+    if not (bundle / "gate-report.json").is_file():
+        warnings.append(f"bundle {bundle.name} has no gate-report.json — quality gate did not run.")
+    return warnings
+
+
 def main() -> None:
     # Always print {} on stdout to be non-blocking. Even if input is malformed.
     try:
@@ -68,11 +91,8 @@ def main() -> None:
         print(json.dumps({}))
         return
 
-    if not (bundle / "win-path.gif").is_file() and not (bundle / "win-path.mp4").is_file():
-        warn(f"bundle {bundle.name} is incomplete: missing win-path.gif/mp4.")
-
-    if not (bundle / "gate-report.json").is_file():
-        warn(f"bundle {bundle.name} has no gate-report.json — quality gate did not run.")
+    for warning in _bundle_warnings(bundle):
+        warn(warning)
 
     print(json.dumps({}))
 

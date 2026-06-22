@@ -29,7 +29,7 @@ from start to goal. Translate the milestone table directly:
 |-------|-----------------------------|---------|
 | 30    | KEY_SPACE press             | scene == "PLAY" |
 | 60    | KEY_RIGHT held              | player.x > start_x + 20 |
-| 120   | KEY_UP at ladder            | player.y < floor_y - 8 |
+| 120   | KEY_UP at route marker      | player.y < floor_y - 8 |
 
 becomes a single `run` call:
 
@@ -99,25 +99,24 @@ Beyond per-milestone asserts, `run` exposes the data needed directly:
 - **Stall:** compare two `state` snapshots N frames apart — if every observed
   attribute is identical despite scheduled inputs, the game has stalled. Optionally,
   capture two `screen_image` snapshots and use Pattern G's `diff_frames` to
-  confirm visual stall. The canonical way for v0.2.0 is `run(stall_detection=True)`
-  (spec §6.5), which sets `exit_status="stalled"` automatically.
+  confirm visual stall. Prefer `run(stall_window_frames=N, snapshots=[...])`
+  with at least one `state` or `screen_grid` snapshot signal; when the observed
+  signal is unchanged for the window, `exit_status` becomes `"stalled"`.
 - **Frame budget:** `result["elapsed_seconds"] / frames` gives average per-frame ms.
   Same rule as before (>100ms → WARN, not FAIL).
 
 ## Closed-loop steering for paths > 200 frames
 
-Use Pattern C verbatim. **godogen contrast note:** godogen leverages Bevy's
-persistent `World` to resume an `Update` loop mid-game; pyxel-mcp's subprocess
-isolation (spec §5.1) precludes resume, so the canonical pattern is
-cumulative-replay from frame 0 with the union of all input segments. The
-trade-off is determinism over runtime cost — fresh subprocesses guarantee no
-leaked state between attempts.
+Use Pattern C verbatim. pyxel-mcp's subprocess isolation precludes mid-run
+resume, so the canonical pattern is cumulative-replay from frame 0 with the
+union of all input segments. The trade-off is determinism over runtime cost:
+fresh subprocesses guarantee no leaked state between attempts.
 
 Example: instead of pre-baking "hold RIGHT for 80 frames", check at frame 60
-whether the player has reached the expected ladder x — if yes, switch to KEY_UP;
+whether the player has reached the expected route x — if yes, switch to KEY_UP;
 if not, add more KEY_RIGHT inputs and rebuild the cumulative schedule from frame 0.
 
-For v0.2.0, open-loop with generous tolerances handles most win paths under
+Open-loop input with generous tolerances handles most win paths under roughly
 200 frames. Pattern C (cumulative-replay segmentation) is the escape hatch when
 a single open-loop schedule cannot be made deterministic.
 
@@ -131,11 +130,8 @@ deterministic input replay. Production code does not need a separate
 "capture mode" branch to be testable — the gate's playthroughs use the same
 code path the player will run.
 
-This differs from godogen-Bevy's recommendation (which warns against "fake
-key presses" and prefers a deterministic capture-time control mode in the
-game itself). Bevy's warning targets cross-process input emulation under
-`xvfb` or virtual displays, where timing drifts and edge cases compound.
-Pyxel-mcp closes that gap structurally — `set_btn` writes the same input
+Avoid cross-process keyboard emulation. Pyxel-mcp closes that gap structurally:
+`set_btn` writes the same input
 ring buffer that `pyxel.btn` reads, on the same frame, in the same process.
 Drift, when it occurs, comes only from physics over long horizons, which is
 what Pattern C (cumulative-replay) is for.

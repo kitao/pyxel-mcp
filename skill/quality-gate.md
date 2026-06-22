@@ -1,6 +1,6 @@
 # Stage 7: Quality Gate
 
-Final acceptance check. PASS gates "done"; FAIL routes back to the phase that owns the failed check. The gate is **agent-driven visual primacy** — the agent (you) reads bundle frames with the `Read` tool, verbalizes observations against PLAN.md / ASSETS.md anchors, and asserts state predicates directly in Python. There are no numerical default thresholds — "good" is judged by what the captured frames actually show.
+Final acceptance check. PASS gates "done"; FAIL routes back to the phase that owns the failed check. The gate is **agent-driven visual primacy** — the agent (you) reads bundle frames, verbalizes observations against PLAN.md / ASSETS.md anchors, and asserts state predicates directly in Python. Numeric examples below are task-local starting points, not universal taste scores; "good" is judged by what the captured frames actually show.
 
 This file contains no `judge_*` calls. The harness's contract is the agent's discipline: run the 11 numbered stop conditions (14 rows after #4 splits into 4a/4b/4c/4d) in order, write `gate-report.json`, route every FAIL to its owning phase, and re-run from the top.
 
@@ -10,7 +10,7 @@ This file contains no `judge_*` calls. The harness's contract is the agent's dis
 - `STRUCTURE.md` (Stage 3) — `FPS` constant.
 - `ASSETS.md` (Stage 4) — sprite manifest (especially `represents:` strings) + audio manifest.
 - `MEMORY.md` — gotchas accumulated across phases.
-- `screenshots/result/<N>/` — proof bundle from `capture.md` (win-path GIF, lose-path GIF, frames/, audio/).
+- `screenshots/result/<N>/` — proof bundle from `capture.md` (win/lose path GIF or MP4 media, frames/, audio/).
 - `pyxel://run-snapshots-schema` (MCP resource) — snapshot field shapes.
 
 ## Output
@@ -66,7 +66,7 @@ FAIL routes to: `scaffolding` (no scene rendered) or `playthrough` (early crash)
 
 ### 4. Win path (multi-attempt with variability)
 
-The win path passes only if the agent can clear under **variability** — not via one specific seed + frame-perfect inputs. A single Pattern-C-found clearance is "answer-key making" with rewind, not gameplay; without variability the gate proves *clearability* but not *playability*. Three sub-checks; **all** must pass.
+The win path passes only if the agent can clear under **variability** — not via one specific seed + frame-perfect inputs. A single Pattern-C-found clearance is "answer-key making" with rewind, not gameplay; without variability the gate proves *clearability* but not *playability*. Four sub-checks; **all** must pass.
 
 #### #4a — Multi-seed clearance
 
@@ -126,6 +126,36 @@ If 0/5 clear under ±3 frame jitter, the game requires frame-perfect timing — 
 
 FAIL routes to: `playthrough` (game requires frame-perfect timing) or `spec` (milestones too tight).
 
+#### #4c — Strategy diversity
+
+Find at least 2 **distinct** winning strategies and verify each clears under one seed. "Distinct" means materially different approach: different route, different pickup-use sequence, different timing pattern, or different risk profile. PLAN.md must contain a `## Win Path Strategies` section listing each strategy's input schedule and rationale.
+
+```markdown
+## Win Path Strategies
+
+### Strategy A — safe route
+Take the longer route around the outer wall, collecting the shield before
+entering the dense hazard lane.
+
+### Strategy B — fast route
+Cut through the center lane without the shield, using shorter movement
+bursts during the visible hazard gaps.
+```
+
+```python
+for name, inputs_for_strategy in strategies.items():
+    result = run(script="main.py", frames=final + 1, random_seed=42,
+                 inputs=inputs_for_strategy,
+                 snapshots=[{"frames": [final], "kind": "state", "attrs": ["scene"]}])
+    snaps = {(s["kind"], s["frame"]): s for s in result["snapshots"]}
+    assert snaps[("state", final)]["values"]["scene"] == "WIN", \
+        f"strategy {name!r}: did not reach WIN"
+```
+
+If only Strategy A clears and Strategy B (a sane alternate path) doesn't, the game is single-thread — memorization, not gameplay. Tune so multiple strategies work.
+
+FAIL routes to: `playthrough` (insufficient solution space) or `spec` (PLAN.md `## Win Path Strategies` section missing or contains < 2 strategies).
+
 #### #4d — Hazard spatial distribution
 
 The win-path's hazard spawns must cover the playfield, not cluster on one side. Single-side bias = the player only needs to dodge in one direction = memorization, not reactive gameplay.
@@ -135,9 +165,9 @@ result = run(script="main.py", frames=final + 1, random_seed=42,
              inputs=inputs,
              snapshots=[{"frames": list(range(0, final, 30)),
                          "kind": "state",
-                         "attrs": ["barrels"]}])  # or whatever hazard collection
+                         "attrs": ["hazards"]}])
 # Collect hazard x positions across all snapshots:
-xs = [b["x"] for s in result["snapshots"] for b in s["values"].get("barrels", [])]
+xs = [h["x"] for s in result["snapshots"] for h in s["values"].get("hazards", [])]
 assert xs, "no hazards observed in win-path window"
 
 usable_lo, usable_hi = 16, 208   # exclude HUD / wall margins (224-wide screen)
@@ -159,36 +189,6 @@ PASS condition: hazard x positions span ≥70% of usable playfield width AND std
 If FAIL: hazards are biased to one column / one path. See `knowledge/game-feel.md` "Hazard Distribution" for design fixes (multi-spawn point, randomize spawn x with deterministic-by-frame variation, telegraphed alternating pattern).
 
 FAIL routes to: `playthrough` (game-balance failure — memorization shortcut design).
-
-#### #4c — Strategy diversity
-
-Find at least 2 **distinct** winning strategies and verify each clears under one seed. "Distinct" means materially different approach: different climb path, different pickup-use sequence, different jump-timing pattern. PLAN.md must contain a `## Win Path Strategies` section listing each strategy's input schedule and rationale.
-
-```markdown
-## Win Path Strategies
-
-### Strategy A — hammer chain
-Pick up hammer on each girder, traverse during invuln, climb when next
-hammer is ~2s away.
-
-### Strategy B — dodge-only
-Skip hammers, jump-dodge each barrel at the apex. Slower, but possible
-because BARREL_SPEED leaves a 20-frame jump window.
-```
-
-```python
-for name, inputs_for_strategy in strategies.items():
-    result = run(script="main.py", frames=final + 1, random_seed=42,
-                 inputs=inputs_for_strategy,
-                 snapshots=[{"frames": [final], "kind": "state", "attrs": ["scene"]}])
-    snaps = {(s["kind"], s["frame"]): s for s in result["snapshots"]}
-    assert snaps[("state", final)]["values"]["scene"] == "WIN", \
-        f"strategy {name!r}: did not reach WIN"
-```
-
-If only Strategy A clears and Strategy B (a sane alternate path) doesn't, the game is single-thread — memorization, not gameplay. Tune so multiple strategies work.
-
-FAIL routes to: `playthrough` (insufficient solution space) or `spec` (PLAN.md `## Win Path Strategies` section missing or contains < 2 strategies).
 
 ### 5. Lose path (multi-seed)
 
@@ -242,7 +242,7 @@ for cue in audio_manifest:  # one entry per SE / per BGM channel
     obs = read_audio(script="main.py",
                      target={"sound": cue["sound_id"]},
                      output_path=f"screenshots/result/{N}/audio/{cue['name']}.wav")
-    assert Path(obs["output_path"]).is_file()
+    assert Path(obs["path"]).is_file()
     assert obs["peak_amplitude"] >= 0.02, f"{cue['name']}: silent (peak={obs['peak_amplitude']})"
     assert len(obs["notes"]) >= 1, f"{cue['name']}: no notes (slot empty?)"
 ```
@@ -265,8 +265,10 @@ PASS condition (no frame-size mismatch): all `frames/*.png` were captured at the
 ```python
 import os
 bundle = Path(f"screenshots/result/{N}")
-required = ["win-path.gif", "lose-path.gif", "notes.md", "frames", "audio"]
-for r in required:
+for stem in ("win-path", "lose-path"):
+    assert any((bundle / f"{stem}{ext}").exists() for ext in (".gif", ".mp4")), \
+        f"missing {stem}.gif or {stem}.mp4"
+for r in ("notes.md", "frames", "audio"):
     assert (bundle / r).exists(), f"missing {r}"
 
 png_files = sorted((bundle / "frames").glob("*.png"))
@@ -302,22 +304,22 @@ For each rule in PLAN.md `## Genre Identity` (3+ rules required by `decomposer.m
 
 The Verify predicate is **the agent's Python code**, not a string parsed by a tool. Each rule typically has a small `run` call with specific inputs and asserts — the same shape as #4/#5 but scoped to one mechanic.
 
-Example for "ladders are the only floor-to-floor path":
+Example for "enemies actively chase the player":
 
 ```python
 result = run(
     script="main.py", frames=120, random_seed=42,
-    inputs=[{"frame": 30, "buttons": ["KEY_SPACE"]}, {"frame": 32, "buttons": []}],
+    inputs=[],
     snapshots=[
-        {"frame": 29, "kind": "state", "attrs": ["player.y"]},
-        {"frame": 60, "kind": "state", "attrs": ["player.y"]},
+        {"frame": 10, "kind": "state", "attrs": ["player.x", "player.y", "enemies[0].x", "enemies[0].y"]},
+        {"frame": 90, "kind": "state", "attrs": ["player.x", "player.y", "enemies[0].x", "enemies[0].y"]},
     ],
 )
-y_before = result["snapshots"][0]["values"]["player.y"]
-y_after  = result["snapshots"][1]["values"]["player.y"]
-girder_pitch = STRUCTURE_CONSTANTS["GIRDER_PITCH_Y"]
-assert (y_before - y_after) <= girder_pitch, \
-    f"jump bypassed a girder: y went from {y_before} to {y_after}, pitch={girder_pitch}"
+start = result["snapshots"][0]["values"]
+end = result["snapshots"][1]["values"]
+start_dist = abs(start["enemies[0].x"] - start["player.x"]) + abs(start["enemies[0].y"] - start["player.y"])
+end_dist = abs(end["enemies[0].x"] - end["player.x"]) + abs(end["enemies[0].y"] - end["player.y"])
+assert end_dist < start_dist, f"enemy did not close distance: {start_dist} -> {end_dist}"
 ```
 
 PASS condition: every rule's predicate holds. If PLAN.md lacks the `## Genre Identity` section or any predicate fails, the gate FAILs.
@@ -339,16 +341,16 @@ After all bundle artifacts exist (#8 PASS) and ASSETS.md draft history is comple
    - `screenshots/result/<N>/frames/win.png`
    - `screenshots/result/<N>/frames/game_over.png`
 
-2. For each PNG, **use the `Read` tool to open it** following the `asset-gen.md` Rule B blind read protocol where applicable: Step B1 literal pixel-position description first, then Step B2 recognition check against ASSETS.md `represents:` strings and PLAN.md milestone description. Vague labels ("Mario-like", "looks like a barrel") are themselves a FAIL — see Rule C anti-patterns.
+2. For each PNG, **use the `Read` tool to open it** following the `asset-gen.md` Rule B blind read protocol where applicable: Step B1 literal pixel-position description first, then Step B2 recognition check against ASSETS.md `represents:` strings and PLAN.md milestone description. Vague labels ("hero-like", "looks like a hazard") are themselves a FAIL — see Rule C anti-patterns.
 
 3. Verbalize observation in 2-3 sentences per frame using **pixel-position-concrete language** (Rule C), covering all of:
-   - **Sprite identity (concrete)** — for each visible character: pixel-position description AND recognition outcome ("Mario at row 200, col 30: 4-pixel red region top, brown 8×6 center, blue lower with two leg columns; recognizable as red-cap plumber per ASSETS.md player_walk_1 represents:"). NOT: "Mario in the bottom-left".
+   - **Sprite identity (concrete)** — for each visible character: pixel-position description AND recognition outcome ("player at row 200, col 30: 4-pixel red region top, brown 8×6 center, blue lower with two leg columns; recognizable as red-jacket explorer per ASSETS.md player_walk_1 represents:"). NOT: "the player is in the bottom-left".
    - **Scene state** — TITLE / PLAY / WIN / GAME_OVER as the PLAN.md milestone for this frame implies?
    - **HUD content** — score / lives / level / "PRESS SPACE" prompts — visible, legible, no overflow, no overlap with gameplay sprites?
    - **Animation state** — mid-stride / climbing / jumping / falling / dead as the milestone implies?
-   - **Background and hazards** — playfield populated (girders, ladders, pickups, hazards) or mostly empty? Are barrels / enemies in plausible positions?
+   - **Background and hazards** — playfield populated with requested terrain, pickups, hazards, and enemies, or mostly empty? Are moving hazards / enemies in plausible positions?
 
-4. Compare each verbalization against the corresponding PLAN.md milestone description. Note divergences explicitly: "milestone says barrel near floor at frame 200, observation: barrel still on girder 1".
+4. Compare each verbalization against the corresponding PLAN.md milestone description. Note divergences explicitly: "milestone says hazard near floor at frame 200, observation: hazard still on upper platform".
 
 5. **Dead-time / static-bundle catch.** Read the verbalizations across `play_start`, `mid_game`, and other gameplay frames. If two gameplay frames produce essentially the same verbalization (same sprite at same position, same hazard placement, same HUD), the bundle is static — entity / camera frozen, broken state, or capture replayed the same frame. This is a FAIL even if every individual frame looks correct in isolation. Anti-shortcut #4 ("a bundle whose first 3 seconds are correct and the rest is static is FAIL, not partial pass") is enforced here, not in #8.
 
@@ -390,9 +392,9 @@ One row per check. The gate writes this file regardless of overall PASS/FAIL.
     {"id": "4b", "label": "Win path jitter tolerance", "result": "PASS",
      "evidence": "±3 frame jitter, 5 trials, 4 cleared (threshold 4)"},
     {"id": "4c", "label": "Win path strategy diversity", "result": "PASS",
-     "evidence": "2 strategies (hammer-chain, dodge-only) both reached WIN"},
+     "evidence": "2 strategies (safe-route, fast-route) both reached WIN"},
     {"id": "4d", "label": "Hazard spatial distribution", "result": "PASS",
-     "evidence": "barrel x positions: span 78% of usable width, stddev 23%"},
+     "evidence": "hazard x positions: span 78% of usable width, stddev 23%"},
     {"id": 5, "label": "Lose path multi-seed", "result": "PASS",
      "evidence": "seeds [42, 99, 1] all reached GAME_OVER"},
     {"id": 6, "label": "Difficulty floor", "result": "PASS",
@@ -408,10 +410,10 @@ One row per check. The gate writes this file regardless of overall PASS/FAIL.
   ],
   "agent_review": {
     "title": "TITLE scene with the game name centered, 'PRESS SPACE' blinking below, no gameplay sprites visible.",
-    "play_start": "Mario in red cap and blue overalls at bottom-left girder; DK boss at top with scaffolding visible; princess and 'HELP!' text on top platform; HUD shows 1UP 0000 / HIGH 0000 / L=01.",
-    "mid_game": "Mario climbing ladder on girder 3; one barrel mid-air falling between girders 1 and 2; another rolling on girder 2; HUD shows score 0300, lives 3.",
-    "win": "Mario adjacent to princess on top platform; 'YOU WIN!' overlay text visible; HUD shows final score 8500.",
-    "game_over": "Mario sprite shows death frame at floor; 'GAME OVER' overlay text; HUD shows score 1200, lives 0."
+    "play_start": "Player sprite is at the start area; goal, pickups, hazards, and HUD are visible with distinct colors.",
+    "mid_game": "Player is mid-route while hazards move through separate lanes; HUD shows score and lives.",
+    "win": "Player has reached the goal area; 'YOU WIN!' overlay text is visible with final score.",
+    "game_over": "Player death frame or failure pose is visible; 'GAME OVER' overlay text is visible with lives at 0."
   },
   "summary": {"pass": 14, "fail": 0, "total": 14}
 }

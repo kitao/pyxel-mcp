@@ -4,9 +4,11 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
+from mcp.types import ToolAnnotations
 from mcp.server.fastmcp import FastMCP
+from pydantic import BaseModel, ConfigDict
 
 from pyxel_mcp._resources import register_resources
 
@@ -21,6 +23,182 @@ mcp = FastMCP(name="pyxel", instructions=_INSTRUCTIONS)
 register_resources(mcp)
 
 
+_PURE_OBSERVATION = ToolAnnotations(
+    readOnlyHint=True,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=False,
+)
+_ARTIFACT_OBSERVATION = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=False,
+    openWorldHint=False,
+)
+
+
+class ToolErrorRecord(BaseModel):
+    phase: str
+    message: str
+    path: str | None = None
+    frame: int | None = None
+    traceback: str | None = None
+
+    model_config = ConfigDict(extra="allow")
+
+
+class ObservationResult(BaseModel):
+    ok: bool
+    errors: list[ToolErrorRecord]
+
+    model_config = ConfigDict(extra="allow")
+
+
+class RunResult(ObservationResult):
+    snapshots: list[Any]
+    assertions: list[Any]
+    exit_status: Literal["ok", "crashed", "timeout", "stalled", "invalid"]
+    frame_count: int
+    elapsed_seconds: float
+    log: str
+    seeded: bool
+
+
+class ValidateResult(ObservationResult):
+    issues: list[Any] = []
+
+
+class PyxelInfoResult(ObservationResult):
+    pyxel_mcp_version: str | None = None
+    pyxel_version: str | None = None
+    python_version: str | None = None
+    stubs_path: str | None = None
+    examples: list[Any] = []
+    resources: dict[str, str] = {}
+
+
+class PaletteResult(ObservationResult):
+    colors: dict[str, Any] = {}
+    extended_palette: bool | None = None
+    palette_size: int | None = None
+    hierarchy: Any = None
+    contrast_warnings: list[Any] = []
+
+
+class ImageResult(ObservationResult):
+    image_index: int | None = None
+    bank_size: list[int] | None = None
+    region: dict[str, int] | None = None
+    pixels: Any = None
+    color_count: dict[str, Any] = {}
+    fill_ratio: float | None = None
+    symmetry: Any = None
+    edge_density: Any = None
+    warnings: list[Any] = []
+    rendered: str | None = None
+
+
+class AnimationResult(ObservationResult):
+    image_index: int | None = None
+    regions: list[Any] = []
+    palette_consistency: float | None = None
+    silhouette_stability: float | None = None
+    region_diffs: list[Any] = []
+    warnings: list[Any] = []
+
+
+class TilemapResult(ObservationResult):
+    tilemap_index: int | None = None
+    size: list[int] | None = None
+    imgsrc: int | None = None
+    tiles: Any = None
+    usage: dict[str, Any] = {}
+    region: dict[str, int] | None = None
+    trap_warning: bool | None = None
+    warnings: list[Any] = []
+    rendered: str | None = None
+
+
+class AudioResult(ObservationResult):
+    path: str | None = None
+    duration_seconds: float | None = None
+    sample_rate: int | None = None
+    channels: int | None = None
+    peak_amplitude: float | None = None
+    notes: list[Any] = []
+    warnings: list[Any] = []
+
+
+class DiffFramesResult(ObservationResult):
+    identical: bool | None = None
+    size_match: bool | None = None
+    size_a: list[int] | None = None
+    size_b: list[int] | None = None
+    changed_pixels: int | None = None
+    total_pixels: int | None = None
+    ratio: float | None = None
+    region: dict[str, int] | None = None
+    warnings: list[Any] = []
+
+
+def _dispatch_error(phase, message: str) -> dict[str, Any]:
+    from pyxel_mcp.observe._harnesses._common.error_capture import make_error
+
+    return {"ok": False, "errors": [make_error(phase, message)]}
+
+
+def _run_error_result(
+    phase,
+    message: str,
+    *,
+    exit_status: Literal["crashed", "timeout", "invalid"] = "crashed",
+    elapsed_seconds: float = 0.0,
+    log: str = "",
+) -> dict[str, Any]:
+    from pyxel_mcp.observe._harnesses._common.error_capture import make_error
+
+    return {
+        "ok": False,
+        "snapshots": [],
+        "assertions": [],
+        "exit_status": exit_status,
+        "frame_count": 0,
+        "elapsed_seconds": elapsed_seconds,
+        "log": log,
+        "seeded": False,
+        "errors": [make_error(phase, message)],
+    }
+
+
+def _load_subprocess_json(stdout: str) -> tuple[dict[str, Any], str]:
+    """Parse the harness JSON result from stdout.
+
+    Some SDL/Pyxel builds print environment diagnostics to stdout before the
+    harness writes its final one-line JSON payload. Treat preceding lines as
+    diagnostics instead of failing the tool call.
+    """
+    text = stdout.strip()
+    if not text:
+        return {}, ""
+    try:
+        return json.loads(text), ""
+    except json.JSONDecodeError:
+        pass
+
+    lines = stdout.splitlines()
+    for index in range(len(lines) - 1, -1, -1):
+        candidate = lines[index].strip()
+        if not candidate:
+            continue
+        try:
+            result = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        diagnostics = "\n".join(lines[:index]).strip()
+        return result, diagnostics
+    raise json.JSONDecodeError("no JSON payload found", stdout, 0)
+
+
 def _dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> dict[str, Any]:
     """Run the harness subprocess with payload as JSON on stdin."""
     cmd = [sys.executable, "-m", "pyxel_mcp.observe._harnesses.main", subcommand]
@@ -32,36 +210,75 @@ def _dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> di
             timeout=timeout,
         )
     except subprocess.TimeoutExpired:
+        from pyxel_mcp.observe._harnesses._common.error_capture import ErrorPhase, make_error
+
+        error = make_error(ErrorPhase.GAME_LOOP, f"subprocess timed out after {timeout}s")
         if subcommand == "run":
             return {
+                "ok": False,
                 "snapshots": [], "assertions": [], "exit_status": "timeout",
                 "frame_count": 0, "elapsed_seconds": float(timeout),
-                "log": "", "seeded": False, "errors": [],
+                "log": "", "seeded": False, "errors": [error],
             }
-        else:
-            from pyxel_mcp.observe._harnesses._common.error_capture import make_error, ErrorPhase
-            return {"errors": [make_error(ErrorPhase.GAME_LOOP, f"subprocess timed out after {timeout}s")]}
+        return {"ok": False, "errors": [error]}
 
     if proc.returncode != 0:
-        from pyxel_mcp.observe._harnesses._common.error_capture import make_error, ErrorPhase
-        return {"errors": [make_error(ErrorPhase.SCRIPT_IMPORT, f"subprocess exited {proc.returncode}: {proc.stderr}")]}
+        from pyxel_mcp.observe._harnesses._common.error_capture import ErrorPhase
 
-    result = json.loads(proc.stdout) if proc.stdout.strip() else {}
+        message = f"subprocess exited {proc.returncode}: {proc.stderr}"
+        if subcommand == "run":
+            return _run_error_result(ErrorPhase.SCRIPT_IMPORT, message, log=proc.stderr)
+        return _dispatch_error(
+            ErrorPhase.SCRIPT_IMPORT,
+            message,
+        )
+
+    try:
+        result, stdout_diagnostics = _load_subprocess_json(proc.stdout)
+    except json.JSONDecodeError as e:
+        from pyxel_mcp.observe._harnesses._common.error_capture import ErrorPhase
+
+        message = f"subprocess returned invalid JSON: {e}: {proc.stdout[-500:]}"
+        if subcommand == "run":
+            return _run_error_result(ErrorPhase.SCRIPT_IMPORT, message, log=proc.stdout)
+        return _dispatch_error(
+            ErrorPhase.SCRIPT_IMPORT,
+            message,
+        )
+    if not result:
+        from pyxel_mcp.observe._harnesses._common.error_capture import ErrorPhase
+
+        message = "subprocess returned no JSON payload"
+        if subcommand == "run":
+            return _run_error_result(ErrorPhase.SCRIPT_IMPORT, message, log=proc.stdout)
+        return _dispatch_error(ErrorPhase.SCRIPT_IMPORT, message)
+    if "ok" not in result and "errors" in result:
+        result["ok"] = len(result["errors"]) == 0
     if subcommand == "run" and proc.stderr:
         result["log"] = (result.get("log", "") + proc.stderr) if result.get("log") else proc.stderr
+    if subcommand == "run" and stdout_diagnostics:
+        result["log"] = (
+            result.get("log", "") + stdout_diagnostics
+            if result.get("log")
+            else stdout_diagnostics
+        )
     return result
 
 
-@mcp.tool()
+@mcp.tool(
+    description="Run a Pyxel script headlessly for N frames, schedule inputs, and capture state, image, layout, or video snapshots.",
+    annotations=_ARTIFACT_OBSERVATION,
+    structured_output=True,
+)
 def run(
     script: str,
     frames: int,
-    inputs: list[dict] | None = None,
-    snapshots: list[dict] | None = None,
+    inputs: list[dict[str, Any]] | None = None,
+    snapshots: list[dict[str, Any]] | None = None,
     random_seed: int | None = None,
     timeout: int = 10,
     stall_window_frames: int | None = None,
-) -> dict:
+) -> RunResult:
     """Drive the script through `frames` headless Pyxel frames, applying
     scheduled `inputs` and collecting `snapshots`.
 
@@ -101,43 +318,66 @@ def run(
     return _dispatch("run", payload, timeout=timeout + 5)
 
 
-@mcp.tool()
-def validate(script: str) -> dict:
+@mcp.tool(
+    description="Statically check a Pyxel script for syntax errors and structural Pyxel anti-patterns before running it.",
+    annotations=_PURE_OBSERVATION,
+    structured_output=True,
+)
+def validate(script: str) -> ValidateResult:
     """Static analysis: syntax + 10 anti-pattern detectors."""
     return _dispatch("validate", {"script": script})
 
 
-@mcp.tool()
-def pyxel_info() -> dict:
+@mcp.tool(
+    description="Report installed Pyxel/pyxel-mcp versions, bundled examples, stubs, and pyxel:// resource URIs.",
+    annotations=_PURE_OBSERVATION,
+    structured_output=True,
+)
+def pyxel_info() -> PyxelInfoResult:
     """Report versions, stub paths, examples, and resource URIs."""
     return _dispatch("pyxel_info", {})
 
 
-@mcp.tool()
-def read_palette(script: str) -> dict:
+@mcp.tool(
+    description="Inspect the active Pyxel palette after script initialization, including color hierarchy and contrast warnings.",
+    annotations=_PURE_OBSERVATION,
+    structured_output=True,
+)
+def read_palette(script: str) -> PaletteResult:
+    """Read `pyxel.colors` and return palette usage metrics without judging quality."""
     return _dispatch("read_palette", {"script": script})
 
 
-@mcp.tool()
+@mcp.tool(
+    description="Inspect a Pyxel image-bank region, returning palette-index pixels, aggregate metrics, and optionally a rendered PNG.",
+    annotations=_ARTIFACT_OBSERVATION,
+    structured_output=True,
+)
 def read_image(
     script: str, image: int,
     x: int = 0, y: int = 0,
     w: int | None = None, h: int | None = None,
     render_path: str | None = None,
-) -> dict:
+) -> ImageResult:
+    """Read pixels from `pyxel.images[image]`; optional render_path writes the region PNG."""
     return _dispatch("read_image", {
         "script": script, "image": image,
         "x": x, "y": y, "w": w, "h": h, "render_path": render_path,
     })
 
 
-@mcp.tool()
+@mcp.tool(
+    description="Compare adjacent sprite-frame regions inside a Pyxel image bank for animation pixel differences.",
+    annotations=_PURE_OBSERVATION,
+    structured_output=True,
+)
 def read_animation(
     script: str, image: int,
     x: int, y: int, w: int, h: int,
     region_count: int,
-    direction: str = "horizontal",
-) -> dict:
+    direction: Literal["horizontal", "vertical"] = "horizontal",
+) -> AnimationResult:
+    """Read adjacent image regions and return per-pair animation diff metrics."""
     return _dispatch("read_animation", {
         "script": script, "image": image,
         "x": x, "y": y, "w": w, "h": h,
@@ -145,18 +385,33 @@ def read_animation(
     })
 
 
-@mcp.tool()
-def read_tilemap(script: str, tilemap: int, render_path: str | None = None) -> dict:
+@mcp.tool(
+    description="Inspect a Pyxel tilemap's used tiles and detect the visible (0,0) tile trap; optionally render the map.",
+    annotations=_ARTIFACT_OBSERVATION,
+    structured_output=True,
+)
+def read_tilemap(script: str, tilemap: int, render_path: str | None = None) -> TilemapResult:
+    """Read `pyxel.tilemaps[tilemap]`; optional render_path writes a preview PNG."""
     return _dispatch("read_tilemap", {"script": script, "tilemap": tilemap, "render_path": render_path})
 
 
-@mcp.tool()
-def read_audio(script: str, target: dict, output_path: str) -> dict:
+@mcp.tool(
+    description="Render a Pyxel sound or music slot to WAV and return notes, peak amplitude, duration, and warnings.",
+    annotations=_ARTIFACT_OBSERVATION,
+    structured_output=True,
+)
+def read_audio(script: str, target: dict[str, int], output_path: str) -> AudioResult:
+    """Render `target` such as `{'sound': 0}` or `{'music': 0}` to output_path."""
     return _dispatch("read_audio", {"script": script, "target": target, "output_path": output_path})
 
 
-@mcp.tool()
-def diff_frames(frame_a: str, frame_b: str) -> dict:
+@mcp.tool(
+    description="Compute a pixel-wise diff between two PNG frames, including identical flag, ratio, and changed bounding box.",
+    annotations=_PURE_OBSERVATION,
+    structured_output=True,
+)
+def diff_frames(frame_a: str, frame_b: str) -> DiffFramesResult:
+    """Compare two frame PNGs without modifying either file."""
     return _dispatch("diff_frames", {"frame_a": frame_a, "frame_b": frame_b})
 
 

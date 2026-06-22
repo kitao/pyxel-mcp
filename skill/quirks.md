@@ -38,7 +38,7 @@ The `state` snapshot kind inside `run` reads attributes off the
 `App` instance (the class that calls `pyxel.run()`). With `attrs:
 None` (or omitted), only top-level scalar primitives are returned —
 lists, dicts, and custom objects are skipped. Dotted/indexed paths
-like `"player.x"` or `"barrels[0].y"` are followed when explicitly
+like `"player.x"` or `"hazards[0].y"` are followed when explicitly
 named, but **arbitrary nested chains are not auto-expanded**:
 `app.world.player.physics.velocity.y` will not be reachable as a
 single attr — name each leaf individually, or flatten to top-level
