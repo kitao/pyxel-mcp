@@ -23,7 +23,6 @@ _EXPECTED_FIXED_URIS = {
     "pyxel://palette/default",
     "pyxel://run-snapshots-schema",
     "pyxel://anti-patterns",
-    "pyxel://workflow",
 }
 
 _DOC_SLUGS = ("api-reference", "user-guide", "mml-commands", "pyxres-format")
@@ -64,7 +63,6 @@ async def test_pyxel_info_uris_are_registered():
         info["resources"]["default_palette"],
         info["resources"]["run_snapshots_schema"],
         info["resources"]["anti_patterns"],
-        info["resources"]["workflow"],
     }
     assert advertised == _EXPECTED_FIXED_URIS
 
@@ -79,9 +77,13 @@ async def test_pyxel_info_uris_are_registered():
     assert any(uri.startswith("pyxel://examples/") for uri in registered), \
         "no example resources registered"
 
-    # Distinct categories: docs + palette + examples + schema + anti-patterns + workflow.
+    assert "workflow" not in info["resources"]
+    assert "workflow_strict_mode" not in info["resources"]
+    assert "workflow_pyxel_notes" not in info["resources"]
+
+    # Distinct categories: docs + palette + examples + schema + anti-patterns.
     categories = _EXPECTED_FIXED_URIS | {"pyxel://examples/<any>"}
-    assert len(categories) >= 9
+    assert len(categories) >= 8
 
 
 async def test_anti_patterns_resource_reads_nonempty():
@@ -127,11 +129,10 @@ async def test_run_snapshots_schema_resource_reads_nonempty():
     assert "snapshot" in blobs[0].content.lower()
 
 
-async def test_workflow_resource_reads_nonempty():
-    result = await mcp.read_resource("pyxel://workflow")
-    blobs = list(result)
-    assert blobs and blobs[0].content
-    assert "pyxel" in blobs[0].content.lower()
+async def test_workflow_resource_is_not_registered():
+    resources = await mcp.list_resources()
+    registered = {str(r.uri) for r in resources}
+    assert not any(uri.startswith("pyxel://workflow") for uri in registered)
 
 
 async def test_examples_resource_reads_nonempty():

@@ -24,8 +24,8 @@ def test_errors_empty_on_success():
 def test_resources_has_expected_uris():
     """Verify every advertised resource URI is present and correct.
 
-    Includes Pyxel docs, validation references, and the lean workflow skill
-    entry points that are actually registered as resources.
+    Includes Pyxel docs and validation references. Skill guidance lives in
+    the separate pyxel-skill repository, not in pyxel-mcp.
     """
     result = pyxel_info_run({})
     assert result["resources"] == {
@@ -37,9 +37,6 @@ def test_resources_has_expected_uris():
         "examples": "pyxel://examples/<name>",
         "run_snapshots_schema": "pyxel://run-snapshots-schema",
         "anti_patterns": "pyxel://anti-patterns",
-        "workflow": "pyxel://workflow",
-        "workflow_strict_mode": "pyxel://workflow/strict-mode",
-        "workflow_pyxel_notes": "pyxel://workflow/pyxel-notes",
     }
 
 

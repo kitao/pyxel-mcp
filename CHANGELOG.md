@@ -20,26 +20,14 @@
   `self.` prefixes and inline expressions.
 - Document absolute path requirements and `state.attrs` path syntax in the
   run snapshot schema resource.
-- Integrate the lean workflow skill under `skill/` and expose it through
-  `pyxel://workflow/*` MCP resources.
-- Embed workflow content into wheels via the hatch build hook and force-include
-  packaging rule; `src/pyxel_mcp/workflow/_content/` remains a generated,
-  gitignored build artifact.
-- Add `pyxel-mcp install`, `pyxel-mcp publish-skill DIR`, and `pyxel-mcp serve`.
-- Harden `publish-skill` against unsafe targets, files, and non-skill
-  overwrite attempts.
-- Rewrite README and workflow guidance around a compact observe-and-iterate
-  loop, with strict proof bundles reserved for release/audit requests.
-- Keep quality verification in the workflow skill: agents assert predicates
-  directly in Python and inspect captured PNG/audio artifacts rather than
-  relying on taste-scoring tools.
-- Remove the old stage pipeline, topical knowledge directory, and Stop hook
-  from the public skill surface.
+- Keep pyxel-mcp scoped to MCP observation tools and resources; workflow
+  guidance lives in the separate pyxel-skill repository.
+- Add `pyxel-mcp install` and `pyxel-mcp serve`.
+- Remove workflow publishing, workflow resources, and related wheel packaging.
 - Remove obsolete internal planning material from the public tree and ignore
   future scratch directories.
 - Replace DK-specific smoke fixtures with neutral route-navigation smoke coverage.
-- Add stale public-content guards for the workflow skill and Agent Skill
-  frontmatter schema checks.
+- Add stale public-content guards for docs, CLI output, and resource contracts.
 - Full verification currently passes with 332 pyxel-mcp tests.
 
 ## 0.11.0

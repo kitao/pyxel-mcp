@@ -44,24 +44,12 @@ Snippet:
 Restart your client. The server logs a startup line to stderr so you can confirm it loaded:
 
 ```text
-[pyxel-mcp] starting - 9 tools, workflow=/path/to/skill
+[pyxel-mcp] starting - 9 tools
 ```
 
 Pyxel >= 2.9.6 is installed as a dependency.
 
-## Optional skill
-
-The package also ships a small Pyxel workflow skill. Use it when you want host-native skill activation instead of reading MCP resources manually:
-
-```bash
-uvx pyxel-mcp publish-skill ~/.claude/skills/pyxel
-```
-
-The same content is available as MCP resources:
-
-- `pyxel://workflow` - skill entry point.
-- `pyxel://workflow/strict-mode` - opt-in release/audit evidence.
-- `pyxel://workflow/pyxel-notes` - concise Pyxel gotchas.
+For workflow guidance, install the separate `pyxel-skill` repository. pyxel-mcp does not ship or publish skills.
 
 ## Tools
 
@@ -89,7 +77,6 @@ The same content is available as MCP resources:
 
 - `pyxel://run-snapshots-schema` - full grammar for `run.snapshots`.
 - `pyxel://anti-patterns` - `validate` issue catalog.
-- `pyxel://workflow` - bundled lean skill.
 - `pyxel://api-reference`, `pyxel://user-guide`, `pyxel://mml-commands`, `pyxel://pyxres-format` - Pyxel docs.
 - `pyxel://palette/default` - default palette table.
 - `pyxel://examples/<name>` - bundled Pyxel examples.
@@ -102,19 +89,13 @@ The same content is available as MCP resources:
 uvx --refresh-package pyxel-mcp pyxel-mcp install
 ```
 
-After upgrading, re-run `publish-skill` if you installed the host-native skill.
-
 ## Troubleshooting
 
 **Tools do not appear.** Look for `[pyxel-mcp] starting - 9 tools` in client logs, then restart the client if the config changed.
 
-**The skill does not activate.** Verify `~/.claude/skills/pyxel/SKILL.md` exists and restart the host.
-
 **A script crashes on `pyxel.init()`.** User scripts should call `pyxel.init()` once. Tool calls are isolated subprocesses, so repeated runs should go through pyxel-mcp rather than re-importing a script in the same process.
 
 **A validation issue is unfamiliar.** Read `pyxel://anti-patterns`.
-
-**Workflow resource is unavailable.** Reinstall through the wheel path, for example `uvx --refresh-package pyxel-mcp pyxel-mcp install`.
 
 ## MCP Registry
 

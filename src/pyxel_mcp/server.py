@@ -429,28 +429,16 @@ diff_frames_tool = diff_frames
 
 
 def _log_startup() -> None:
-    """One-line stderr diagnostic so users can confirm install + workflow path.
+    """One-line stderr diagnostic so users can confirm the server loaded.
 
     Stderr is safe under MCP's stdio transport: stdout is reserved for
-    protocol frames, stderr surfaces in the host client's logs (Claude
-    Code, Cursor, Codex CLI all forward it). The line names the
-    workflow source so install troubleshooting starts from data, not
-    guesswork.
+    protocol frames, stderr surfaces in host client logs.
     """
-    try:
-        from pyxel_mcp.workflow import workflow_root
-        wf = str(workflow_root())
-    except Exception as e:  # workflow content missing — keep server startable
-        wf = f"<unavailable: {e}>"
-    # Counted live from FastMCP rather than hard-coded so the diagnostic
-    # tracks reality if the tool surface changes between versions.
     try:
         n_tools = len(mcp._tool_manager._tools)  # type: ignore[attr-defined]
     except Exception:
         n_tools = 0
-    sys.stderr.write(
-        f"[pyxel-mcp] starting — {n_tools} tools, workflow={wf}\n"
-    )
+    sys.stderr.write(f"[pyxel-mcp] starting — {n_tools} tools\n")
 
 
 def main() -> None:

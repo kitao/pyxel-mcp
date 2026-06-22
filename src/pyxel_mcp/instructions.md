@@ -39,7 +39,7 @@ Example snapshot pair:
 
 Use `random_seed` when randomness affects verification. For long input paths, rerun from frame 0 with the cumulative schedule after each observed state checkpoint.
 
-For full game builds, read `pyxel://workflow`. It is a lean skill, not a required gate for every tool call. Its strict mode is opt-in for release, audit, or long multi-session work.
+For full game-building workflow guidance, use the separate `pyxel-skill` repository.
 
 ## Quirks
 
@@ -55,7 +55,6 @@ For full game builds, read `pyxel://workflow`. It is a lean skill, not a require
 
 - `pyxel://run-snapshots-schema` - full snapshot schema.
 - `pyxel://anti-patterns` - `validate` issue catalog.
-- `pyxel://workflow` - bundled lean Pyxel skill.
 - `pyxel://api-reference`, `pyxel://user-guide`, `pyxel://mml-commands`, `pyxel://pyxres-format` - Pyxel documentation.
 - `pyxel://palette/default` - default 16-color palette.
 - `pyxel://examples/<name>` - bundled example scripts.
