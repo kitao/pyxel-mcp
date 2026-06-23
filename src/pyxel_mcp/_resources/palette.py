@@ -22,7 +22,7 @@ PALETTE: dict[int, tuple[str, tuple[int, int, int]]] = {
     15: ("peach", (237, 199, 176)),
 }
 
-# Common-use hints — informed by 142-game analysis (see instructions.md).
+# Common-use hints for the agent-readable palette resource.
 _USE_HINTS = {
     0: "bg, outline",
     1: "dark bg, shadows",

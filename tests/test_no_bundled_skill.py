@@ -38,6 +38,42 @@ def test_pyxel_mcp_has_no_skill_build_or_publish_plumbing():
     assert offenders == []
 
 
+def test_pyxel_mcp_has_no_source_tmp_artifacts():
+    offenders = [
+        str(path.relative_to(ROOT))
+        for path in (ROOT / "src").rglob("*")
+        if "tmp" in path.relative_to(ROOT).parts and path.is_file()
+    ]
+    assert offenders == []
+
+
+def test_pyxel_mcp_source_does_not_assume_skill_or_host_artifacts():
+    forbidden = ("ASSETS.md", "host's `Read`")
+    offenders = []
+    for path in (ROOT / "src").rglob("*.py"):
+        text = path.read_text()
+        for term in forbidden:
+            if term in text:
+                offenders.append(f"{path.relative_to(ROOT)}: {term}")
+    assert offenders == []
+
+
+def test_pyxel_mcp_source_has_no_review_breadcrumbs():
+    forbidden = ("review on commit", "ef9c730")
+    offenders = []
+    for path in (ROOT / "src").rglob("*.py"):
+        text = path.read_text()
+        for term in forbidden:
+            if term in text:
+                offenders.append(f"{path.relative_to(ROOT)}: {term}")
+    assert offenders == []
+
+
+def test_local_agent_settings_are_ignored_by_repo():
+    ignore = (ROOT / ".gitignore").read_text()
+    assert ".claude/" in ignore
+
+
 def test_pyxel_mcp_source_does_not_import_workflow_package():
     offenders = []
     for path in (ROOT / "src").rglob("*.py"):

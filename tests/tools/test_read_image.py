@@ -47,3 +47,23 @@ def test_render_to_png():
         assert Path(result["rendered"]).resolve() == Path(png_path).resolve()
         assert Path(result["rendered"]).exists()
         assert Path(png_path).stat().st_size > 0
+
+
+def test_render_path_must_be_absolute():
+    result = read_image_run({
+        "script": str(SCRIPTS / "palette_default.py"),
+        "image": 0,
+        "render_path": "bank0.png",
+    })
+    assert result["errors"][0]["phase"] == "validation"
+    assert "absolute" in result["errors"][0]["message"]
+
+
+def test_render_path_rejects_unexpanded_home():
+    result = read_image_run({
+        "script": str(SCRIPTS / "palette_default.py"),
+        "image": 0,
+        "render_path": "~/bank0.png",
+    })
+    assert result["errors"][0]["phase"] == "validation"
+    assert "absolute" in result["errors"][0]["message"]

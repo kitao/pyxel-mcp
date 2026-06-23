@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from pyxel_mcp.observe._harnesses._common.analyzers.tilemap import analyze_tilemap
+from pyxel_mcp.observe._harnesses._common.artifact_path import absolute_path_error
 from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_error
 from pyxel_mcp.observe._harnesses._common.preloop import PreloopFailed, run_to_preloop
 
@@ -26,6 +27,11 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     tilemap = payload.get("tilemap")
     if not isinstance(tilemap, int):
         return _empty(make_validation_error("`tilemap` must be int"))
+    render_path = payload.get("render_path")
+    if render_path is not None:
+        path_error = absolute_path_error(render_path, "render_path")
+        if path_error:
+            return _empty(make_validation_error(path_error))
 
     try:
         with run_to_preloop(payload, empty_factory=_empty):
@@ -34,7 +40,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                 return _empty(make_validation_error(
                     f"tilemap index {tilemap} out of range [0, {len(pyxel.tilemaps)})"))
 
-            result = analyze_tilemap(tilemap=tilemap, render_path=payload.get("render_path"))
+            result = analyze_tilemap(tilemap=tilemap, render_path=render_path)
     except PreloopFailed as f:
         return f.result
     result["ok"] = len(result.get("errors", [])) == 0

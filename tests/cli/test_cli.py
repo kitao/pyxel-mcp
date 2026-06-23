@@ -32,6 +32,15 @@ def test_registry_metadata_matches_project_version():
     assert registry["packages"][0]["transport"]["type"] == "stdio"
 
 
+def test_public_descriptions_preserve_observation_boundary():
+    pyproject = (ROOT / "pyproject.toml").read_text()
+    parser = cli._build_parser()
+
+    assert "observe Pyxel programs" in pyproject
+    assert "verify, and iterate" not in pyproject
+    assert parser.description == "MCP server for Pyxel - headless observation tools."
+
+
 def test_install_output_contains_snippet_text(capsys):
     """install output should embed the snippet so users can copy it directly."""
     rc = cli.main(["install"])

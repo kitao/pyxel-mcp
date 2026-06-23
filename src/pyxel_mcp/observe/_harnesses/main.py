@@ -66,10 +66,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = handler(payload)
     except Exception as e:
-        # TODO(phase 2): SCRIPT_IMPORT is misleading for handler-internal bugs
-        # (vs actual user-script import failures). Reassess once tools start
-        # using `script_loader.load_script_module` so the script-import catch
-        # can be scoped tightly inside the handler. (See review on commit ef9c730.)
+        # Handler-specific validation and script-load paths should catch expected
+        # user errors before this process-level fallback.
         result = {"errors": [make_error(ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=True)]}
 
     print(json.dumps(result))

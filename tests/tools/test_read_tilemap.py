@@ -68,3 +68,13 @@ def test_render_to_png():
         assert Path(result["rendered"]).resolve() == Path(png_path).resolve()
         assert Path(result["rendered"]).exists()
         assert Path(png_path).stat().st_size > 0
+
+
+def test_render_path_must_be_absolute():
+    result = read_tilemap_run({
+        "script": str(SCRIPTS / "tilemap_demo.py"),
+        "tilemap": 0,
+        "render_path": "tilemap0.png",
+    })
+    assert result["errors"][0]["phase"] == "validation"
+    assert "absolute" in result["errors"][0]["message"]

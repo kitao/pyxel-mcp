@@ -52,6 +52,15 @@ def test_center_of_mass_for_centered_blob():
     assert 14 <= cy <= 18
 
 
+def test_layout_result_exposes_only_implemented_metrics():
+    import pyxel
+    with headless_pyxel():
+        pyxel.init(32, 32)
+        pyxel.cls(0)
+        result = capture({"frame": 0, "kind": "layout"})
+    assert "text_positions" not in result
+
+
 # --- performance regression guard --------------------------------------------
 
 

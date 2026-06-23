@@ -2,6 +2,8 @@
 
 pyxel-mcp is an MCP server for observing Pyxel programs. It exposes 9 tools. They return facts; the agent decides whether those facts satisfy the current game.
 
+Tools with a `script` argument execute trusted local Python in a fresh subprocess. pyxel-mcp is an observation adapter, not a sandbox for untrusted code.
+
 ## Tools at a glance
 
 - `validate(script)`: syntax plus common Pyxel anti-patterns. Run before the first dynamic check.

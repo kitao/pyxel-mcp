@@ -32,6 +32,16 @@ def test_render_target_validation():
     assert result["errors"][0]["phase"] == "validation"
 
 
+def test_output_path_must_be_absolute():
+    result = read_audio_run({
+        "script": str(SCRIPTS / "sound_demo.py"),
+        "target": {"sound": 0},
+        "output_path": "sound.wav",
+    })
+    assert result["errors"][0]["phase"] == "validation"
+    assert "absolute" in result["errors"][0]["message"]
+
+
 def test_render_empty_slot_warns():
     """Rendering an empty slot returns success with peak=0 and warning."""
     result = read_audio_run({

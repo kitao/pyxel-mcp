@@ -17,7 +17,7 @@ _INSTRUCTIONS_PATH = Path(__file__).parent / "instructions.md"
 try:
     _INSTRUCTIONS = _INSTRUCTIONS_PATH.read_text()
 except FileNotFoundError:
-    _INSTRUCTIONS = "pyxel-mcp — instructions file missing from install."
+    _INSTRUCTIONS = "pyxel-mcp - instructions file missing from install."
 
 mcp = FastMCP(name="pyxel", instructions=_INSTRUCTIONS)
 register_resources(mcp)
@@ -33,7 +33,13 @@ _ARTIFACT_OBSERVATION = ToolAnnotations(
     readOnlyHint=False,
     destructiveHint=False,
     idempotentHint=False,
-    openWorldHint=False,
+    openWorldHint=True,
+)
+_SCRIPT_OBSERVATION = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=False,
+    openWorldHint=True,
 )
 
 
@@ -283,13 +289,13 @@ def run(
     scheduled `inputs` and collecting `snapshots`.
 
     Snapshot kinds (see `pyxel://run-snapshots-schema` for full grammar):
-    - `{"frame": F, "kind": "screen_image", "output": "out.png", "scale": 1}`
+    - `{"frame": F, "kind": "screen_image", "output": "/tmp/out.png", "scale": 1}`
     - `{"frame": F, "kind": "screen_grid", "bbox": [x, y, w, h]}` — input field
       `bbox` (list); output emits `region: {x, y, w, h}` (dict, consistent with
       read_image / read_tilemap / diff_frames)
     - `{"frame": F, "kind": "state", "attrs": ["player.x", "scene"]}` — dotted-path App attrs
-    - `{"frame": F, "kind": "layout"}` — text/region balance metrics
-    - `{"kind": "video", "start_frame": A, "end_frame": B, "fps": 30, "output": "clip.gif"}`
+    - `{"frame": F, "kind": "layout"}` — balance and density metrics
+    - `{"kind": "video", "start_frame": A, "end_frame": B, "fps": 30, "output": "/tmp/clip.gif"}`
     Multi-frame: `{"frames": [10, 20, 30]}` or `{"frames": "10..50:5"}` plus `output_pattern`
     with the `{frame}` token for screen_image batches.
 
@@ -340,7 +346,7 @@ def pyxel_info() -> PyxelInfoResult:
 
 @mcp.tool(
     description="Inspect the active Pyxel palette after script initialization, including color hierarchy and contrast warnings.",
-    annotations=_PURE_OBSERVATION,
+    annotations=_SCRIPT_OBSERVATION,
     structured_output=True,
 )
 def read_palette(script: str) -> PaletteResult:
@@ -368,7 +374,7 @@ def read_image(
 
 @mcp.tool(
     description="Compare adjacent sprite-frame regions inside a Pyxel image bank for animation pixel differences.",
-    annotations=_PURE_OBSERVATION,
+    annotations=_SCRIPT_OBSERVATION,
     structured_output=True,
 )
 def read_animation(
@@ -438,7 +444,7 @@ def _log_startup() -> None:
         n_tools = len(mcp._tool_manager._tools)  # type: ignore[attr-defined]
     except Exception:
         n_tools = 0
-    sys.stderr.write(f"[pyxel-mcp] starting — {n_tools} tools\n")
+    sys.stderr.write(f"[pyxel-mcp] starting - {n_tools} tools\n")
 
 
 def main() -> None:

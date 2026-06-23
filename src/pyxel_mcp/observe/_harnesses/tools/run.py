@@ -10,6 +10,7 @@ from typing import Any
 
 from PIL import Image
 
+from pyxel_mcp.observe._harnesses._common.artifact_path import absolute_path_error
 from pyxel_mcp.observe._harnesses._common.error_capture import (
     make_error, make_validation_error, ErrorPhase,
 )
@@ -142,6 +143,11 @@ def _expand_multi_frame_snapshots(
                 raise _ValidationFailed(make_validation_error(
                     f"`snapshots[{i}]` multi-frame screen_image requires `output_pattern`"
                 ))
+            path_error = absolute_path_error(
+                snap.get("output_pattern"), f"snapshots[{i}].output_pattern"
+            )
+            if path_error:
+                raise _ValidationFailed(make_validation_error(path_error))
             # Validate pattern structure once before expanding frames
             try:
                 _substitute_output_pattern(snap["output_pattern"], 0)
@@ -230,6 +236,9 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
                 raise _ValidationFailed(make_validation_error(
                     f"`snapshots[{i}]` video kind does not support `frames`; use `start_frame`/`end_frame`"
                 ))
+            path_error = absolute_path_error(snap.get("output"), f"snapshots[{i}].output")
+            if path_error:
+                raise _ValidationFailed(make_validation_error(path_error))
             # Validate extension early without keeping the instance.
             out = snap.get("output", "")
             ext = Path(str(out)).suffix.lower()
@@ -266,6 +275,20 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
                     raise _ValidationFailed(make_validation_error(
                         f"`snapshots[{i}].frame` must satisfy 0 <= frame < frames ({frames}), got: {frame!r}"
                     ))
+        if kind == "screen_image":
+            output = snap.get("output")
+            if not isinstance(output, str) or not output:
+                raise _ValidationFailed(make_validation_error(
+                    f"`snapshots[{i}].output` must be a non-empty str for screen_image snapshots"
+                ))
+            path_error = absolute_path_error(output, f"snapshots[{i}].output")
+            if path_error:
+                raise _ValidationFailed(make_validation_error(path_error))
+            scale = snap.get("scale", 1)
+            if not isinstance(scale, int) or scale < 1:
+                raise _ValidationFailed(make_validation_error(
+                    f"`snapshots[{i}].scale` must be int >= 1"
+                ))
 
     inputs = payload.get("inputs", [])
     if not isinstance(inputs, list):

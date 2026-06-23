@@ -28,7 +28,6 @@
   future scratch directories.
 - Replace DK-specific smoke fixtures with neutral route-navigation smoke coverage.
 - Add stale public-content guards for docs, CLI output, and resource contracts.
-- Full verification currently passes with 332 pyxel-mcp tests.
 
 ## 0.11.0
 

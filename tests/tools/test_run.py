@@ -379,6 +379,42 @@ def test_single_frame_with_output_pattern_is_validation_error(tmp_path):
     assert result["errors"][0]["phase"] == "validation"
 
 
+def test_single_frame_screen_image_without_output_is_validation_error():
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"frame": 1, "kind": "screen_image"}],
+    })
+    assert result["ok"] is False
+    assert result["exit_status"] == "invalid"
+    assert result["snapshots"] == []
+    assert result["assertions"] == []
+    assert result["errors"][0]["phase"] == "validation"
+    assert "output" in result["errors"][0]["message"]
+
+
+def test_single_frame_screen_image_output_must_be_absolute():
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"frame": 1, "kind": "screen_image", "output": "frame.png"}],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+    assert "absolute" in result["errors"][0]["message"]
+
+
+def test_single_frame_screen_image_output_rejects_unexpanded_home():
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 5,
+        "snapshots": [{"frame": 1, "kind": "screen_image", "output": "~/frame.png"}],
+    })
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+    assert "absolute" in result["errors"][0]["message"]
+
+
 def test_video_with_frames_is_validation_error(tmp_path):
     out = tmp_path / "play.gif"
     result = run_tool({

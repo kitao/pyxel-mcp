@@ -47,8 +47,10 @@ def headless_pyxel():
 
     saved_run = pyxel.run
     saved_init = pyxel.init
-    saved_env = os.environ.get("SDL_VIDEODRIVER")
+    saved_video_env = os.environ.get("SDL_VIDEODRIVER")
+    saved_audio_env = os.environ.get("SDL_AUDIODRIVER")
     os.environ["SDL_VIDEODRIVER"] = "dummy"
+    os.environ["SDL_AUDIODRIVER"] = "dummy"
 
     def _headless_init(*args, **kwargs):
         # Skip if already initialized; safe because each production invocation
@@ -72,7 +74,11 @@ def headless_pyxel():
     finally:
         pyxel.run = saved_run
         pyxel.init = saved_init
-        if saved_env is None:
+        if saved_video_env is None:
             os.environ.pop("SDL_VIDEODRIVER", None)
         else:
-            os.environ["SDL_VIDEODRIVER"] = saved_env
+            os.environ["SDL_VIDEODRIVER"] = saved_video_env
+        if saved_audio_env is None:
+            os.environ.pop("SDL_AUDIODRIVER", None)
+        else:
+            os.environ["SDL_AUDIODRIVER"] = saved_audio_env

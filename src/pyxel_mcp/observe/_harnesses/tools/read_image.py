@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from pyxel_mcp.observe._harnesses._common.analyzers.image import analyze_image
+from pyxel_mcp.observe._harnesses._common.artifact_path import absolute_path_error
 from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_error
 from pyxel_mcp.observe._harnesses._common.preloop import PreloopFailed, run_to_preloop
 
@@ -23,14 +24,18 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     """Read pixels in an image-bank region at the pre-loop checkpoint.
 
     Returns raw observation (`color_count`, `fill_ratio`, ...). The agent
-    judges the verdict directly: compare aggregates to ASSETS.md sprite
-    manifest entry, then `Read` the rendered PNG (pass `render_path`)
-    and verbalize against the `represents:` description. `ok` is True
+    judges the verdict directly against task-specific sprite expectations,
+    and can inspect a rendered PNG by passing `render_path`. `ok` is True
     iff `len(errors) == 0`.
     """
     image = payload.get("image")
     if not isinstance(image, int):
         return _empty(make_validation_error("`image` must be int"))
+    render_path = payload.get("render_path")
+    if render_path is not None:
+        path_error = absolute_path_error(render_path, "render_path")
+        if path_error:
+            return _empty(make_validation_error(path_error))
 
     try:
         with run_to_preloop(payload, empty_factory=_empty):
@@ -43,7 +48,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                 image=image,
                 x=payload.get("x", 0), y=payload.get("y", 0),
                 w=payload.get("w"), h=payload.get("h"),
-                render_path=payload.get("render_path"),
+                render_path=render_path,
             )
     except PreloopFailed as f:
         return f.result

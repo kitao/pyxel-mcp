@@ -1,4 +1,4 @@
-"""layout snapshot — balance analysis (spec §6.4.4)."""
+"""layout snapshot — balance and density analysis (spec §6.4.4)."""
 from __future__ import annotations
 from typing import Any
 
@@ -65,11 +65,6 @@ def _center_of_mass(mask: np.ndarray) -> list[float]:
     return [float(xs.mean()), float(ys.mean())]
 
 
-def _detect_text_positions(arr: np.ndarray) -> list[dict[str, Any]]:
-    """Heuristic text-block detection. Deferred to a future task."""
-    return []
-
-
 def capture(snapshot: dict[str, Any]) -> dict[str, Any]:
     arr, w, h = _read_screen()
     mask = _density_mask(arr)
@@ -80,6 +75,5 @@ def capture(snapshot: dict[str, Any]) -> dict[str, Any]:
         "v_balance": _v_balance(mask),
         "quadrant_density": _quadrant_density(mask),
         "center_of_mass": _center_of_mass(mask),
-        "text_positions": _detect_text_positions(arr),
         "warnings": [],
     }

@@ -10,6 +10,20 @@ def test_sets_sdl_videodriver():
         assert os.environ.get("SDL_VIDEODRIVER") == "dummy"
 
 
+def test_sets_and_restores_sdl_audiodriver(monkeypatch):
+    monkeypatch.setenv("SDL_AUDIODRIVER", "coreaudio")
+    with headless_pyxel():
+        assert os.environ.get("SDL_AUDIODRIVER") == "dummy"
+    assert os.environ.get("SDL_AUDIODRIVER") == "coreaudio"
+
+
+def test_removes_sdl_audiodriver_when_absent(monkeypatch):
+    monkeypatch.delenv("SDL_AUDIODRIVER", raising=False)
+    with headless_pyxel():
+        assert os.environ.get("SDL_AUDIODRIVER") == "dummy"
+    assert os.environ.get("SDL_AUDIODRIVER") is None
+
+
 def test_captures_callbacks():
     import pyxel
     update_fn = lambda: None

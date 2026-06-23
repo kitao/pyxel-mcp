@@ -4,6 +4,8 @@ MCP server for [Pyxel](https://github.com/kitao/pyxel), a retro game engine for 
 
 The server is deliberately an observation adapter. It does not judge whether a game is good. Agents use the returned state, pixels, audio, docs, and diffs to make task-specific decisions.
 
+Tools that accept `script` execute trusted local Python. pyxel-mcp isolates Pyxel state per subprocess, but it is not a sandbox for untrusted code.
+
 ## Why this exists
 
 LLM agents writing Pyxel code without feedback often stop at "the script runs". pyxel-mcp closes that loop:
@@ -16,11 +18,13 @@ LLM agents writing Pyxel code without feedback often stop at "the script runs". 
 
 ## Install
 
-Register as an MCP server in your client. The CLI prints the exact snippet:
+Register the published package as an MCP server in your client. The CLI prints the snippet:
 
 ```bash
 uvx pyxel-mcp install
 ```
+
+The printed snippet uses `uvx pyxel-mcp`, so it resolves the published package. For an unreleased checkout, point your MCP config at that checkout's console script or local Python environment instead.
 
 Paste the printed JSON into your client's MCP config:
 

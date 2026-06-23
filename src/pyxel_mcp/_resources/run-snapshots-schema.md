@@ -9,12 +9,10 @@ must include `"kind"` plus kind-specific fields described below.
 ## Output paths — always absolute
 
 Snapshot fields that name output files (`output` for `screen_image` /
-`video`, `output_pattern` for multi-frame `screen_image`) **should be
-absolute paths**. Relative paths resolve against the harness subprocess's
-working directory — Pyxel chdirs into the script's parent directory before
-the run loop, which is rarely what the caller expects. Constructing the
-path with `os.path.abspath(...)` or `pathlib.Path(...).resolve()` from
-the caller side avoids any ambiguity about where the PNG / GIF lands.
+`video`, `output_pattern` for multi-frame `screen_image`) **must be
+absolute paths**. Relative paths and unexpanded `~` paths are validation
+errors. Construct paths with `os.path.abspath(...)`,
+`pathlib.Path(...).resolve()`, or an already-expanded absolute temp path.
 
 ---
 
@@ -47,7 +45,7 @@ Saves a PNG screenshot of the Pyxel screen at a given frame.
 {
   "kind": "screen_image",
   "frame": <int>,
-  "output": "<path>.png",
+  "output": "<absolute path>.png",
   "scale": 1
 }
 ```
@@ -57,7 +55,7 @@ Saves a PNG screenshot of the Pyxel screen at a given frame.
 {
   "kind": "screen_image",
   "frames": <list[int] | range-string>,
-  "output_pattern": "<path>/{frame}_screen.png",
+  "output_pattern": "<absolute path>/{frame}_screen.png",
   "scale": 1
 }
 ```
@@ -176,7 +174,7 @@ game logic (scores, positions, flags) without image comparison.
 
 ### 4. layout
 
-Analyzes the visual layout of the screen — balance, density, and text positions.
+Analyzes visual balance and density on the screen.
 No file output; returns metrics inline.
 
 **Input — single-frame:**
@@ -204,7 +202,6 @@ No file output; returns metrics inline.
   "v_balance": 0.48,
   "quadrant_density": [0.3, 0.4, 0.2, 0.5],
   "center_of_mass": [64.0, 60.0],
-  "text_positions": [{"x": 10, "y": 5, "text": "SCORE"}],
   "warnings": []
 }
 ```
@@ -214,7 +211,6 @@ No file output; returns metrics inline.
 - `v_balance`: float 0–1; same metric for top/bottom halves.
 - `quadrant_density`: 4 floats [top-left, top-right, bottom-left, bottom-right], each 0–1.
 - `center_of_mass`: [x, y] float pixel coordinates of the visual centroid.
-- `text_positions`: list of detected text runs with their screen coordinates.
 
 ---
 
@@ -230,7 +226,7 @@ accept `frames` (range-string or list). Use `start_frame`/`end_frame` instead.
   "start_frame": 0,
   "end_frame": 60,
   "fps": 30,
-  "output": "<path>.gif",
+  "output": "<absolute path>.gif",
   "scale": 1
 }
 ```

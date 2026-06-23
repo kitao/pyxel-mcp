@@ -51,7 +51,7 @@ def _print_install_guide() -> int:
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pyxel-mcp",
-        description="MCP server for Pyxel - run, verify, iterate on retro-game scripts.",
+        description="MCP server for Pyxel - headless observation tools.",
     )
     sub = parser.add_subparsers(dest="cmd", title="commands")
     sub.add_parser("serve", help="Start the MCP server (default if no command)")

@@ -7,3 +7,17 @@ def test_instructions_present():
     text = (repo_root / "src/pyxel_mcp/instructions.md").read_text()
     for marker in ["## Tools at a glance", "## Workflow patterns", "## Quirks", "pyxel://run-snapshots-schema"]:
         assert marker in text, f"missing section: {marker}"
+
+
+def test_run_examples_do_not_show_relative_artifact_paths():
+    from pyxel_mcp.server import run_tool
+
+    repo_root = Path(__file__).parent.parent.parent
+    schema = (repo_root / "src/pyxel_mcp/_resources/run-snapshots-schema.md").read_text()
+    doc = run_tool.__doc__ or ""
+
+    assert '"output": "out.png"' not in doc
+    assert '"output": "clip.gif"' not in doc
+    assert '"output": "<path>.png"' not in schema
+    assert '"output_pattern": "<path>/{frame}_screen.png"' not in schema
+    assert '"output": "<path>.gif"' not in schema

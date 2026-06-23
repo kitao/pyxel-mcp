@@ -9,6 +9,7 @@ import wave
 from pathlib import Path
 from typing import Any
 
+from pyxel_mcp.observe._harnesses._common.artifact_path import absolute_path_error
 from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_error
 from pyxel_mcp.observe._harnesses._common.preloop import PreloopFailed, run_to_preloop
 
@@ -152,6 +153,9 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     output_path = payload.get("output_path")
     if not isinstance(output_path, str):
         return _empty(make_validation_error("missing or non-str `output_path`"))
+    path_error = absolute_path_error(output_path, "output_path")
+    if path_error:
+        return _empty(make_validation_error(path_error))
 
     # --- Run script to pre-loop checkpoint ---
     try:

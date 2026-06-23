@@ -148,6 +148,15 @@ async def test_mcp_tool_metadata_is_discoverable():
     assert by_name["pyxel_info"].annotations.readOnlyHint is True
     assert by_name["run"].annotations.destructiveHint is False
     assert by_name["read_audio"].annotations.readOnlyHint is False
+    script_executing_tools = {
+        "run", "read_palette", "read_image", "read_animation",
+        "read_tilemap", "read_audio",
+    }
+    for name in script_executing_tools:
+        annotations = by_name[name].annotations
+        assert annotations.readOnlyHint is False, name
+        assert annotations.idempotentHint is False, name
+        assert annotations.openWorldHint is True, name
 
     expected_tool_fields = {
         "validate": {"issues"},

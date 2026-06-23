@@ -4,9 +4,11 @@ __pycache__/
 dist/
 build/
 .venv/
+.claude/
 .mcpregistry_*
 uv.lock
 .worktrees/
+tmp/
 superpowers/
 docs/superpowers/
 tests/fixtures/images/*.png
