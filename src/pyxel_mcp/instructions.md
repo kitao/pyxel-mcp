@@ -41,7 +41,7 @@ Example snapshot pair:
 
 Use `random_seed` when randomness affects verification. For long input paths, rerun from frame 0 with the cumulative schedule after each observed state checkpoint.
 
-For full game-building workflow guidance, use the separate `pyxel-skill` repository.
+For full game-building workflow guidance, see `pyxel-skill`: https://github.com/kitao/pyxel-skill.
 
 ## Quirks
 
