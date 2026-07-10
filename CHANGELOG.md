@@ -1,8 +1,23 @@
 # Change Log
 
-## 1.0.0 (unreleased)
+## 1.1.0 (unreleased)
 
-- Bump package and server metadata to 1.0.0; PyPI publish is still pending.
+- Add `until` parameter to `run` for condition-based stopping
+- Add `until_met` field to run results
+- Add `"end"` frame token to state/screen_image/screen_grid/layout snapshots
+- Add `title` and unified safety annotations to all 9 tools
+- Declare `used_indices` and `co_located_pairs` in read_palette output
+- Warn when a music target hits the fixed 10-second render window
+- Document that `script` parameters take file paths, not source strings
+- Document `exit_status` values and live-fetched doc resources
+- Remove dangling spec section references from docstrings
+- Drop deprecated license classifier per PEP 639
+- Rewrite README with quick start, badges, and security notes
+- Add CI workflow, SECURITY.md, and CONTRIBUTING.md
+
+## 1.0.0
+
+- Bump package and server metadata to 1.0.0.
 - Bump minimum Pyxel dependency to 2.9.6.
 - Mark package classifier as Production/Stable.
 - Keep the public MCP surface to 9 observation tools: `run`, `validate`,
