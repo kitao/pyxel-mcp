@@ -286,10 +286,11 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
         kind = snap.get("kind")
         if kind != "video":
             frame = snap.get("frame")
-            if frame is not None:
+            if frame is not None and frame != "end":
                 if not isinstance(frame, int) or frame < 0 or frame >= frames:
                     raise _ValidationFailed(make_validation_error(
-                        f"`snapshots[{i}].frame` must satisfy 0 <= frame < frames ({frames}), got: {frame!r}"
+                        f"`snapshots[{i}].frame` must be an int with 0 <= frame < "
+                        f"frames ({frames}) or the string \"end\", got: {frame!r}"
                     ))
         if kind == "screen_image":
             output = snap.get("output")
@@ -416,6 +417,14 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         else:
             single_frame_snaps.append(snap)
     snapshot_results: list[dict] = []
+
+    # `"frame": "end"` snapshots are deferred until the last completed frame
+    # is known, so they are excluded from the per-frame dispatch loop below.
+    end_snaps = [s for s in single_frame_snaps if s.get("frame") == "end"]
+    if end_snaps:
+        single_frame_snaps = [
+            s for s in single_frame_snaps if s.get("frame") != "end"
+        ]
 
     # Stall detection setup. We track the rolling buffer here so we can also
     # warn (after the loop) if the agent set stall_window_frames but did not
@@ -593,6 +602,26 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                         ):
                             exit_status = "stalled"
                             break
+
+            # Fire `"frame": "end"` snapshots at the last completed frame.
+            # Crashed runs are excluded: their final frame did not complete.
+            if end_snaps and frame_count > 0 and exit_status in ("ok", "stalled"):
+                last = frame_count - 1
+                for snap in end_snaps:
+                    resolved = {**snap, "frame": last}
+                    kind = resolved["kind"]
+                    if kind == "screen_image":
+                        snapshot_results.append(_si_kind.capture(resolved))
+                    elif kind == "screen_grid":
+                        snapshot_results.append(_sg_kind.capture(resolved))
+                    elif kind == "state":
+                        snapshot_results.append(_state_kind.capture(
+                            resolved,
+                            app_instance=state.app_instance,
+                            module=imported_module,
+                        ))
+                    elif kind == "layout":
+                        snapshot_results.append(_layout_kind.capture(resolved))
 
             # Post-loop: encode all video accumulators (partial videos are useful for debugging)
             for accum in video_accumulators:
