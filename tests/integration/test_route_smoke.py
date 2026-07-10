@@ -1,7 +1,8 @@
 """Integration smoke: drive mini_route.py through the core tool surface."""
 from tests.conftest import SCRIPTS
 from pyxel_mcp.server import (
-    run_tool, validate_tool, read_palette_tool, read_image_tool,
+    run as run_tool, validate as validate_tool,
+    read_palette as read_palette_tool, read_image as read_image_tool,
 )
 
 

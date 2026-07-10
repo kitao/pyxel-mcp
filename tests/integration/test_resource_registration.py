@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from pyxel_mcp.server import mcp, pyxel_info_tool
+from pyxel_mcp.server import mcp, pyxel_info as pyxel_info_tool
 
 
 # Slugs that pyxel_info advertises as live URIs (not the `examples/<name>` template).

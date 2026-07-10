@@ -3,9 +3,10 @@ import subprocess
 
 import pytest
 from pyxel_mcp.server import (
-    run_tool, validate_tool, pyxel_info_tool,
-    read_palette_tool, read_image_tool, read_animation_tool, read_tilemap_tool,
-    read_audio_tool, diff_frames_tool,
+    run as run_tool, validate as validate_tool, pyxel_info as pyxel_info_tool,
+    read_palette as read_palette_tool, read_image as read_image_tool,
+    read_animation as read_animation_tool, read_tilemap as read_tilemap_tool,
+    read_audio as read_audio_tool, diff_frames as diff_frames_tool,
     _dispatch, mcp,
 )
 from tests.conftest import SCRIPTS
@@ -225,3 +226,12 @@ def test_palette_result_declares_all_output_fields():
     from pyxel_mcp.server import PaletteResult
     fields = set(PaletteResult.model_fields)
     assert {"used_indices", "co_located_pairs"} <= fields
+
+
+async def test_every_tool_has_title_and_safety_annotations():
+    tools = await mcp.list_tools()
+    assert len(tools) == 9
+    for t in tools:
+        assert t.annotations is not None, t.name
+        assert t.annotations.title, t.name
+        assert t.annotations.destructiveHint is False, t.name

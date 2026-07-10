@@ -10,7 +10,7 @@ def test_instructions_present():
 
 
 def test_run_examples_do_not_show_relative_artifact_paths():
-    from pyxel_mcp.server import run_tool
+    from pyxel_mcp.server import run as run_tool
 
     repo_root = Path(__file__).parent.parent.parent
     schema = (repo_root / "src/pyxel_mcp/_resources/run-snapshots-schema.md").read_text()

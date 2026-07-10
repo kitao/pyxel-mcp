@@ -11,6 +11,7 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict
 
 from pyxel_mcp._resources import register_resources
+from pyxel_mcp.observe._harnesses._common.error_capture import ErrorPhase, make_error
 
 
 _INSTRUCTIONS_PATH = Path(__file__).parent / "instructions.md"
@@ -23,24 +24,16 @@ mcp = FastMCP(name="pyxel", instructions=_INSTRUCTIONS)
 register_resources(mcp)
 
 
-_PURE_OBSERVATION = ToolAnnotations(
-    readOnlyHint=True,
-    destructiveHint=False,
-    idempotentHint=True,
-    openWorldHint=False,
-)
-_ARTIFACT_OBSERVATION = ToolAnnotations(
-    readOnlyHint=False,
-    destructiveHint=False,
-    idempotentHint=False,
-    openWorldHint=True,
-)
-_SCRIPT_OBSERVATION = ToolAnnotations(
-    readOnlyHint=False,
-    destructiveHint=False,
-    idempotentHint=False,
-    openWorldHint=True,
-)
+def _annotations(title: str, *, pure: bool) -> ToolAnnotations:
+    """pure=True marks tools that neither execute a user script nor write
+    artifact files; clients may auto-approve and parallelize those."""
+    return ToolAnnotations(
+        title=title,
+        readOnlyHint=pure,
+        destructiveHint=False,
+        idempotentHint=pure,
+        openWorldHint=not pure,
+    )
 
 
 class ToolErrorRecord(BaseModel):
@@ -151,8 +144,6 @@ class DiffFramesResult(ObservationResult):
 
 
 def _dispatch_error(phase, message: str) -> dict[str, Any]:
-    from pyxel_mcp.observe._harnesses._common.error_capture import make_error
-
     return {"ok": False, "errors": [make_error(phase, message)]}
 
 
@@ -164,8 +155,6 @@ def _run_error_result(
     elapsed_seconds: float = 0.0,
     log: str = "",
 ) -> dict[str, Any]:
-    from pyxel_mcp.observe._harnesses._common.error_capture import make_error
-
     return {
         "ok": False,
         "snapshots": [],
@@ -220,8 +209,6 @@ def _dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> di
             timeout=timeout,
         )
     except subprocess.TimeoutExpired:
-        from pyxel_mcp.observe._harnesses._common.error_capture import ErrorPhase, make_error
-
         error = make_error(ErrorPhase.GAME_LOOP, f"subprocess timed out after {timeout}s")
         if subcommand == "run":
             return {
@@ -233,8 +220,6 @@ def _dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> di
         return {"ok": False, "errors": [error]}
 
     if proc.returncode != 0:
-        from pyxel_mcp.observe._harnesses._common.error_capture import ErrorPhase
-
         message = f"subprocess exited {proc.returncode}: {proc.stderr}"
         if subcommand == "run":
             return _run_error_result(ErrorPhase.SCRIPT_IMPORT, message, log=proc.stderr)
@@ -246,8 +231,6 @@ def _dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> di
     try:
         result, stdout_diagnostics = _load_subprocess_json(proc.stdout)
     except json.JSONDecodeError as e:
-        from pyxel_mcp.observe._harnesses._common.error_capture import ErrorPhase
-
         message = f"subprocess returned invalid JSON: {e}: {proc.stdout[-500:]}"
         if subcommand == "run":
             return _run_error_result(ErrorPhase.SCRIPT_IMPORT, message, log=proc.stdout)
@@ -256,8 +239,6 @@ def _dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> di
             message,
         )
     if not result:
-        from pyxel_mcp.observe._harnesses._common.error_capture import ErrorPhase
-
         message = "subprocess returned no JSON payload"
         if subcommand == "run":
             return _run_error_result(ErrorPhase.SCRIPT_IMPORT, message, log=proc.stdout)
@@ -277,7 +258,7 @@ def _dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> di
 
 @mcp.tool(
     description="Run a Pyxel script file headlessly for N frames — or until a condition holds — scheduling inputs and capturing state, image, layout, or video snapshots.",
-    annotations=_ARTIFACT_OBSERVATION,
+    annotations=_annotations("Run Pyxel script headlessly", pure=False),
     structured_output=True,
 )
 def run(
@@ -314,7 +295,7 @@ def run(
 
     `stall_window_frames` (opt-in; default None = disabled): when set to N, the
     harness keeps a rolling buffer of the last N captured `state.values` dicts
-    and last N `screen_grid` hashes. If every entry in either buffer is
+    and last N `screen_grid` signatures. If every entry in either buffer is
     identical for N consecutive frames despite scheduled inputs, the run
     breaks early with `exit_status="stalled"`. Requires at least one `state`
     or `screen_grid` snapshot scheduled — without one, the param is
@@ -342,7 +323,7 @@ def run(
 
 @mcp.tool(
     description="Statically check a Pyxel script for syntax errors and structural Pyxel anti-patterns before running it.",
-    annotations=_PURE_OBSERVATION,
+    annotations=_annotations("Validate Pyxel script", pure=True),
     structured_output=True,
 )
 def validate(script: str) -> ValidateResult:
@@ -355,7 +336,7 @@ def validate(script: str) -> ValidateResult:
 
 @mcp.tool(
     description="Report installed Pyxel/pyxel-mcp versions, bundled examples, stubs, and pyxel:// resource URIs.",
-    annotations=_PURE_OBSERVATION,
+    annotations=_annotations("Pyxel environment info", pure=True),
     structured_output=True,
 )
 def pyxel_info() -> PyxelInfoResult:
@@ -365,7 +346,7 @@ def pyxel_info() -> PyxelInfoResult:
 
 @mcp.tool(
     description="Inspect the active Pyxel palette after script initialization, including color hierarchy and contrast warnings.",
-    annotations=_SCRIPT_OBSERVATION,
+    annotations=_annotations("Read Pyxel palette", pure=False),
     structured_output=True,
 )
 def read_palette(script: str) -> PaletteResult:
@@ -378,7 +359,7 @@ def read_palette(script: str) -> PaletteResult:
 
 @mcp.tool(
     description="Inspect a Pyxel image-bank region, returning palette-index pixels, aggregate metrics, and optionally a rendered PNG.",
-    annotations=_ARTIFACT_OBSERVATION,
+    annotations=_annotations("Read image bank region", pure=False),
     structured_output=True,
 )
 def read_image(
@@ -399,7 +380,7 @@ def read_image(
 
 @mcp.tool(
     description="Compare adjacent sprite-frame regions inside a Pyxel image bank for animation pixel differences.",
-    annotations=_SCRIPT_OBSERVATION,
+    annotations=_annotations("Read animation regions", pure=False),
     structured_output=True,
 )
 def read_animation(
@@ -421,7 +402,7 @@ def read_animation(
 
 @mcp.tool(
     description="Inspect a Pyxel tilemap's used tiles and detect the visible (0,0) tile trap; optionally render the map.",
-    annotations=_ARTIFACT_OBSERVATION,
+    annotations=_annotations("Read tilemap", pure=False),
     structured_output=True,
 )
 def read_tilemap(script: str, tilemap: int, render_path: str | None = None) -> TilemapResult:
@@ -434,7 +415,7 @@ def read_tilemap(script: str, tilemap: int, render_path: str | None = None) -> T
 
 @mcp.tool(
     description="Render a Pyxel sound or music slot to WAV and return notes, peak amplitude, duration, and warnings.",
-    annotations=_ARTIFACT_OBSERVATION,
+    annotations=_annotations("Render audio to WAV", pure=False),
     structured_output=True,
 )
 def read_audio(script: str, target: dict[str, int], output_path: str) -> AudioResult:
@@ -447,25 +428,12 @@ def read_audio(script: str, target: dict[str, int], output_path: str) -> AudioRe
 
 @mcp.tool(
     description="Compute a pixel-wise diff between two PNG frames, including identical flag, ratio, and changed bounding box.",
-    annotations=_PURE_OBSERVATION,
+    annotations=_annotations("Diff two frames", pure=True),
     structured_output=True,
 )
 def diff_frames(frame_a: str, frame_b: str) -> DiffFramesResult:
     """Compare two frame PNGs without modifying either file."""
     return _dispatch("diff_frames", {"frame_a": frame_a, "frame_b": frame_b})
-
-
-# Aliases for direct test access without going through MCP machinery.
-# @mcp.tool() returns the function unchanged (directly callable), so simple aliases work.
-run_tool = run
-validate_tool = validate
-pyxel_info_tool = pyxel_info
-read_palette_tool = read_palette
-read_image_tool = read_image
-read_animation_tool = read_animation
-read_tilemap_tool = read_tilemap
-read_audio_tool = read_audio
-diff_frames_tool = diff_frames
 
 
 def _log_startup() -> None:

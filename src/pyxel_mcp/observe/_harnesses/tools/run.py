@@ -351,11 +351,12 @@ def _capture_screen_as_pil() -> Image.Image:
 
 
 def _grid_signature(grid: list) -> tuple:
-    """Convert a screen_grid 2D list into a hashable nested tuple.
+    """Convert a screen_grid 2D list into a hashable, comparable nested tuple.
 
     The grid is `list[list[int]]`; tuples with the same nesting are hashable
-    and compare structurally — so we can put `hash(...)` into the rolling
-    buffer cheaply.
+    and compare structurally by value, so equal grids compare equal even
+    without hashing — avoiding the (rare but possible) hash collisions that
+    `hash(...)` equality would risk.
     """
     return tuple(tuple(row) for row in grid)
 
@@ -434,7 +435,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     has_grid_snap = any(s["kind"] == "screen_grid" for s in single_frame_snaps)
     stall_active = stall_window is not None and (has_state_snap or has_grid_snap)
     state_buffer: list[dict] = []
-    grid_buffer: list[int] = []
+    grid_buffer: list[tuple] = []
 
     # Capture stdout+stderr from the user script into log_buf.
     # The real stdout is reserved for the JSON result written by main.py,
@@ -579,7 +580,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                             break
 
                     # Stall detection: maintain rolling buffer of the most
-                    # recent N captured state-values and grid-hashes. If at
+                    # recent N captured state-values and grid-signatures. If at
                     # least one buffer is full and every entry is identical,
                     # the run has not advanced for N consecutive frames despite
                     # scheduled inputs — break early and surface "stalled".
@@ -589,7 +590,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                             if len(state_buffer) > stall_window:
                                 state_buffer.pop(0)
                         if captured_grid_this_frame is not None:
-                            grid_buffer.append(hash(_grid_signature(captured_grid_this_frame)))
+                            grid_buffer.append(_grid_signature(captured_grid_this_frame))
                             if len(grid_buffer) > stall_window:
                                 grid_buffer.pop(0)
 
