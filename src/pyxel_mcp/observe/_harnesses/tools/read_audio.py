@@ -2,6 +2,7 @@
 
 Renders a Pyxel sound or music slot to WAV. Delegates synthesis to Pyxel's
 built-in .save() method, then reads the WAV back to compute metadata.
+Music targets render a fixed 10-second window.
 """
 from __future__ import annotations
 import struct
@@ -204,7 +205,12 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                     n_notes = max(len(list(audio_obj.notes)), 1)
                     duration_hint = n_notes * audio_obj.speed / 22050
             else:
-                duration_hint = 10.0  # conservative default for music
+                duration_hint = 10.0  # music renders a fixed 10-second window
+                if not is_empty_slot:
+                    warnings.append(
+                        "music target renders a fixed 10-second window; "
+                        "audio beyond 10 seconds is truncated"
+                    )
 
             out_path = str(Path(output_path).resolve())
             audio_obj.save(out_path, duration_hint)

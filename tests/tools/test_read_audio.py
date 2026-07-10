@@ -98,3 +98,16 @@ def test_render_music_out_of_range():
     })
     assert result["errors"][0]["phase"] == "validation"
     assert "out of range" in result["errors"][0]["message"]
+
+
+def test_music_target_warns_about_fixed_window(tmp_path):
+    """Music renders always use a fixed 10-second window; a populated slot
+    must warn so agents know audio beyond 10 seconds is truncated.
+    """
+    result = read_audio_run({
+        "script": str(SCRIPTS / "music_demo.py"),
+        "target": {"music": 0},
+        "output_path": str(tmp_path / "music.wav"),
+    })
+    assert result["ok"] is True
+    assert any("10-second window" in w for w in result["warnings"])

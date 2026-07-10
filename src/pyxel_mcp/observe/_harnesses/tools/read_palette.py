@@ -14,6 +14,7 @@ def _empty(error: dict) -> dict[str, Any]:
     return {
         "ok": False,
         "colors": {}, "extended_palette": False, "palette_size": 0,
+        "used_indices": [], "co_located_pairs": [],
         "hierarchy": None, "contrast_warnings": [],
         "errors": [error],
     }
@@ -22,11 +23,11 @@ def _empty(error: dict) -> dict[str, Any]:
 def run(payload: dict[str, Any]) -> dict[str, Any]:
     """Read the script's palette state at the pre-loop checkpoint.
 
-    Returns raw observation (`hierarchy`, `contrast_warnings`, ...). The
-    agent judges the verdict directly against the merged
-    `read_palette` ∪ `screen_grid` `used_indices` set (HUD / overlay
-    colours are only visible in the runtime grid, not the pre-loop
-    bank). `ok` is True iff `len(errors) == 0`.
+    Returns raw observation (`used_indices`, `hierarchy`,
+    `contrast_warnings`, ...). `used_indices` reflects the pre-loop image
+    banks only; colors drawn at runtime (HUD, overlays) appear in
+    `screen_grid` snapshots, so merge the grid's values yourself when
+    runtime coverage matters. `ok` is True iff `len(errors) == 0`.
     """
     try:
         with run_to_preloop(payload, empty_factory=_empty):

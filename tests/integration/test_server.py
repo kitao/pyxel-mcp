@@ -219,3 +219,9 @@ def test_run_tool_until_via_server():
 def test_run_result_declares_until_met():
     from pyxel_mcp.server import RunResult
     assert "until_met" in RunResult.model_fields
+
+
+def test_palette_result_declares_all_output_fields():
+    from pyxel_mcp.server import PaletteResult
+    fields = set(PaletteResult.model_fields)
+    assert {"used_indices", "co_located_pairs"} <= fields

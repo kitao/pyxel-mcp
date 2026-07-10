@@ -88,6 +88,8 @@ class PaletteResult(ObservationResult):
     colors: dict[str, Any] = {}
     extended_palette: bool | None = None
     palette_size: int | None = None
+    used_indices: list[Any] = []
+    co_located_pairs: list[Any] = []
     hierarchy: Any = None
     contrast_warnings: list[Any] = []
 
