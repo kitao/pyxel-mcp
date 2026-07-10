@@ -1,4 +1,4 @@
-"""Scheduled input application (spec §6.3)."""
+"""Scheduled input application."""
 from __future__ import annotations
 from typing import TypedDict
 

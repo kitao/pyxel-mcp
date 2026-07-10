@@ -1,4 +1,4 @@
-"""layout snapshot — balance and density analysis (spec §6.4.4)."""
+"""layout snapshot — balance and density analysis."""
 from __future__ import annotations
 from typing import Any
 

@@ -1,4 +1,4 @@
-"""ToolError construction (spec §5.4)."""
+"""ToolError construction."""
 from __future__ import annotations
 import enum
 import sys

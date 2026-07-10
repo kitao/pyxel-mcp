@@ -1,4 +1,4 @@
-"""validate(script) — static analysis on script source (spec §8.1)."""
+"""validate(script) — static analysis on script source."""
 from __future__ import annotations
 import ast
 from pathlib import Path
@@ -10,7 +10,7 @@ from pyxel_mcp.observe._harnesses._common.script_loader import resolve_script_pa
 
 _SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}
 
-# Pixel-emitting pyxel APIs — any call to these renders pixels (spec §8.1 cls_missing)
+# Pixel-emitting pyxel APIs — any call to these renders pixels (cls_missing detector)
 _PIXEL_EMIT_APIS = frozenset(
     ["blt", "bltm", "pset", "line", "rect", "rectb", "circ", "circb", "tri", "trib", "text"]
 )

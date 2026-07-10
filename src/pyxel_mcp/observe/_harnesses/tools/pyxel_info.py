@@ -1,4 +1,4 @@
-"""pyxel_info() — discovery (spec §8.2)."""
+"""pyxel_info() — discovery."""
 from __future__ import annotations
 import sys
 from importlib.metadata import PackageNotFoundError, version as _pkg_version

@@ -1,4 +1,4 @@
-"""screen_image snapshot — PNG capture (spec §6.4.1)."""
+"""screen_image snapshot — PNG capture."""
 from __future__ import annotations
 from pathlib import Path
 from typing import Any

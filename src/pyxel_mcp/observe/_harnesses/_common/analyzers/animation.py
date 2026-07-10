@@ -1,4 +1,4 @@
-"""Animation strip analyzer (spec §7.3)."""
+"""Animation strip analyzer."""
 from __future__ import annotations
 from typing import Any
 

@@ -1,4 +1,4 @@
-"""Subprocess entry point (spec §11.2).
+"""Subprocess entry point.
 
 Usage: python -m pyxel_mcp.observe._harnesses.main <subcommand>
        reads JSON parameters from stdin, writes JSON result to stdout.

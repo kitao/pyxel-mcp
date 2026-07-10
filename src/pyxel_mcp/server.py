@@ -1,4 +1,4 @@
-"""FastMCP server (spec §11.2)."""
+"""FastMCP server exposing the 9 observation tools."""
 from __future__ import annotations
 import json
 import subprocess

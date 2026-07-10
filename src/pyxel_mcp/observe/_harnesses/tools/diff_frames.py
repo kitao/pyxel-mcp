@@ -1,4 +1,4 @@
-"""diff_frames tool (spec §9.1).
+"""diff_frames tool.
 
 Pixel-wise diff between two PNG files. Returns size_match, identical,
 changed_pixels, ratio, and bounding region of differing pixels.

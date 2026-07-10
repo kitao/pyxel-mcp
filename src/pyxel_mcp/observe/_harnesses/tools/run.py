@@ -1,4 +1,4 @@
-"""run(script, frames, ...) — dynamic execution driver (spec §6)."""
+"""run(script, frames, ...) — dynamic execution driver."""
 from __future__ import annotations
 import contextlib
 import re
@@ -128,7 +128,7 @@ def _expand_multi_frame_snapshots(
 
         if not has_frames:
             # Single-frame snapshot (or video): pass through, but reject
-            # output_pattern in single-frame mode per spec §6.6.
+            # output_pattern in single-frame mode.
             if has_pattern and kind != "video":
                 raise _ValidationFailed(make_validation_error(
                     f"`snapshots[{i}]` single-frame mode requires `output`, not `output_pattern`"
@@ -262,7 +262,7 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
                 raise _ValidationFailed(make_validation_error(
                     f"`snapshots[{i}]` video output extension must be .gif or .mp4, got: {ext or '(none)'}"
                 ))
-            # Validate video frame range (spec §6.4.5).
+            # Validate video frame range.
             start = snap.get("start_frame")
             end = snap.get("end_frame")
             if not isinstance(start, int) or start < 0:

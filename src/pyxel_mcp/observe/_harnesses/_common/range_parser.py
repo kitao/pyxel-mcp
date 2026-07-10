@@ -1,4 +1,4 @@
-"""Multi-frame range-string parser (spec §6.6)."""
+"""Multi-frame range-string parser."""
 from __future__ import annotations
 import re
 

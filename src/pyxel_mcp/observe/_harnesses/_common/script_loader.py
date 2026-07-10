@@ -1,4 +1,4 @@
-"""Script import + cwd handling (spec §5.2)."""
+"""Script import + cwd handling."""
 from __future__ import annotations
 import os
 import sys

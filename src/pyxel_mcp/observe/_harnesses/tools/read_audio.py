@@ -1,4 +1,4 @@
-"""read_audio tool (spec §8.3).
+"""read_audio tool.
 
 Renders a Pyxel sound or music slot to WAV. Delegates synthesis to Pyxel's
 built-in .save() method, then reads the WAV back to compute metadata.

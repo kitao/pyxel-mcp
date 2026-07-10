@@ -1,4 +1,4 @@
-"""read_image tool (spec §7.2)."""
+"""read_image tool."""
 from __future__ import annotations
 from typing import Any
 

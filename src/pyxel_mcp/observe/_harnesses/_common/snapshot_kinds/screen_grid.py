@@ -1,4 +1,4 @@
-"""screen_grid snapshot — palette indices as 2D array (spec §6.4.2)."""
+"""screen_grid snapshot — palette indices as 2D array."""
 from __future__ import annotations
 from typing import Any
 

@@ -1,4 +1,4 @@
-"""state snapshot — read App or module attrs (spec §6.4.3)."""
+"""state snapshot — read App or module attrs."""
 from __future__ import annotations
 import re
 from typing import Any

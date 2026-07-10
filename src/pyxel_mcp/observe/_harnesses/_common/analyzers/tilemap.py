@@ -1,4 +1,4 @@
-"""Tilemap analyzer (spec §7.4)."""
+"""Tilemap analyzer."""
 from __future__ import annotations
 from pathlib import Path
 from typing import Any

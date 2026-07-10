@@ -1,10 +1,10 @@
-"""Palette analysis (spec §7.1)."""
+"""Palette analysis."""
 from __future__ import annotations
 from typing import Any
 
 import numpy as np
 
-# Pyxel default palette index ranges (heuristic per spec §7.1):
+# Pyxel default palette index ranges (heuristic):
 # - background: 0, 1, 5
 # - environment: 3, 4, 13
 # - interactive: 8, 10, 11
@@ -65,7 +65,7 @@ def _hierarchy_score(used: set[int]) -> dict[str, Any]:
 def _scan_image_banks() -> tuple[set[int], set[tuple[int, int]]]:
     """Single-pass scan of all image banks: returns (used_indices, co_located_pairs).
 
-    Implements spec §7.1's notion of "commonly co-located indices" at the
+    Implements the "commonly co-located indices" heuristic at the
     pixel-data level: an unordered pair (i, j) is co-located iff some pixel
     with index i has a 4-neighbour pixel with index j (or vice versa) in any
     image bank. The transparent index 0 is excluded — pairings against the

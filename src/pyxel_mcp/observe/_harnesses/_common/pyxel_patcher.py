@@ -1,4 +1,4 @@
-"""Headless Pyxel + run-intercept (spec §5.1, §5.7)."""
+"""Headless Pyxel + run-intercept."""
 from __future__ import annotations
 import contextlib
 import os
@@ -12,7 +12,7 @@ class RunNotCalledError(RuntimeError):
 
 @dataclass
 class PreLoopState:
-    """Captured at the pre-loop checkpoint (spec §5.7)."""
+    """Captured at the pre-loop checkpoint."""
     update_callback: Callable | None = None
     draw_callback: Callable | None = None
     app_instance: object | None = None  # update_callback.__self__ if bound; else None
@@ -33,7 +33,7 @@ def headless_pyxel():
     re-initialization when Pyxel is already initialized (width > 0). The latter
     is relevant only in test processes that share a single Pyxel module state
     across multiple test cases; in production each tool call runs in its own
-    subprocess (spec §5.1), so re-init cannot happen.
+    subprocess, so re-init cannot happen.
     """
     import pyxel
     state = PreLoopState()

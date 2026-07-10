@@ -93,3 +93,13 @@ def test_pyxel_mcp_cli_has_only_mcp_commands():
     ]
     choices = set(subparsers[0].choices)
     assert choices == {"serve", "install"}
+
+
+def test_no_dangling_spec_references():
+    """The internal design spec was removed from the public tree; docstrings
+    must not reference its section numbers."""
+    src = Path(__file__).parent.parent / "src"
+    offenders = [
+        str(p) for p in src.rglob("*.py") if "spec §" in p.read_text()
+    ]
+    assert offenders == []

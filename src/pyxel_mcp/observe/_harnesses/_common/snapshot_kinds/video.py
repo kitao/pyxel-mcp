@@ -1,4 +1,4 @@
-"""video snapshot — GIF/MP4 encoding (spec §6.4.5)."""
+"""video snapshot — GIF/MP4 encoding."""
 from __future__ import annotations
 import shutil
 import subprocess

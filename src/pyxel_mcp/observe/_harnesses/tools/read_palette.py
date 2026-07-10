@@ -1,4 +1,4 @@
-"""read_palette tool (spec §7.1).
+"""read_palette tool.
 
 Runs the script to the pre-loop checkpoint, then analyzes the palette.
 """

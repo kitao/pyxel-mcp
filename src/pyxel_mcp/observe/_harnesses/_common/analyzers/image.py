@@ -1,4 +1,4 @@
-"""Image bank region analyzer (spec §7.2)."""
+"""Image bank region analyzer."""
 from __future__ import annotations
 from pathlib import Path
 from typing import Any
