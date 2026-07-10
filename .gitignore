@@ -12,3 +12,8 @@ tmp/
 superpowers/
 docs/superpowers/
 tests/fixtures/images/*.png
+.pytest_cache/
+.DS_Store
+.vscode/
+.idea/
+*.swp
