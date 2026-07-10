@@ -68,6 +68,7 @@ class RunResult(ObservationResult):
     elapsed_seconds: float
     log: str
     seeded: bool
+    until_met: bool | None = None
 
 
 class ValidateResult(ObservationResult):
@@ -172,6 +173,7 @@ def _run_error_result(
         "elapsed_seconds": elapsed_seconds,
         "log": log,
         "seeded": False,
+        "until_met": None,
         "errors": [make_error(phase, message)],
     }
 
@@ -224,7 +226,7 @@ def _dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> di
                 "ok": False,
                 "snapshots": [], "assertions": [], "exit_status": "timeout",
                 "frame_count": 0, "elapsed_seconds": float(timeout),
-                "log": "", "seeded": False, "errors": [error],
+                "log": "", "seeded": False, "until_met": None, "errors": [error],
             }
         return {"ok": False, "errors": [error]}
 
@@ -272,7 +274,7 @@ def _dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> di
 
 
 @mcp.tool(
-    description="Run a Pyxel script headlessly for N frames, schedule inputs, and capture state, image, layout, or video snapshots.",
+    description="Run a Pyxel script file headlessly for N frames — or until a condition holds — scheduling inputs and capturing state, image, layout, or video snapshots.",
     annotations=_ARTIFACT_OBSERVATION,
     structured_output=True,
 )
@@ -284,9 +286,11 @@ def run(
     random_seed: int | None = None,
     timeout: int = 10,
     stall_window_frames: int | None = None,
+    until: str | None = None,
 ) -> RunResult:
-    """Drive the script through `frames` headless Pyxel frames, applying
-    scheduled `inputs` and collecting `snapshots`.
+    """Drive the script (a path to a Python file, not source code) through
+    `frames` headless Pyxel frames, applying scheduled `inputs` and
+    collecting `snapshots`.
 
     Snapshot kinds (see `pyxel://run-snapshots-schema` for full grammar):
     - `{"frame": F, "kind": "screen_image", "output": "/tmp/out.png", "scale": 1}`
@@ -313,6 +317,15 @@ def run(
     breaks early with `exit_status="stalled"`. Requires at least one `state`
     or `screen_grid` snapshot scheduled — without one, the param is
     informational-only and a warning is logged.
+
+    `until` (optional): a Python expression over App attributes (e.g.
+    `"score >= 1"`, `"player.y > 100"`), evaluated after each frame; the run
+    stops at the first frame where it holds and reports `until_met`. `frames`
+    stays the hard cap. Undefined names count as not-yet-satisfied. Pair with
+    `"frame": "end"` snapshots to capture the stop frame.
+
+    `exit_status` values: `ok` (frame budget or until reached), `crashed`,
+    `timeout`, `stalled`, `invalid`.
     """
     payload = {
         "script": script, "frames": frames,
@@ -320,6 +333,7 @@ def run(
         "random_seed": random_seed,
         "timeout": timeout,
         "stall_window_frames": stall_window_frames,
+        "until": until,
     }
     return _dispatch("run", payload, timeout=timeout + 5)
 
@@ -330,7 +344,10 @@ def run(
     structured_output=True,
 )
 def validate(script: str) -> ValidateResult:
-    """Static analysis: syntax + 10 anti-pattern detectors."""
+    """Static analysis: syntax + 10 anti-pattern detectors.
+
+    `script` is a path to a Python file, not source code.
+    """
     return _dispatch("validate", {"script": script})
 
 
@@ -350,7 +367,10 @@ def pyxel_info() -> PyxelInfoResult:
     structured_output=True,
 )
 def read_palette(script: str) -> PaletteResult:
-    """Read `pyxel.colors` and return palette usage metrics without judging quality."""
+    """Read `pyxel.colors` and return palette usage metrics without judging quality.
+
+    `script` is a path to a Python file, not source code.
+    """
     return _dispatch("read_palette", {"script": script})
 
 
@@ -365,7 +385,10 @@ def read_image(
     w: int | None = None, h: int | None = None,
     render_path: str | None = None,
 ) -> ImageResult:
-    """Read pixels from `pyxel.images[image]`; optional render_path writes the region PNG."""
+    """Read pixels from `pyxel.images[image]`; optional render_path writes the region PNG.
+
+    `script` is a path to a Python file, not source code.
+    """
     return _dispatch("read_image", {
         "script": script, "image": image,
         "x": x, "y": y, "w": w, "h": h, "render_path": render_path,
@@ -383,7 +406,10 @@ def read_animation(
     region_count: int,
     direction: Literal["horizontal", "vertical"] = "horizontal",
 ) -> AnimationResult:
-    """Read adjacent image regions and return per-pair animation diff metrics."""
+    """Read adjacent image regions and return per-pair animation diff metrics.
+
+    `script` is a path to a Python file, not source code.
+    """
     return _dispatch("read_animation", {
         "script": script, "image": image,
         "x": x, "y": y, "w": w, "h": h,
@@ -397,7 +423,10 @@ def read_animation(
     structured_output=True,
 )
 def read_tilemap(script: str, tilemap: int, render_path: str | None = None) -> TilemapResult:
-    """Read `pyxel.tilemaps[tilemap]`; optional render_path writes a preview PNG."""
+    """Read `pyxel.tilemaps[tilemap]`; optional render_path writes a preview PNG.
+
+    `script` is a path to a Python file, not source code.
+    """
     return _dispatch("read_tilemap", {"script": script, "tilemap": tilemap, "render_path": render_path})
 
 
@@ -407,7 +436,10 @@ def read_tilemap(script: str, tilemap: int, render_path: str | None = None) -> T
     structured_output=True,
 )
 def read_audio(script: str, target: dict[str, int], output_path: str) -> AudioResult:
-    """Render `target` such as `{'sound': 0}` or `{'music': 0}` to output_path."""
+    """Render `target` such as `{'sound': 0}` or `{'music': 0}` to output_path.
+
+    `script` is a path to a Python file, not source code.
+    """
     return _dispatch("read_audio", {"script": script, "target": target, "output_path": output_path})
 
 

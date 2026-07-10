@@ -206,3 +206,16 @@ async def test_structured_tool_results_keep_tool_specific_fields():
     assert structured["ok"] is True
     assert "errors" in structured
     assert "issues" in structured
+
+
+def test_run_tool_until_via_server():
+    result = run_tool(
+        script=str(SCRIPTS / "stateful_app.py"), frames=50, until="counter >= 2",
+    )
+    assert result["until_met"] is True
+    assert result["frame_count"] == 2
+
+
+def test_run_result_declares_until_met():
+    from pyxel_mcp.server import RunResult
+    assert "until_met" in RunResult.model_fields
