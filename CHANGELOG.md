@@ -1,6 +1,6 @@
 # Change Log
 
-## 1.1.0 (unreleased)
+## 1.1.0
 
 - Add `until` parameter to `run` for condition-based stopping
 - Add `until_met` field to run results
