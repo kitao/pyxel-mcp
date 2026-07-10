@@ -97,3 +97,9 @@ def test_serve_subcommand_invokes_server(monkeypatch):
     monkeypatch.setattr(pyxel_mcp.server, "main", fake_server_main)
     cli.main(["serve"])
     assert called["yes"] is True
+
+
+def test_readme_contains_cli_install_snippet_verbatim():
+    """README and CLI must not drift; the CLI constant is the single source."""
+    readme = (ROOT / "README.md").read_text()
+    assert cli._INSTALL_SNIPPET in readme
