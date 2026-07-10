@@ -5,7 +5,10 @@ from pyxel_mcp.observe._harnesses._common.error_capture import (
 
 
 def test_phases_match_spec():
-    expected = {"validation", "script_import", "asset_load", "build_assets", "game_loop", "snapshot"}
+    expected = {
+        "validation", "script_import", "asset_load", "build_assets", "game_loop",
+        "snapshot", "until",
+    }
     assert {p.value for p in ErrorPhase} == expected
 
 

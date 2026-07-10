@@ -13,6 +13,7 @@ class ErrorPhase(str, enum.Enum):
     BUILD_ASSETS = "build_assets"
     GAME_LOOP = "game_loop"
     SNAPSHOT = "snapshot"
+    UNTIL = "until"
 
 
 ToolError = dict[str, Any]

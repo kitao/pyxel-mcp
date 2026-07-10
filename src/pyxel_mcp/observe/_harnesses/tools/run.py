@@ -18,6 +18,7 @@ from pyxel_mcp.observe._harnesses._common.input_scheduler import InputScheduler,
 from pyxel_mcp.observe._harnesses._common.pyxel_patcher import headless_pyxel, RunNotCalledError
 from pyxel_mcp.observe._harnesses._common.range_parser import resolve_frames as _resolve_frames, RangeError
 from pyxel_mcp.observe._harnesses._common.script_loader import resolve_script_path, load_script_module
+from pyxel_mcp.observe._harnesses._common.until_condition import UntilCondition, UntilError
 from pyxel_mcp.observe._harnesses._common.snapshot_kinds import (
     screen_image as _si_kind,
     screen_grid as _sg_kind,
@@ -45,6 +46,7 @@ def _empty_result(*, exit_status: str = "ok", errors: list | None = None) -> dic
         "elapsed_seconds": 0.0,
         "log": "",
         "seeded": False,
+        "until_met": None,
         "errors": errs,
     }
 
@@ -183,7 +185,7 @@ def _expand_multi_frame_snapshots(
 def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
     """Validate payload and return
     (script_path, frames, random_seed, snapshots, scheduler, warnings,
-    stall_window_frames).
+    stall_window_frames, until_condition).
 
     Raises _ValidationFailed with a ToolError dict on any invalid input.
     """
@@ -214,6 +216,20 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
         raise _ValidationFailed(make_validation_error(
             "`stall_window_frames` must be int >= 1 or null"
         ))
+
+    until = payload.get("until")
+    until_condition = None
+    if until is not None:
+        if not isinstance(until, str) or not until.strip():
+            raise _ValidationFailed(make_validation_error(
+                "`until` must be a non-empty str or null"
+            ))
+        try:
+            until_condition = UntilCondition(until)
+        except SyntaxError as e:
+            raise _ValidationFailed(make_validation_error(
+                f"`until` is not a valid Python expression: {e}"
+            ))
 
     raw_snapshots = payload.get("snapshots", [])
     if not isinstance(raw_snapshots, list):
@@ -298,7 +314,10 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
     except ValidationError as e:
         raise _ValidationFailed(make_validation_error(str(e)))
 
-    return path, frames, random_seed, snapshots, scheduler, pending_warnings, stall_window
+    return (
+        path, frames, random_seed, snapshots, scheduler, pending_warnings,
+        stall_window, until_condition,
+    )
 
 
 def _capture_screen_as_pil() -> Image.Image:
@@ -376,7 +395,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         (
             path, frames, random_seed, snapshots, scheduler, pending_warnings,
-            stall_window,
+            stall_window, until_condition,
         ) = _validate(payload)
     except _ValidationFailed as vf:
         return _empty_result(exit_status="invalid", errors=[vf.err])
@@ -386,6 +405,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     seeded = False
     frame_count = 0
     exit_status = "ok"
+    until_met: bool | None = None if until_condition is None else False
 
     # Pre-loop: split snapshots into per-frame captures vs. video accumulators.
     video_accumulators: list[_video_kind.VideoAccumulator] = []
@@ -471,6 +491,13 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                     _random.seed(random_seed)
                     seeded = True
 
+                # until expressions resolve names on the App instance when one
+                # exists, else on the module (same fallback as state snapshots).
+                until_target = (
+                    state.app_instance if state.app_instance is not None
+                    else imported_module
+                )
+
                 # Phase 3: drive the update/draw loop
                 for f in range(frames):
                     try:
@@ -522,6 +549,26 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                         for accum in video_accumulators:
                             accum.add_frame(f, img)
 
+                    # Until condition: evaluated after the frame completes, so
+                    # the stop frame's draw and snapshots are already done.
+                    if until_condition is not None:
+                        try:
+                            met = until_condition.evaluate(until_target)
+                        except UntilError as e:
+                            errors.append(make_error(
+                                ErrorPhase.UNTIL, str(e), frame=f,
+                            ))
+                            exit_status = "crashed"
+                            break
+                        if until_condition.pending_warning:
+                            log_buf.write(
+                                f"[pyxel-mcp] warning: {until_condition.pending_warning}\n"
+                            )
+                            until_condition.pending_warning = None
+                        if met:
+                            until_met = True
+                            break
+
                     # Stall detection: maintain rolling buffer of the most
                     # recent N captured state-values and grid-hashes. If at
                     # least one buffer is full and every entry is identical,
@@ -564,5 +611,6 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         "elapsed_seconds": elapsed,
         "log": log_text,
         "seeded": seeded,
+        "until_met": until_met,
         "errors": errors,
     }
