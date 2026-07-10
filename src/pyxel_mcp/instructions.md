@@ -2,12 +2,12 @@
 
 pyxel-mcp is an MCP server for observing Pyxel programs. It exposes 9 tools. They return facts; the agent decides whether those facts satisfy the current game.
 
-Tools with a `script` argument execute trusted local Python in a fresh subprocess. pyxel-mcp is an observation adapter, not a sandbox for untrusted code.
+Tools with a `script` argument execute trusted local Python in a fresh subprocess. pyxel-mcp is an observation adapter, not a sandbox for untrusted code. Every `script` argument is a file path to a Python script, not inline source code.
 
 ## Tools at a glance
 
 - `validate(script)`: syntax plus common Pyxel anti-patterns. Run before the first dynamic check.
-- `run(script, frames, inputs=[], snapshots=[], random_seed=None, timeout=10, stall_window_frames=None)`: drive the game headlessly and collect snapshots. Snapshot kinds are `state`, `screen_image`, `screen_grid`, `layout`, and `video`. Read `log` even when `ok` is true.
+- `run(script, frames, inputs=[], snapshots=[], random_seed=None, timeout=10, stall_window_frames=None, until=None)`: drive the game headlessly and collect snapshots. Snapshot kinds are `state`, `screen_image`, `screen_grid`, `layout`, and `video`. Read `log` even when `ok` is true. `until="score >= 1"` stops at the first frame where the App-attribute expression holds (reported as `until_met`); `"frame": "end"` snapshots capture that stop frame.
 - `pyxel_info()`: versions, paths, examples, and resource URIs.
 - `read_palette(script)`: palette state, used indices, hierarchy hints, and contrast warnings.
 - `read_image(script, image, x=0, y=0, w=None, h=None, render_path=None)`: image-bank pixels and optional PNG render for visual inspection.
@@ -39,7 +39,7 @@ Example snapshot pair:
 }
 ```
 
-Use `random_seed` when randomness affects verification. For long input paths, rerun from frame 0 with the cumulative schedule after each observed state checkpoint.
+Use `random_seed` when randomness affects verification. For long input paths, rerun from frame 0 with the cumulative schedule after each observed state checkpoint. Prefer `until` over guessing frame numbers when you need "the moment X happens".
 
 For full game-building workflow guidance, see `pyxel-skill`: https://github.com/kitao/pyxel-skill.
 
@@ -60,3 +60,4 @@ For full game-building workflow guidance, see `pyxel-skill`: https://github.com/
 - `pyxel://api-reference`, `pyxel://user-guide`, `pyxel://mml-commands`, `pyxel://pyxres-format` - Pyxel documentation.
 - `pyxel://palette/default` - default 16-color palette.
 - `pyxel://examples/<name>` - bundled example scripts.
+- `pyxel://api-reference` and the other Pyxel docs are fetched live from GitHub with a 24h cache; offline reads fall back to the cached copy.

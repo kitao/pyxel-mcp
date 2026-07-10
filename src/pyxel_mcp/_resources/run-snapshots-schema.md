@@ -359,3 +359,30 @@ expands to N consecutive result entries at that position.
 ]
 ```
 The result list will contain 4 entries: state@0, state@1, state@2, then screen_image@5.
+
+## The `"end"` frame token
+
+`state`, `screen_image`, `screen_grid`, and `layout` accept `"frame": "end"`.
+The snapshot fires at the last completed frame, whatever stopped the run: the
+`frames` cap, an `until` condition match, or stall detection. Crashed runs
+skip `"end"` snapshots because their final frame did not complete. The result
+reports the concrete frame number, not the string `"end"`.
+
+`"end"` is valid only in the single `frame` field — not inside `frames` lists
+or ranges, and not for `video`.
+
+Combine with `run(until=...)` to capture the moment a condition first holds:
+
+```json
+{
+  "until": "score >= 1",
+  "snapshots": [
+    {"kind": "state", "frame": "end", "attrs": ["score"]},
+    {"kind": "screen_image", "frame": "end", "output": "/tmp/goal.png"}
+  ]
+}
+```
+
+`until` is a Python expression over App attributes, evaluated after each
+frame. Undefined names count as "not yet satisfied" (warned once in `log`).
+The run result reports `until_met` and the reached `frame_count`.
