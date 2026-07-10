@@ -57,7 +57,6 @@ For full game-building workflow guidance, see `pyxel-skill`: https://github.com/
 
 - `pyxel://run-snapshots-schema` - full snapshot schema.
 - `pyxel://anti-patterns` - `validate` issue catalog.
-- `pyxel://api-reference`, `pyxel://user-guide`, `pyxel://mml-commands`, `pyxel://pyxres-format` - Pyxel documentation.
+- `pyxel://api-reference`, `pyxel://user-guide`, `pyxel://mml-commands`, `pyxel://pyxres-format` - Pyxel documentation, fetched live from GitHub with a 24h cache; offline reads fall back to the cached copy.
 - `pyxel://palette/default` - default 16-color palette.
 - `pyxel://examples/<name>` - bundled example scripts.
-- `pyxel://api-reference` and the other Pyxel docs are fetched live from GitHub with a 24h cache; offline reads fall back to the cached copy.
