@@ -60,16 +60,16 @@ The agent then reads `/tmp/goal.png` with its own eyes. State proves mechanics; 
 
    For any other MCP client, `uvx pyxel-mcp install` prints this snippet and where to put it:
 
-```json
-{
-  "mcpServers": {
-    "pyxel": {
-      "command": "uvx",
-      "args": ["pyxel-mcp"]
-    }
-  }
-}
-```
+   ```json
+   {
+     "mcpServers": {
+       "pyxel": {
+         "command": "uvx",
+         "args": ["pyxel-mcp"]
+       }
+     }
+   }
+   ```
 
    - **Claude Code**: `~/.claude/.mcp.json` or per-project `.mcp.json`
    - **Cursor**: `~/.cursor/mcp.json`
