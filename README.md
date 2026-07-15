@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/kitao-pyxel-mcp-badge.png)](https://mseep.ai/app/kitao-pyxel-mcp)
+
 # pyxel-mcp
 
 An MCP server for observing programs built with [Pyxel](https://github.com/kitao/pyxel). It runs trusted local scripts headlessly and returns structured state, pixels, assets, audio, and frame differences.
