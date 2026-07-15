@@ -1,4 +1,4 @@
-"""`pyxel://anti-patterns` resource — agent-readable catalog of detector
+"""Catalog for the `pyxel://validation-patterns` resource and detector
 categories surfaced by the `validate` tool.
 
 The `validate` tool reports each anti-pattern by `category` string only.
@@ -78,7 +78,7 @@ _ROWS: list[tuple[str, str, str, str]] = [
 ]
 
 
-_HEADER = "# Pyxel anti-patterns detected by `validate`"
+_HEADER = "# Pyxel Validation Patterns"
 
 _PREAMBLE = (
     "Each row corresponds to one detector category in the `validate` tool's "
@@ -110,8 +110,8 @@ def _format_table() -> str:
 
 def register(mcp):
     @mcp.resource(
-        "pyxel://anti-patterns",
-        name="Pyxel Anti-Patterns",
+        "pyxel://validation-patterns",
+        name="Pyxel Validation Patterns",
         description=(
             "Catalog of anti-pattern categories the `validate` tool detects, "
             "with severity, rationale, and canonical fix per category."

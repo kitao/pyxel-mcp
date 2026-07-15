@@ -24,19 +24,22 @@ class PreLoopState:
 
 
 @contextlib.contextmanager
-def headless_pyxel():
+def headless_pyxel(*, random_seed: int | None = None):
     """Context manager: sets SDL headless, intercepts pyxel.run, restores on exit.
 
     Yields a PreLoopState that the caller fills via the script's pyxel.run call.
 
-    pyxel.init is also patched to inject headless=True and to silently skip
-    re-initialization when Pyxel is already initialized (width > 0). The latter
-    is relevant only in test processes that share a single Pyxel module state
-    across multiple test cases; in production each tool call runs in its own
-    subprocess, so re-init cannot happen.
+    pyxel.init is also patched to inject headless=True and silently skip
+    re-initialization when Pyxel is already initialized (width > 0). An
+    optional RNG seed is applied before script import and again after init,
+    because initialization may reset Pyxel's RNG. Re-init is relevant only in
+    test processes that share Pyxel state; production calls use subprocesses.
     """
     import pyxel
     state = PreLoopState()
+
+    if random_seed is not None:
+        pyxel.rseed(random_seed)
 
     def _capture_run(update, draw, *args, **kwargs):
         state.update_callback = update
@@ -56,6 +59,8 @@ def headless_pyxel():
         # Skip if already initialized; safe because each production invocation
         # runs in a fresh subprocess — only test processes share module state.
         if pyxel.width > 0:
+            if random_seed is not None:
+                pyxel.rseed(random_seed)
             return
         kwargs["headless"] = True  # override: headless mode is mandatory in harness context
         # Pyxel's `flip()` sleeps to maintain the fps target; under harness
@@ -66,6 +71,8 @@ def headless_pyxel():
         # unaffected (run.py sets it explicitly each iteration).
         kwargs["fps"] = 10000
         saved_init(*args, **kwargs)
+        if random_seed is not None:
+            pyxel.rseed(random_seed)
 
     pyxel.init = _headless_init
     pyxel.run = _capture_run

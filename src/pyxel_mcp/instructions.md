@@ -1,62 +1,32 @@
 # pyxel-mcp
 
-pyxel-mcp is an MCP server for observing Pyxel programs. It exposes 9 tools. They return facts; the agent decides whether those facts satisfy the current game.
+pyxel-mcp exposes eight tools for observing trusted local Pyxel scripts. It reports facts; the caller decides what those facts mean for the current task.
 
-Tools with a `script` argument execute trusted local Python in a fresh subprocess. pyxel-mcp is an observation adapter, not a sandbox for untrusted code. Every `script` argument is a file path to a Python script, not inline source code.
+## Contract
 
-## Tools at a glance
+- A `script` is a Python file path, never inline source. Script tools execute it in a fresh subprocess and are not a sandbox.
+- Every result has `ok` and `errors`. A successful call may still contain useful `log` or `warnings` fields.
+- Artifact paths must be absolute. Relative assets used by a script resolve from the script's directory.
+- Each call starts from a clean Pyxel process. Reproduce prior input from frame 0 when continuing a scenario.
 
-- `validate(script)`: syntax plus common Pyxel anti-patterns. Run before the first dynamic check.
-- `run(script, frames, inputs=[], snapshots=[], random_seed=None, timeout=10, stall_window_frames=None, until=None)`: drive the game headlessly and collect snapshots. Snapshot kinds are `state`, `screen_image`, `screen_grid`, `layout`, and `video`. Read `log` even when `ok` is true. `until="score >= 1"` stops at the first frame where the App-attribute expression holds (reported as `until_met`); `"frame": "end"` snapshots capture that stop frame.
-- `pyxel_info()`: versions, paths, examples, and resource URIs.
-- `read_palette(script)`: palette state, used indices, hierarchy hints, and contrast warnings.
-- `read_image(script, image, x=0, y=0, w=None, h=None, render_path=None)`: image-bank pixels and optional PNG render for visual inspection.
-- `read_animation(script, image, x, y, w, h, region_count, direction)`: adjacent sprite-frame consistency and per-pair diffs.
-- `read_tilemap(script, tilemap, render_path=None)`: tile usage, non-empty region, and `(0, 0)` trap warning.
-- `read_audio(script, target, output_path)`: render `{"sound": N}` or `{"music": N}` to WAV. Sound targets expose note lists; music targets are channel sound references.
-- `diff_frames(frame_a, frame_b)`: pixel diff between two PNG files.
+## Tools
 
-See `pyxel://run-snapshots-schema` for the complete `run.snapshots` grammar.
+- `validate`: parse a script and report recognizable Pyxel code patterns without executing it.
+- `run`: advance frames, schedule inputs, stop on an optional App-attribute condition, and capture `state`, `screen_image`, `screen_grid`, or `video` snapshots.
+- `pyxel_info`: report installed versions, paths, examples, and resource URIs.
+- `read_palette`: return palette colors and image-bank palette indices in use.
+- `read_image`: return image-bank pixels for a region and optionally render a PNG.
+- `read_tilemap`: return tile coordinates, source bank, usage counts, bounds, and optional rendered output.
+- `read_audio`: render one sound or music target to WAV and return measurable audio data.
+- `diff_frames`: compare two PNG files pixel by pixel.
 
-## Workflow patterns
-
-A small Pyxel task usually needs only this loop:
-
-1. `validate` the script.
-2. `run` with one `state` snapshot and one `screen_image` at the frame being checked.
-3. Inspect the PNG yourself. State proves mechanics; pixels prove what the player sees.
-4. Add targeted `read_*` calls for assets, audio, palette, or tilemaps only when they matter.
-5. Write task-specific assertions in Python against returned values; do not use universal quality scores.
-
-Example snapshot pair:
-
-```json
-{
-  "snapshots": [
-    {"kind": "state", "frame": 60, "attrs": ["player.x", "score"]},
-    {"kind": "screen_image", "frame": 60, "output": "/tmp/frame60.png"}
-  ]
-}
-```
-
-Use `random_seed` when randomness affects verification. For long input paths, rerun from frame 0 with the cumulative schedule after each observed state checkpoint. Prefer `until` over guessing frame numbers when you need "the moment X happens".
-
-For full game-building workflow guidance, see `pyxel-skill`: https://github.com/kitao/pyxel-skill.
-
-## Quirks
-
-- `pyxel.btn(K)` is continuous; `pyxel.btnp(K)` is a press edge.
-- Call `pyxel.cls(color)` at the start of `draw()`.
-- Use `colkey=0` on `blt()` when sprite backgrounds should be transparent.
-- Avoid visible content in source tile `(0, 0)` when tilemaps use it as blank.
-- Build assets before `pyxel.run()` starts, usually in `App.__init__`.
-- Prefer `pyxel.sounds[N].set(...)` for sounds that need note-list verification.
-- Each tool call runs in a fresh subprocess; relative asset paths resolve from the script's parent directory.
+Use `random_seed` when randomness affects a run. Use `until` with snapshots at `"end"` when the target is an event rather than a known frame. Inspect captured images directly when appearance matters.
 
 ## Resources
 
-- `pyxel://run-snapshots-schema` - full snapshot schema.
-- `pyxel://anti-patterns` - `validate` issue catalog.
-- `pyxel://api-reference`, `pyxel://user-guide`, `pyxel://mml-commands`, `pyxel://pyxres-format` - Pyxel documentation, fetched live from GitHub with a 24h cache; offline reads fall back to the cached copy.
-- `pyxel://palette/default` - default 16-color palette.
-- `pyxel://examples/<name>` - bundled example scripts.
+- `pyxel://run-snapshots-schema`: complete snapshot grammar.
+- `pyxel://validation-patterns`: categories reported by `validate`.
+- `pyxel://palette/default`: default palette table.
+- `pyxel://examples/{name}`: source for a named example bundled with the installed Pyxel package.
+
+`pyxel_info` discovers available example names. Full game-building guidance belongs in the separate pyxel-skill project.

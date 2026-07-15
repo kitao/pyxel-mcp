@@ -2,7 +2,7 @@
 
 Centralises the script validation + headless_pyxel + load_script_module +
 require_run_called dance shared by read_palette, read_image,
-read_animation, read_tilemap, and read_audio. Each of those tools
+read_tilemap, and read_audio. Each of those tools
 previously copy-pasted the same ~12 lines of try/except plumbing; consolidating
 here keeps the error mapping and phase tagging consistent across tools.
 """

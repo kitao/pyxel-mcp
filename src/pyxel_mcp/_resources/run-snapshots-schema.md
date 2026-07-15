@@ -16,7 +16,7 @@ errors. Construct paths with `os.path.abspath(...)`,
 
 ---
 
-## Snapshot Kinds (5)
+## Snapshot Kinds (4)
 
 ### state — `attrs` path syntax
 
@@ -62,6 +62,7 @@ Saves a PNG screenshot of the Pyxel screen at a given frame.
 
 - `scale`: integer zoom factor; nearest-neighbor only (no smoothing). Default `1`.
 - `output` and `output_pattern` are mutually exclusive (validation error if both present).
+- Both output forms must end with `.png`.
 - `output_pattern` must contain `{frame}` — substituted as a 5-digit zero-padded integer
   (e.g. frame 3 → `00003`).
 - Single-frame uses `frame` + `output`; multi-frame uses `frames` + `output_pattern`.
@@ -80,7 +81,7 @@ Saves a PNG screenshot of the Pyxel screen at a given frame.
 
 ### 2. screen_grid
 
-Returns the screen as a 2-D grid of palette indices (0–15), row-major.
+Returns the screen as a 2-D grid of palette indices, row-major.
 Useful for verifying exact pixel-level state without image files.
 
 **Input — single-frame:**
@@ -172,49 +173,7 @@ game logic (scores, positions, flags) without image comparison.
 
 ---
 
-### 4. layout
-
-Analyzes visual balance and density on the screen.
-No file output; returns metrics inline.
-
-**Input — single-frame:**
-```json
-{
-  "kind": "layout",
-  "frame": <int>
-}
-```
-
-**Input — multi-frame:**
-```json
-{
-  "kind": "layout",
-  "frames": <list[int] | range-string>
-}
-```
-
-**Output per frame:**
-```json
-{
-  "kind": "layout",
-  "frame": <int>,
-  "h_balance": 0.52,
-  "v_balance": 0.48,
-  "quadrant_density": [0.3, 0.4, 0.2, 0.5],
-  "center_of_mass": [64.0, 60.0],
-  "warnings": []
-}
-```
-
-- `h_balance`: float 0–1; fraction of bright pixels in the left half of the screen.
-  0.5 = balanced; < 0.5 = left-heavy; > 0.5 = right-heavy.
-- `v_balance`: float 0–1; same metric for top/bottom halves.
-- `quadrant_density`: 4 floats [top-left, top-right, bottom-left, bottom-right], each 0–1.
-- `center_of_mass`: [x, y] float pixel coordinates of the visual centroid.
-
----
-
-### 5. video
+### 4. video
 
 Encodes a frame range to GIF or MP4. Unlike other kinds, `video` does not
 accept `frames` (range-string or list). Use `start_frame`/`end_frame` instead.
@@ -263,7 +222,7 @@ accept `frames` (range-string or list). Use `start_frame`/`end_frame` instead.
 ## Multi-Frame Syntax
 
 Use `frames` (instead of `frame`) to capture multiple frames in a single snapshot entry.
-Applies to: `screen_image`, `screen_grid`, `state`, `layout`.
+Applies to: `screen_image`, `screen_grid`, `state`.
 Does NOT apply to: `video` (use `start_frame`/`end_frame`).
 
 ### Range-string grammar
@@ -345,11 +304,9 @@ aborts before executing.
 
 ## Result Ordering
 
-Output snapshot results appear in the same order as the input `snapshots` list.
-
-For multi-frame entries, each single-frame result is emitted inline at the original
-list position, in frame-ascending order. A multi-frame entry with N resolved frames
-expands to N consecutive result entries at that position.
+Per-frame snapshot results appear in chronological frame order. Requests for the
+same frame retain their input order. Deferred `"end"` snapshots follow per-frame
+results, and video results are appended last; each group retains input order.
 
 **Example:** if `snapshots` is:
 ```json
@@ -358,11 +315,11 @@ expands to N consecutive result entries at that position.
   { "kind": "screen_image", "frame": 5, "output": "/tmp/end.png" }
 ]
 ```
-The result list will contain 4 entries: state@0, state@1, state@2, then screen_image@5.
+The result list contains state@0, state@1, state@2, then screen_image@5.
 
 ## The `"end"` frame token
 
-`state`, `screen_image`, `screen_grid`, and `layout` accept `"frame": "end"`.
+`state`, `screen_image`, and `screen_grid` accept `"frame": "end"`.
 The snapshot fires at the last completed frame, whatever stopped the run: the
 `frames` cap, an `until` condition match, or stall detection. Crashed runs
 skip `"end"` snapshots because their final frame did not complete. The result

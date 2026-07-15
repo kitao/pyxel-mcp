@@ -13,9 +13,7 @@ def _empty(error: dict) -> dict:
         "ok": False,
         "image_index": -1, "bank_size": [0, 0],
         "region": {"x": 0, "y": 0, "w": 0, "h": 0},
-        "pixels": None, "color_count": {}, "fill_ratio": 0.0,
-        "symmetry": None, "edge_density": None,
-        "warnings": [], "rendered": None,
+        "pixels": None, "color_count": {}, "rendered": None,
         "errors": [error],
     }
 
@@ -23,14 +21,24 @@ def _empty(error: dict) -> dict:
 def run(payload: dict[str, Any]) -> dict[str, Any]:
     """Read pixels in an image-bank region at the pre-loop checkpoint.
 
-    Returns raw observation (`color_count`, `fill_ratio`, ...). The agent
-    judges the verdict directly against task-specific sprite expectations,
-    and can inspect a rendered PNG by passing `render_path`. `ok` is True
-    iff `len(errors) == 0`.
+    The result contains only source pixels and direct aggregates. Pass
+    `render_path` when a human- or model-visible PNG is useful.
     """
     image = payload.get("image")
-    if not isinstance(image, int):
+    if not isinstance(image, int) or isinstance(image, bool):
         return _empty(make_validation_error("`image` must be int"))
+    x = payload.get("x", 0)
+    y = payload.get("y", 0)
+    w = payload.get("w")
+    h = payload.get("h")
+    if not isinstance(x, int) or isinstance(x, bool) or x < 0:
+        return _empty(make_validation_error("`x` must be int >= 0"))
+    if not isinstance(y, int) or isinstance(y, bool) or y < 0:
+        return _empty(make_validation_error("`y` must be int >= 0"))
+    if w is not None and (not isinstance(w, int) or isinstance(w, bool) or w < 1):
+        return _empty(make_validation_error("`w` must be int >= 1 or null"))
+    if h is not None and (not isinstance(h, int) or isinstance(h, bool) or h < 1):
+        return _empty(make_validation_error("`h` must be int >= 1 or null"))
     render_path = payload.get("render_path")
     if render_path is not None:
         path_error = absolute_path_error(render_path, "render_path")
@@ -43,11 +51,16 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
             if image < 0 or image >= len(pyxel.images):
                 return _empty(make_validation_error(
                     f"image index {image} out of range [0, {len(pyxel.images)})"))
+            bank = pyxel.images[image]
+            if x >= bank.width or y >= bank.height:
+                return _empty(make_validation_error(
+                    f"image origin ({x}, {y}) outside bank size "
+                    f"({bank.width}, {bank.height})"
+                ))
 
             result = analyze_image(
                 image=image,
-                x=payload.get("x", 0), y=payload.get("y", 0),
-                w=payload.get("w"), h=payload.get("h"),
+                x=x, y=y, w=w, h=h,
                 render_path=render_path,
             )
     except PreloopFailed as f:

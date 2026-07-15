@@ -1,4 +1,4 @@
-"""Verify the `ok: bool` field is uniformly present across all 9 tool responses.
+"""Verify the `ok: bool` field is uniformly present across all 8 tool responses.
 
 The 0.11.0 redesign promises that `if not result["ok"]: handle(result["errors"])`
 is a single uniform predicate across the whole tool surface. This file pins
@@ -8,7 +8,6 @@ that contract — both for success paths (ok=True) and validation/error paths
 from pathlib import Path
 
 from pyxel_mcp.observe._harnesses.tools.diff_frames import run as diff_frames_run
-from pyxel_mcp.observe._harnesses.tools.read_animation import run as read_animation_run
 from pyxel_mcp.observe._harnesses.tools.read_image import run as read_image_run
 from pyxel_mcp.observe._harnesses.tools.read_palette import run as read_palette_run
 from pyxel_mcp.observe._harnesses.tools.read_tilemap import run as read_tilemap_run
@@ -88,26 +87,6 @@ def test_read_image_ok_false_on_invalid_index():
     result = read_image_run({
         "script": str(SCRIPTS / "palette_default.py"),
         "image": 999,
-    })
-    assert result["ok"] is False
-
-
-def test_read_animation_ok_true():
-    result = read_animation_run({
-        "script": str(SCRIPTS / "palette_default.py"),
-        "image": 0,
-        "x": 0, "y": 0, "w": 8, "h": 8,
-        "region_count": 3,
-    })
-    assert result["ok"] is True
-
-
-def test_read_animation_ok_false_on_overflow():
-    result = read_animation_run({
-        "script": str(SCRIPTS / "palette_default.py"),
-        "image": 0,
-        "x": 250, "y": 0, "w": 8, "h": 8,
-        "region_count": 4,
     })
     assert result["ok"] is False
 

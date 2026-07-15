@@ -20,7 +20,7 @@ def _build_tools() -> dict[str, Callable[[dict], dict]]:
     """
     from pyxel_mcp.observe._harnesses.tools import (
         run, validate, pyxel_info,
-        read_palette, read_image, read_animation, read_tilemap,
+        read_palette, read_image, read_tilemap,
         read_audio, diff_frames,
     )
     return {
@@ -29,7 +29,6 @@ def _build_tools() -> dict[str, Callable[[dict], dict]]:
         "pyxel_info": pyxel_info.run,
         "read_palette": read_palette.run,
         "read_image": read_image.run,
-        "read_animation": read_animation.run,
         "read_tilemap": read_tilemap.run,
         "read_audio": read_audio.run,
         "diff_frames": diff_frames.run,
@@ -68,7 +67,13 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:
         # Handler-specific validation and script-load paths should catch expected
         # user errors before this process-level fallback.
-        result = {"errors": [make_error(ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=True)]}
+        error = make_error(ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=True)
+        if subcommand == "run":
+            from pyxel_mcp.observe._harnesses.tools.run import _empty_result
+
+            result = _empty_result(exit_status="crashed", errors=[error])
+        else:
+            result = {"errors": [error]}
 
     print(json.dumps(result))
     return 0

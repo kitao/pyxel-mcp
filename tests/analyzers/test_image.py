@@ -44,21 +44,12 @@ def test_small_region_includes_pixels():
     assert result["pixels"][7][7] == 11
 
 
-def test_oversize_region_clamped_with_warning():
+def test_oversize_region_reports_clamped_bounds():
     """Region beyond bank bounds is clamped."""
     result = analyze_image(image=0, x=200, y=200, w=100, h=100)
     # Bank is 256x256. (200..300, 200..300) clamps to (200..256, 200..256) = 56x56.
     assert result["region"] == {"x": 200, "y": 200, "w": 56, "h": 56}
-    assert any("clamp" in w.lower() for w in result["warnings"])
-
-
-def test_symmetry_and_edge_density_only_for_small_regions():
-    """For region <= 4096 px, symmetry and edge_density are computed; otherwise None."""
-    small = analyze_image(image=0, x=0, y=0, w=8, h=8)
-    assert small["symmetry"] is not None
-    large = analyze_image(image=0, x=0, y=0, w=None, h=None)
-    assert large["symmetry"] is None
-    assert large["edge_density"] is None
+    assert {"fill_ratio", "symmetry", "edge_density", "warnings"}.isdisjoint(result)
 
 
 # --- performance regression guard --------------------------------------------

@@ -1,4 +1,6 @@
 """Tests for run() — dynamic execution driver (spec §6)."""
+import random
+
 import pytest
 from pyxel_mcp.observe._harnesses.tools.run import run as run_tool
 from tests.conftest import SCRIPTS
@@ -40,6 +42,38 @@ def test_random_seed_seeds_python_stdlib_random():
     v2 = r2["snapshots"][0]["values"]["samples"]
     assert v1 == v2, f"stdlib random not seeded: run-1 {v1} != run-2 {v2}"
     assert len(v1) == 5
+
+
+def test_random_seed_controls_rngs_during_app_initialization():
+    """The tool seed must win before module and App initialization consume either RNG."""
+    import pyxel
+
+    def observe(ambient_seed):
+        random.seed(ambient_seed)
+        if pyxel.width > 0:
+            pyxel.rseed(ambient_seed)
+        result = run_tool({
+            "script": str(SCRIPTS / "import_time_random.py"),
+            "frames": 1,
+            "random_seed": 2468,
+            "snapshots": [{
+                "frame": 0,
+                "kind": "state",
+                "attrs": [
+                    "module_stdlib_value",
+                    "module_pyxel_value",
+                    "stdlib_value",
+                    "pyxel_value",
+                ],
+            }],
+        })
+        assert result["exit_status"] == "ok"
+        return result["snapshots"][0]["values"]
+
+    first = observe(11)
+    second = observe(97)
+
+    assert first == second
 
 
 def test_frames_zero_is_validation_error():
@@ -236,6 +270,139 @@ def test_run_with_screen_image_snapshot(tmp_path):
     assert out.exists()
 
 
+def test_screen_snapshot_is_captured_before_flip(monkeypatch, tmp_path):
+    import pyxel
+    from pyxel_mcp.observe._harnesses.tools import run as run_module
+
+    events = []
+
+    def capture(snapshot):
+        events.append("capture")
+        return {
+            "frame": snapshot["frame"],
+            "kind": "screen_image",
+            "path": snapshot["output"],
+            "size": [1, 1],
+        }
+
+    monkeypatch.setattr(pyxel, "flip", lambda: events.append("flip"))
+    monkeypatch.setattr(run_module._si_kind, "capture", capture)
+
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 2,
+        "snapshots": [{
+            "frame": 0,
+            "kind": "screen_image",
+            "output": str(tmp_path / "frame.png"),
+        }],
+    })
+
+    assert result["exit_status"] == "ok"
+    assert events.index("capture") < events.index("flip")
+
+
+def test_end_snapshot_keeps_the_last_drawn_frame_before_flip(monkeypatch, tmp_path):
+    import pyxel
+    from pyxel_mcp.observe._harnesses.tools import run as run_module
+
+    events = []
+
+    def capture(snapshot):
+        events.append("capture")
+        return {
+            "frame": snapshot["frame"],
+            "kind": "screen_image",
+            "path": snapshot["output"],
+            "size": [1, 1],
+        }
+
+    monkeypatch.setattr(pyxel, "flip", lambda: events.append("flip"))
+    monkeypatch.setattr(run_module._si_kind, "capture", capture)
+
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 2,
+        "snapshots": [{
+            "frame": "end",
+            "kind": "screen_image",
+            "output": str(tmp_path / "end.png"),
+        }],
+    })
+
+    assert result["exit_status"] == "ok"
+    assert events == ["flip", "capture"]
+
+
+def test_flip_failure_keeps_the_completed_frame_and_snapshot(monkeypatch):
+    import pyxel
+
+    def fail_flip():
+        raise RuntimeError("flip failed")
+
+    monkeypatch.setattr(pyxel, "flip", fail_flip)
+
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 2,
+        "snapshots": [{"frame": 0, "kind": "state"}],
+    })
+
+    assert result["exit_status"] == "crashed"
+    assert result["frame_count"] == 1
+    assert [snap["frame"] for snap in result["snapshots"]] == [0]
+    assert result["errors"][0]["frame"] == 0
+
+
+def test_snapshot_failure_returns_a_complete_run_result(monkeypatch, tmp_path):
+    from pyxel_mcp.observe._harnesses.tools import run as run_module
+
+    def fail_capture(_snapshot):
+        raise OSError("snapshot failed")
+
+    monkeypatch.setattr(run_module._si_kind, "capture", fail_capture)
+
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 1,
+        "snapshots": [{
+            "frame": 0,
+            "kind": "screen_image",
+            "output": str(tmp_path / "frame.png"),
+        }],
+    })
+
+    assert result["exit_status"] == "crashed"
+    assert result["frame_count"] == 1
+    assert result["snapshots"] == []
+    assert result["errors"][0]["phase"] == "artifact"
+    assert result["errors"][0]["frame"] == 0
+
+
+def test_video_encode_failure_returns_a_complete_run_result(monkeypatch, tmp_path):
+    from pyxel_mcp.observe._harnesses._common.snapshot_kinds import video
+
+    def fail_encode(_self):
+        raise OSError("encode failed")
+
+    monkeypatch.setattr(video.VideoAccumulator, "encode", fail_encode)
+
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 1,
+        "snapshots": [{
+            "kind": "video",
+            "start_frame": 0,
+            "end_frame": 1,
+            "output": str(tmp_path / "play.gif"),
+        }],
+    })
+
+    assert result["exit_status"] == "crashed"
+    assert result["frame_count"] == 1
+    assert result["errors"][0]["phase"] == "artifact"
+
+
 def test_run_with_screen_grid_snapshot():
     result = run_tool({
         "script": str(SCRIPTS / "minimal.py"),
@@ -256,17 +423,6 @@ def test_run_with_state_snapshot():
         "snapshots": [{"frame": 4, "kind": "state", "attrs": ["counter"]}],
     })
     assert result["snapshots"][0]["values"]["counter"] == 5
-
-
-def test_run_with_layout_snapshot():
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 3,
-        "snapshots": [{"frame": 1, "kind": "layout"}],
-    })
-    snap = result["snapshots"][0]
-    assert snap["kind"] == "layout"
-    assert "h_balance" in snap
 
 
 def test_run_with_video_snapshot(tmp_path):
@@ -388,7 +544,6 @@ def test_single_frame_screen_image_without_output_is_validation_error():
     assert result["ok"] is False
     assert result["exit_status"] == "invalid"
     assert result["snapshots"] == []
-    assert result["assertions"] == []
     assert result["errors"][0]["phase"] == "validation"
     assert "output" in result["errors"][0]["message"]
 
@@ -413,6 +568,37 @@ def test_single_frame_screen_image_output_rejects_unexpanded_home():
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
     assert "absolute" in result["errors"][0]["message"]
+
+
+@pytest.mark.parametrize("extension", ["jpg", "PNG"])
+def test_single_frame_screen_image_output_requires_png(tmp_path, extension):
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 1,
+        "snapshots": [{
+            "frame": 0,
+            "kind": "screen_image",
+            "output": str(tmp_path / f"frame.{extension}"),
+        }],
+    })
+
+    assert result["exit_status"] == "invalid"
+    assert ".png" in result["errors"][0]["message"]
+
+
+def test_multi_frame_screen_image_output_pattern_requires_png(tmp_path):
+    result = run_tool({
+        "script": str(SCRIPTS / "minimal.py"),
+        "frames": 1,
+        "snapshots": [{
+            "frames": [0],
+            "kind": "screen_image",
+            "output_pattern": str(tmp_path / "frame-{frame}.jpg"),
+        }],
+    })
+
+    assert result["exit_status"] == "invalid"
+    assert ".png" in result["errors"][0]["message"]
 
 
 def test_video_with_frames_is_validation_error(tmp_path):
@@ -498,23 +684,12 @@ def test_output_pattern_unknown_token_validation_error(tmp_path):
     assert result["errors"][0]["phase"] == "validation"
 
 
-# --- Console assertions ---
-
-def test_assertions_parsed():
-    result = run_tool({"script": str(SCRIPTS / "assert_passing.py"), "frames": 5})
-    assert result["exit_status"] == "ok"
-    assert result["errors"] == []
-    assert len(result["assertions"]) == 2
-    a, b = result["assertions"]
-    assert a["passed"] is True and a["name"] == "midpoint_reached"
-    assert b["passed"] is False and b["name"] == "hp_check" and b["message"] == "expected 100, got 50"
-
-
-def test_assertions_in_log_verbatim():
+def test_script_output_is_retained_verbatim_in_log():
     result = run_tool({"script": str(SCRIPTS / "assert_passing.py"), "frames": 5})
     assert result["exit_status"] == "ok"
     assert result["errors"] == []
     assert "ASSERT PASS: midpoint_reached" in result["log"]
+    assert "assertions" not in result
 
 
 # --- Frame-bounds validation tests ---

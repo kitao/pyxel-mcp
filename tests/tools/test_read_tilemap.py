@@ -40,19 +40,20 @@ def test_round_trip_tilemap_demo():
     assert result["size"] == [256, 256]
     assert result["usage"].get("1,0", 0) == 9
     assert result["region"] == {"x": 5, "y": 5, "w": 3, "h": 3}
-    assert result["trap_warning"] is False
+    assert result["zero_tile_used"] is True
+    assert result["zero_tile_nonempty"] is False
     # Full 256x256 tilemap exceeds 4096 — tiles should be None
     assert result["tiles"] is None
 
 
-def test_trap_warning_fires():
-    """tilemap_zero_zero_trap has non-empty (0,0) tile — trap_warning should be True."""
+def test_nonempty_zero_tile_is_reported():
     result = read_tilemap_run({
         "script": str(SCRIPTS / "tilemap_zero_zero_trap.py"),
         "tilemap": 0,
     })
     assert result["errors"] == []
-    assert result["trap_warning"] is True
+    assert result["zero_tile_used"] is True
+    assert result["zero_tile_nonempty"] is True
 
 
 def test_render_to_png():

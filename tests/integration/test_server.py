@@ -1,202 +1,200 @@
-"""End-to-end tests: invoke server.py's handlers and MCP metadata."""
-import subprocess
+"""End-to-end tests for MCP handlers, transport, and metadata."""
 
-import pytest
+import json
+import subprocess
+import tempfile
+
+from pyxel_mcp.contracts import PaletteResult, RunResult
+from pyxel_mcp.dispatch import dispatch
 from pyxel_mcp.server import (
-    run as run_tool, validate as validate_tool, pyxel_info as pyxel_info_tool,
-    read_palette as read_palette_tool, read_image as read_image_tool,
-    read_animation as read_animation_tool, read_tilemap as read_tilemap_tool,
-    read_audio as read_audio_tool, diff_frames as diff_frames_tool,
-    _dispatch, mcp,
+    mcp,
+    pyxel_info,
+    read_tilemap,
+    run,
+    validate,
 )
 from tests.conftest import SCRIPTS
 
 
-def test_validate_tool_via_server():
-    result = validate_tool(script=str(SCRIPTS / "minimal.py"))
-    assert result["ok"] is True
+def test_validate_and_run_via_server():
+    assert validate(script=str(SCRIPTS / "minimal.py"))["ok"] is True
+    assert run(script=str(SCRIPTS / "minimal.py"), frames=3)["exit_status"] == "ok"
 
 
-def test_run_tool_via_server():
-    result = run_tool(script=str(SCRIPTS / "minimal.py"), frames=3)
-    assert result["exit_status"] == "ok"
+def test_run_timeout_keeps_run_result_shape():
+    result = run(script=str(SCRIPTS / "stalling.py"), frames=1000, timeout=2)
 
-
-def test_subprocess_timeout_enforced():
-    result = run_tool(script=str(SCRIPTS / "stalling.py"), frames=1000, timeout=2)
-    assert result["exit_status"] == "timeout"
-
-
-def test_run_timeout_payload_shape():
-    """When `run` times out, the result must remain a well-formed RunResult so
-    that callers can predicate on it without special-casing the timeout path
-    (snapshots/[], assertions/[], errors/[], frame_count int, elapsed float).
-    """
-    result = run_tool(script=str(SCRIPTS / "stalling.py"), frames=1000, timeout=2)
     assert result["ok"] is False
     assert result["exit_status"] == "timeout"
-    assert isinstance(result.get("snapshots"), list)
-    assert isinstance(result.get("assertions"), list)
-    assert isinstance(result.get("errors"), list)
+    assert result["snapshots"] == []
     assert result["errors"]
-    assert isinstance(result.get("frame_count"), int)
-    assert isinstance(result.get("elapsed_seconds"), (int, float))
-    assert "log" in result and isinstance(result["log"], str)
-    assert "seeded" in result
+    assert isinstance(result["frame_count"], int)
+    assert isinstance(result["elapsed_seconds"], float)
+    assert isinstance(result["log"], str)
+    assert isinstance(result["seeded"], bool)
 
 
-def test_run_nonzero_payload_shape(monkeypatch):
+def test_run_timeout_cleans_child_temporary_files(tmp_path, monkeypatch):
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+
+    result = run(
+        script=str(SCRIPTS / "stalling.py"),
+        frames=1000,
+        timeout=1,
+        snapshots=[{
+            "kind": "video",
+            "start_frame": 0,
+            "end_frame": 1000,
+            "output": str(tmp_path / "timeout.gif"),
+        }],
+    )
+
+    assert result["exit_status"] == "timeout"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_dispatch_nonzero_exit_keeps_run_shape(monkeypatch):
     def _nonzero(*args, **kwargs):
         return subprocess.CompletedProcess(args=["pyxel-mcp"], returncode=2, stdout="", stderr="boom")
 
     monkeypatch.setattr(subprocess, "run", _nonzero)
-    result = _dispatch("run", {"script": "main.py", "frames": 1}, timeout=1)
+    result = dispatch("run", {"script": "main.py", "frames": 1}, timeout=1)
 
     assert result["ok"] is False
     assert result["exit_status"] == "crashed"
-    assert isinstance(result.get("snapshots"), list)
-    assert isinstance(result.get("assertions"), list)
-    assert isinstance(result.get("errors"), list)
     assert result["errors"][0]["phase"] == "script_import"
-    assert isinstance(result.get("frame_count"), int)
-    assert isinstance(result.get("elapsed_seconds"), (int, float))
-    assert "log" in result and isinstance(result["log"], str)
-    assert "seeded" in result
+    assert result["snapshots"] == []
 
 
-def test_run_invalid_json_payload_shape(monkeypatch):
-    def _invalid_json(*args, **kwargs):
+def test_dispatch_invalid_json_keeps_run_shape(monkeypatch):
+    def _invalid(*args, **kwargs):
         return subprocess.CompletedProcess(
             args=["pyxel-mcp"], returncode=0, stdout="SDL diagnostic\nnot json\n", stderr=""
         )
 
-    monkeypatch.setattr(subprocess, "run", _invalid_json)
-    result = _dispatch("run", {"script": "main.py", "frames": 1}, timeout=1)
+    monkeypatch.setattr(subprocess, "run", _invalid)
+    result = dispatch("run", {"script": "main.py", "frames": 1}, timeout=1)
 
     assert result["ok"] is False
     assert result["exit_status"] == "crashed"
-    assert isinstance(result.get("snapshots"), list)
-    assert isinstance(result.get("assertions"), list)
-    assert isinstance(result.get("errors"), list)
     assert result["errors"][0]["phase"] == "script_import"
-    assert isinstance(result.get("frame_count"), int)
-    assert isinstance(result.get("elapsed_seconds"), (int, float))
-    assert "log" in result and isinstance(result["log"], str)
-    assert "seeded" in result
 
 
-def test_non_run_tool_timeout_returns_errors():
-    """For non-run tools, dispatch's timeout path returns {errors: [...]} —
-    verify the error shape (phase + message) so agents can detect it."""
-    # validate has near-zero work; force a 1-second timeout to trip dispatch's
-    # subprocess.TimeoutExpired only if validate actually takes that long.
-    # We can't reliably force a timeout on validate itself, but we can verify
-    # the contract by inspection: read_audio with a long-duration argument
-    # plus a tight timeout would trigger the path. Use stalling.py instead
-    # since it's the canonical "never returns" fixture and read_tilemap
-    # imports + headless inits the script.
-    result = read_tilemap_tool(script=str(SCRIPTS / "stalling.py"), tilemap=0)
-    # stalling.py spins in pyxel.run; harness can't reach pre-loop checkpoint,
-    # so we expect either a successful pre-loop reach (if Pyxel.run intercept
-    # works) or a timeout error. Either way, the result must be a dict with
-    # an `errors` list — never raise.
-    assert isinstance(result, dict)
-    assert "errors" in result and isinstance(result["errors"], list)
-    assert "ok" in result
+def test_dispatch_partial_run_fallback_is_normalized(monkeypatch):
+    def _partial(*args, **kwargs):
+        payload = {"errors": [{
+            "phase": "script_import",
+            "message": "unexpected handler failure",
+            "path": None,
+            "frame": None,
+            "traceback": None,
+        }]}
+        return subprocess.CompletedProcess(
+            args=["pyxel-mcp"], returncode=0, stdout=json.dumps(payload), stderr=""
+        )
+
+    monkeypatch.setattr(subprocess, "run", _partial)
+    result = dispatch("run", {"script": "main.py", "frames": 1}, timeout=1)
+
+    RunResult.model_validate(result)
+    assert result["ok"] is False
+    assert result["exit_status"] == "crashed"
+    assert result["errors"][0]["message"] == "unexpected handler failure"
 
 
-def test_non_run_dispatch_timeout_uniform_shape(monkeypatch):
+def test_screen_snapshot_write_failure_stays_a_run_result(tmp_path):
+    not_a_directory = tmp_path / "file"
+    not_a_directory.write_text("occupied")
+
+    result = run(
+        script=str(SCRIPTS / "minimal.py"),
+        frames=1,
+        snapshots=[{
+            "frame": 0,
+            "kind": "screen_image",
+            "output": str(not_a_directory / "frame.png"),
+        }],
+    )
+
+    RunResult.model_validate(result)
+    assert result["ok"] is False
+    assert result["exit_status"] == "crashed"
+    assert result["errors"][0]["phase"] == "artifact"
+
+
+def test_dispatch_rejects_non_object_json(monkeypatch):
+    def _non_object(*args, **kwargs):
+        return subprocess.CompletedProcess(
+            args=["pyxel-mcp"], returncode=0, stdout="[1]", stderr=""
+        )
+
+    monkeypatch.setattr(subprocess, "run", _non_object)
+    result = dispatch("validate", {"script": "main.py"}, timeout=1)
+
+    assert result["ok"] is False
+    assert "JSON object" in result["errors"][0]["message"]
+
+
+def test_dispatch_timeout_is_uniform_for_non_run_tools(monkeypatch):
     def _timeout(*args, **kwargs):
         raise subprocess.TimeoutExpired(cmd=["pyxel-mcp"], timeout=1)
 
     monkeypatch.setattr(subprocess, "run", _timeout)
-    result = _dispatch("validate", {"script": "main.py"}, timeout=1)
+    result = dispatch("validate", {"script": "main.py"}, timeout=1)
 
     assert result["ok"] is False
     assert result["errors"][0]["phase"] == "game_loop"
 
 
-async def test_run_snapshots_schema_resource_served():
-    resources = await mcp.list_resources()
-    uris = [str(r.uri) for r in resources]
-    assert "pyxel://run-snapshots-schema" in uris
+def test_script_reader_errors_remain_structured():
+    result = read_tilemap(script=str(SCRIPTS / "stalling.py"), tilemap=0)
+
+    assert isinstance(result, dict)
+    assert isinstance(result["errors"], list)
+    assert "ok" in result
 
 
-async def test_mcp_tool_metadata_is_discoverable():
+async def test_mcp_metadata_is_complete_and_precise():
     tools = await mcp.list_tools()
     by_name = {tool.name: tool for tool in tools}
 
     assert set(by_name) == {
-        "run", "validate", "pyxel_info", "read_palette", "read_image",
-        "read_animation", "read_tilemap", "read_audio", "diff_frames",
+        "run",
+        "validate",
+        "pyxel_info",
+        "read_palette",
+        "read_image",
+        "read_tilemap",
+        "read_audio",
+        "diff_frames",
     }
     for tool in tools:
-        assert tool.description and tool.description.strip(), tool.name
-        assert tool.annotations is not None, tool.name
-        assert tool.outputSchema is not None, tool.name
-        assert tool.outputSchema["type"] == "object", tool.name
-        assert {"ok", "errors"} <= set(tool.outputSchema["properties"]), tool.name
+        assert tool.description and tool.description.strip()
+        assert tool.annotations and tool.annotations.title
+        assert tool.annotations.destructiveHint is False
+        assert tool.outputSchema
+        assert {"ok", "errors"} <= tool.outputSchema["properties"].keys()
 
-    run_schema = by_name["run"].outputSchema
-    assert {
-        "snapshots", "assertions", "exit_status", "frame_count",
-        "elapsed_seconds", "log", "seeded",
-    } <= set(run_schema["properties"])
-    assert {
-        "ok", "errors", "snapshots", "assertions", "exit_status",
-        "frame_count", "elapsed_seconds", "log", "seeded",
-    } <= set(run_schema["required"])
+    assert "assertions" not in by_name["run"].outputSchema["properties"]
     assert by_name["pyxel_info"].annotations.readOnlyHint is True
-    assert by_name["run"].annotations.destructiveHint is False
-    assert by_name["read_audio"].annotations.readOnlyHint is False
-    script_executing_tools = {
-        "run", "read_palette", "read_image", "read_animation",
-        "read_tilemap", "read_audio",
-    }
-    for name in script_executing_tools:
-        annotations = by_name[name].annotations
-        assert annotations.readOnlyHint is False, name
-        assert annotations.idempotentHint is False, name
-        assert annotations.openWorldHint is True, name
+    assert by_name["run"].annotations.readOnlyHint is False
+    assert by_name["read_audio"].annotations.openWorldHint is True
 
-    expected_tool_fields = {
+    expected_fields = {
         "validate": {"issues"},
-        "pyxel_info": {
-            "pyxel_mcp_version", "pyxel_version", "python_version",
-            "stubs_path", "examples", "resources",
-        },
-        "read_palette": {
-            "colors", "extended_palette", "palette_size",
-            "hierarchy", "contrast_warnings",
-        },
-        "read_image": {
-            "image_index", "bank_size", "region", "pixels",
-            "color_count", "fill_ratio", "symmetry", "edge_density",
-            "warnings", "rendered",
-        },
-        "read_animation": {
-            "image_index", "regions", "palette_consistency",
-            "silhouette_stability", "region_diffs", "warnings",
-        },
-        "read_tilemap": {
-            "tilemap_index", "size", "imgsrc", "tiles", "usage",
-            "region", "trap_warning", "warnings", "rendered",
-        },
-        "read_audio": {
-            "path", "duration_seconds", "sample_rate", "channels",
-            "peak_amplitude", "notes", "warnings",
-        },
-        "diff_frames": {
-            "identical", "size_match", "size_a", "size_b",
-            "changed_pixels", "total_pixels", "ratio", "region",
-            "warnings",
-        },
+        "pyxel_info": {"pyxel_mcp_version", "pyxel_version", "python_version", "stubs_path", "examples", "resources"},
+        "read_palette": {"colors", "extended_palette", "palette_size", "used_indices"},
+        "read_image": {"image_index", "bank_size", "region", "pixels", "color_count", "rendered"},
+        "read_tilemap": {"tilemap_index", "size", "imgsrc", "tiles", "usage", "region", "zero_tile_used", "zero_tile_nonempty", "rendered"},
+        "read_audio": {"path", "duration_seconds", "sample_rate", "channels", "peak_amplitude", "notes", "warnings"},
+        "diff_frames": {"identical", "size_match", "size_a", "size_b", "changed_pixels", "total_pixels", "ratio", "region", "warnings"},
     }
-    for name, fields in expected_tool_fields.items():
-        assert fields <= set(by_name[name].outputSchema["properties"]), name
+    for name, fields in expected_fields.items():
+        assert fields <= by_name[name].outputSchema["properties"].keys()
 
 
-async def test_structured_tool_results_keep_tool_specific_fields():
+async def test_structured_result_preserves_tool_fields():
     content, structured = await mcp._tool_manager.call_tool(
         "validate",
         {"script": str(SCRIPTS / "minimal.py")},
@@ -205,33 +203,28 @@ async def test_structured_tool_results_keep_tool_specific_fields():
 
     assert content
     assert structured["ok"] is True
-    assert "errors" in structured
+    assert structured["errors"] == []
     assert "issues" in structured
 
 
-def test_run_tool_until_via_server():
-    result = run_tool(
-        script=str(SCRIPTS / "stateful_app.py"), frames=50, until="counter >= 2",
+def test_until_stops_on_first_matching_frame():
+    result = run(
+        script=str(SCRIPTS / "stateful_app.py"),
+        frames=50,
+        until="counter >= 2",
     )
+
     assert result["until_met"] is True
     assert result["frame_count"] == 2
 
 
-def test_run_result_declares_until_met():
-    from pyxel_mcp.server import RunResult
+def test_result_models_declare_public_fields():
     assert "until_met" in RunResult.model_fields
+    assert set(PaletteResult.model_fields) >= {"colors", "palette_size", "used_indices"}
 
 
-def test_palette_result_declares_all_output_fields():
-    from pyxel_mcp.server import PaletteResult
-    fields = set(PaletteResult.model_fields)
-    assert {"used_indices", "co_located_pairs"} <= fields
+def test_pyxel_info_reports_successful_environment():
+    result = pyxel_info()
 
-
-async def test_every_tool_has_title_and_safety_annotations():
-    tools = await mcp.list_tools()
-    assert len(tools) == 9
-    for t in tools:
-        assert t.annotations is not None, t.name
-        assert t.annotations.title, t.name
-        assert t.annotations.destructiveHint is False, t.name
+    assert result["ok"] is True
+    assert result["pyxel_version"]

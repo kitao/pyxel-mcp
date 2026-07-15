@@ -13,16 +13,16 @@ def _empty(error: dict) -> dict:
         "ok": False,
         "tilemap_index": -1, "size": [0, 0], "imgsrc": 0,
         "tiles": None, "usage": {}, "region": None,
-        "trap_warning": False, "rendered": None,
-        "warnings": [], "errors": [error],
+        "zero_tile_used": False, "zero_tile_nonempty": False,
+        "rendered": None, "errors": [error],
     }
 
 
 def run(payload: dict[str, Any]) -> dict[str, Any]:
     """Inspect a tilemap at the pre-loop checkpoint.
 
-    Result includes `ok: bool` — True iff `len(errors) == 0`. The
-    `trap_warning` flag is informational and does not affect `ok`.
+    Result includes direct facts about whether source tile (0, 0) is used
+    and whether that source tile contains non-zero pixels.
     """
     tilemap = payload.get("tilemap")
     if not isinstance(tilemap, int):

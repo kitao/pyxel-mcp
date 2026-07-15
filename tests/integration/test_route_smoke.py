@@ -27,16 +27,17 @@ def test_run_route_with_input_and_state():
     assert result["snapshots"][0]["values"]["player_x"] > 16
 
 
-def test_route_assertions():
+def test_route_log_remains_available_for_script_output():
     result = run_tool(
         script=ROUTE, frames=60,
         inputs=[{"frame": 5, "buttons": ["KEY_SPACE"]}, {"frame": 7, "buttons": []}],
     )
-    assert any(a["name"].startswith("jump_at_frame") for a in result["assertions"])
+    assert isinstance(result["log"], str)
+    assert "assertions" not in result
 
 
-def test_route_palette_hierarchy():
+def test_route_palette_is_observable():
     result = read_palette_tool(script=ROUTE)
     assert result["palette_size"] == 16
-    # Palette shape may not have hierarchy on this minimal fixture; just check no errors.
+    assert isinstance(result["used_indices"], list)
     assert result["errors"] == []

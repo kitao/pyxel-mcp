@@ -24,19 +24,14 @@ def test_errors_empty_on_success():
 def test_resources_has_expected_uris():
     """Verify every advertised resource URI is present and correct.
 
-    Includes Pyxel docs and validation references. Skill guidance lives in
-    the separate pyxel-skill repository, not in pyxel-mcp.
+    The server exposes only local, version-matched resources.
     """
     result = pyxel_info_run({})
     assert result["resources"] == {
-        "api_reference": "pyxel://api-reference",
-        "user_guide": "pyxel://user-guide",
-        "mml_commands": "pyxel://mml-commands",
-        "pyxres_format": "pyxel://pyxres-format",
         "default_palette": "pyxel://palette/default",
-        "examples": "pyxel://examples/<name>",
+        "examples": "pyxel://examples/{name}",
         "run_snapshots_schema": "pyxel://run-snapshots-schema",
-        "anti_patterns": "pyxel://anti-patterns",
+        "validation_patterns": "pyxel://validation-patterns",
     }
 
 

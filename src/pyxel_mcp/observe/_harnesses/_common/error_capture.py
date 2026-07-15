@@ -11,6 +11,7 @@ class ErrorPhase(str, enum.Enum):
     SCRIPT_IMPORT = "script_import"
     ASSET_LOAD = "asset_load"
     GAME_LOOP = "game_loop"
+    ARTIFACT = "artifact"
     UNTIL = "until"
 
 
@@ -27,8 +28,8 @@ def make_error(
 ) -> ToolError:
     """Build a ToolError dict.
 
-    `path` is populated for asset_load (failing asset path) and script_import
-    (script path). `frame` is populated for game_loop and until phases.
+    `path` is populated for asset_load, script_import, and artifact failures.
+    `frame` is populated for game_loop, artifact, and until phases.
     `traceback` is populated only when capture_traceback=True AND an exception
     is currently active; otherwise None.
     """

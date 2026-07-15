@@ -34,6 +34,26 @@ def test_invalid_extension_raises(tmp_path):
         })
 
 
+def test_encode_failure_cleans_temporary_directory(tmp_path, monkeypatch):
+    out = tmp_path / "anim.gif"
+    accum = VideoAccumulator({
+        "kind": "video", "start_frame": 0, "end_frame": 1,
+        "fps": 30, "output": str(out), "scale": 1,
+    })
+    accum.add_frame(0, _dummy_frames(1)[0])
+    tempdir = Path(accum._tempdir)
+
+    def fail_save(*_args, **_kwargs):
+        raise OSError("save failed")
+
+    monkeypatch.setattr(Image.Image, "save", fail_save)
+
+    with pytest.raises(OSError, match="save failed"):
+        accum.encode()
+
+    assert not tempdir.exists()
+
+
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not on PATH")
 def test_mp4_output(tmp_path):
     out = tmp_path / "anim.mp4"

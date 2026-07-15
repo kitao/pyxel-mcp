@@ -33,6 +33,11 @@ def test_registry_metadata_matches_project_version():
     assert registry["packages"][0]["transport"]["type"] == "stdio"
 
 
+def test_release_version_is_1_2_0():
+    pyproject = (ROOT / "pyproject.toml").read_text()
+    assert 'version = "1.2.0"' in pyproject
+
+
 def test_public_descriptions_preserve_observation_boundary():
     pyproject = (ROOT / "pyproject.toml").read_text()
     parser = cli._build_parser()
@@ -40,6 +45,12 @@ def test_public_descriptions_preserve_observation_boundary():
     assert "observe Pyxel programs" in pyproject
     assert "verify, and iterate" not in pyproject
     assert parser.description == "MCP server for Pyxel - headless observation tools."
+
+
+def test_python_requirement_matches_pyxel_dependency():
+    pyproject = (ROOT / "pyproject.toml").read_text()
+    assert 'requires-python = ">=3.11"' in pyproject
+    assert '"Programming Language :: Python :: 3.10"' not in pyproject
 
 
 def test_install_output_contains_snippet_text(capsys):
@@ -50,6 +61,8 @@ def test_install_output_contains_snippet_text(capsys):
     assert '"command": "uvx"' in out
     assert '"args": ["pyxel-mcp"]' in out
     assert '"mcpServers"' in out
+    assert "8 tools" in out
+    assert "read_animation" not in out
 
 
 def test_install_lists_known_host_config_paths(capsys):

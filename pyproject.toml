@@ -1,9 +1,9 @@
 [project]
 name = "pyxel-mcp"
-version = "1.1.0"
+version = "1.2.0"
 description = "MCP server for Pyxel, a retro game engine for Python. Provides headless tools to observe Pyxel programs."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Takashi Kitao", email = "takashi.kitao@gmail.com" }]
 keywords = [
@@ -20,7 +20,6 @@ classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -28,7 +27,7 @@ classifiers = [
     "Topic :: Games/Entertainment",
     "Topic :: Software Development :: Libraries",
 ]
-dependencies = ["mcp>=1.0.0,<2.0.0", "pyxel>=2.9.6", "numpy", "Pillow"]
+dependencies = ["mcp>=1.27.0,<2.0.0", "pyxel>=2.9.6", "numpy", "Pillow"]
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-asyncio"]

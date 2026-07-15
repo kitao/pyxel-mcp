@@ -45,6 +45,12 @@ class VideoAccumulator:
         self.frames.append(img)
 
     def encode(self) -> dict[str, Any]:
+        try:
+            return self._encode()
+        finally:
+            shutil.rmtree(self._tempdir, ignore_errors=True)
+
+    def _encode(self) -> dict[str, Any]:
         warnings: list[str] = []
         out = self.requested_output
         out.parent.mkdir(parents=True, exist_ok=True)
@@ -80,9 +86,6 @@ class VideoAccumulator:
                 str(out),
             ]
             subprocess.run(cmd, check=True, capture_output=True)
-
-        # Cleanup temp dir
-        shutil.rmtree(self._tempdir, ignore_errors=True)
 
         frames_encoded = len(self.frames)
         return {

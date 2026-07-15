@@ -29,7 +29,7 @@ def test_round_trip_default_region():
     # Full bank (65536 px) exceeds threshold — pixels should be None
     assert result["pixels"] is None
     assert "color_count" in result
-    assert "fill_ratio" in result
+    assert {"fill_ratio", "symmetry", "edge_density", "warnings"}.isdisjoint(result)
 
 
 def test_render_to_png():

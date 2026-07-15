@@ -1,5 +1,26 @@
 # Change Log
 
+## 1.2.0
+
+- BREAKING: reduce the public surface from nine tools to eight by removing
+  `read_animation`; use `read_image` and `diff_frames` for explicit comparisons.
+- BREAKING: remove the `layout` snapshot kind and stdout `ASSERT PASS|FAIL`
+  parsing from `run`.
+- BREAKING: remove subjective palette, image, and tilemap quality fields; the
+  observation tools now return direct measurements only.
+- BREAKING: replace live documentation resources with three local resources
+  and one installed-example template.
+- Declare typed input and output schemas from Pydantic contracts for all tools.
+- Separate MCP registration, public contracts, and subprocess dispatch.
+- Seed stdlib and Pyxel randomness before module initialization, and capture
+  completed draws before presentation advances the frame.
+- Return structured `artifact` failures for snapshot and video output, require
+  `.png` screen-image paths, and define snapshot results in chronological order.
+- Require the stable MCP Python SDK 1.27 or newer while remaining below 2.0.
+- Align the declared Python requirement with Pyxel at Python 3.11 or newer.
+- Rewrite agent instructions and public documentation around the smaller
+  factual contract.
+
 ## 1.1.0
 
 - Add `until` parameter to `run` for condition-based stopping

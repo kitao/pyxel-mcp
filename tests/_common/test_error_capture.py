@@ -6,7 +6,7 @@ from pyxel_mcp.observe._harnesses._common.error_capture import (
 
 def test_phases_match_spec():
     expected = {
-        "validation", "script_import", "asset_load", "game_loop", "until",
+        "validation", "script_import", "asset_load", "game_loop", "artifact", "until",
     }
     assert {p.value for p in ErrorPhase} == expected
 

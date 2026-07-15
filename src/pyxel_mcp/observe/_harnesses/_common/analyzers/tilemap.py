@@ -98,7 +98,7 @@ def analyze_tilemap(
     *,
     render_path: str | None = None,
 ) -> dict[str, Any]:
-    """Analyze a Pyxel tilemap: usage, region, trap_warning."""
+    """Read tile coordinates, usage, bounds, and source-tile facts."""
     import pyxel
 
     tm = pyxel.tilemaps[tilemap]
@@ -144,8 +144,7 @@ def analyze_tilemap(
             continue
         usage[f"{u},{v}"] = int(c)
 
-    # trap_warning: (0,0) tile appears in usage AND source bank (0,0) has visible content
-    trap_warning = uses_zero_zero and _zero_zero_is_visible(imgsrc)
+    zero_tile_nonempty = _zero_zero_is_visible(imgsrc)
 
     # tiles: full grid only when small enough — return as nested int lists.
     total_cells = tm_w * tm_h
@@ -176,8 +175,8 @@ def analyze_tilemap(
         "tiles": tiles,
         "usage": usage,
         "region": region,
-        "trap_warning": trap_warning,
+        "zero_tile_used": uses_zero_zero,
+        "zero_tile_nonempty": zero_tile_nonempty,
         "rendered": rendered,
-        "warnings": [],
         "errors": [],
     }

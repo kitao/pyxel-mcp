@@ -12,7 +12,7 @@ def test_default_palette_via_tool():
 def test_extended_palette_via_tool():
     result = read_palette_run({"script": str(SCRIPTS / "palette_extended.py")})
     assert result["palette_size"] == 18
-    assert result["hierarchy"] is None
+    assert result["extended_palette"] is True
 
 
 def test_missing_script_validation_error():

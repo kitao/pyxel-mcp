@@ -36,13 +36,15 @@ def test_basic_tilemap_usage():
     # 9 tiles of (1,0) placed
     assert result["usage"].get("1,0", 0) == 9
     assert result["region"] == {"x": 5, "y": 5, "w": 3, "h": 3}
-    assert result["trap_warning"] is False
+    assert result["zero_tile_used"] is True
+    assert result["zero_tile_nonempty"] is False
 
 
-def test_zero_zero_trap_detected():
+def test_zero_tile_facts_are_reported_separately():
     pyxel.images[0].pset(0, 0, 11)  # source (0,0) has visible content
     result = analyze_tilemap(tilemap=0)
-    assert result["trap_warning"] is True
+    assert result["zero_tile_used"] is True
+    assert result["zero_tile_nonempty"] is True
 
 
 def test_imgsrc_resolved_when_tilemap_image_assigned():
@@ -59,7 +61,8 @@ def test_imgsrc_resolved_when_tilemap_image_assigned():
         # Should not raise; should treat bank 1 as the source.
         result = analyze_tilemap(tilemap=0)
         # region / usage shape unchanged from the int case.
-        assert "trap_warning" in result
+        assert "zero_tile_used" in result
+        assert "zero_tile_nonempty" in result
         assert result["errors"] == []
     finally:
         tm.imgsrc = 0

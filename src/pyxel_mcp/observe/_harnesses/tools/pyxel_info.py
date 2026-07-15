@@ -67,14 +67,10 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         "stubs_path": stubs,
         "examples": examples,
         "resources": {
-            "api_reference": "pyxel://api-reference",
-            "user_guide": "pyxel://user-guide",
-            "mml_commands": "pyxel://mml-commands",
-            "pyxres_format": "pyxel://pyxres-format",
             "default_palette": "pyxel://palette/default",
-            "examples": "pyxel://examples/<name>",
+            "examples": "pyxel://examples/{name}",
             "run_snapshots_schema": "pyxel://run-snapshots-schema",
-            "anti_patterns": "pyxel://anti-patterns",
+            "validation_patterns": "pyxel://validation-patterns",
         },
         "errors": errors,
     }
