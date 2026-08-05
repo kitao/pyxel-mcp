@@ -1,5 +1,7 @@
 # pyxel-mcp
 
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.kitao%2Fpyxel-mcp.svg)](https://mcptoplist.com/server/io.github.kitao%2Fpyxel-mcp)
+
 An MCP server for observing programs built with [Pyxel](https://github.com/kitao/pyxel). It runs trusted local scripts headlessly and returns structured state, pixels, assets, audio, and frame differences.
 
 [![PyPI](https://img.shields.io/pypi/v/pyxel-mcp)](https://pypi.org/project/pyxel-mcp/)
