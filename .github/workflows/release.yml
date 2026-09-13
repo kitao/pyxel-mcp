@@ -22,7 +22,7 @@ jobs:
             echo "tag ${GITHUB_REF_NAME} does not match pyproject version ${version}"; exit 1; }
           python3 -c "import json; d=json.load(open('server.json')); assert d['version']=='${version}' and d['packages'][0]['version']=='${version}', d"
       - run: uv build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/
