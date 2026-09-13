@@ -53,3 +53,13 @@ Notes:
 2. Commit, tag `vX.Y.Z`, and push the tag. The release workflow builds the
    package, publishes it to PyPI through trusted publishing, and then
    publishes `server.json` to the MCP Registry through GitHub OIDC.
+
+The PyPI step runs only while the repository variable
+`PYPI_TRUSTED_PUBLISHING` is `true`, which requires a trusted publisher on
+PyPI for `release.yml` with the `pypi` environment. Without it, upload the
+package by hand before pushing the tag; the registry step still runs because
+it only needs the version to exist on PyPI:
+
+```bash
+uv build && twine upload dist/*
+```

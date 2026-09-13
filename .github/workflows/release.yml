@@ -27,8 +27,12 @@ jobs:
           name: dist
           path: dist/
 
+  # Runs once the repository variable PYPI_TRUSTED_PUBLISHING is "true", which
+  # means a PyPI trusted publisher exists for this workflow. Until then the
+  # package is uploaded by hand and the registry step below still runs.
   pypi:
     needs: build
+    if: vars.PYPI_TRUSTED_PUBLISHING == 'true'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -39,9 +43,12 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
 
   mcp-registry:
-    needs: pypi
+    needs: [build, pypi]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.pypi.result != 'failure' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
