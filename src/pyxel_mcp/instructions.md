@@ -20,7 +20,7 @@ pyxel-mcp exposes eight tools for observing trusted local Pyxel scripts. It repo
 - `read_audio`: render one sound or music target to WAV and return measurable audio data.
 - `diff_frames`: compare two PNG files pixel by pixel.
 
-Use `random_seed` when randomness affects a run. Use `until` with snapshots at `"end"` when the target is an event rather than a known frame. Inspect captured images directly when appearance matters.
+Use `random_seed` when randomness affects a run. Use `until` with snapshots at `"end"` when the target is an event rather than a known frame. Set `inline: true` on a `screen_image` snapshot, or `inline=true` on `read_image` and `read_tilemap`, to receive the PNG as image content in the same result. A single inline frame may omit its output path; the PNG then lands under the system temp directory and its path is still reported. At most 12 images are embedded per call. Use `scale` 2 to 4 so pixel art stays legible. Look at captured pixels whenever appearance matters.
 
 ## Resources
 

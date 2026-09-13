@@ -1,5 +1,7 @@
 """screen_grid snapshot — palette indices as 2D array."""
+
 from __future__ import annotations
+
 from typing import Any
 
 import numpy as np
@@ -17,6 +19,7 @@ def capture(snapshot: dict[str, Any]) -> dict[str, Any]:
     appended.
     """
     import pyxel
+
     sw, sh = pyxel.width, pyxel.height
     warnings: list[str] = []
 
@@ -34,9 +37,11 @@ def capture(snapshot: dict[str, Any]) -> dict[str, Any]:
         x, y, w, h = cx, cy, cw, ch
 
     arr = np.frombuffer(
-        pyxel.screen.data_ptr(), dtype=np.uint8, count=sw * sh,
+        pyxel.screen.data_ptr(),
+        dtype=np.uint8,
+        count=sw * sh,
     ).reshape((sh, sw))
-    grid = arr[y:y + h, x:x + w].astype(int).tolist()
+    grid = arr[y : y + h, x : x + w].astype(int).tolist()
     return {
         "frame": snapshot["frame"],
         "kind": "screen_grid",

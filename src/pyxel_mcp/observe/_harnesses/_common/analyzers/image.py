@@ -1,5 +1,7 @@
 """Image bank region analyzer."""
+
 from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +12,7 @@ _PIXEL_GRID_LIMIT = 4096
 
 def _bank_size(image: int) -> tuple[int, int]:
     import pyxel
+
     bank = pyxel.images[image]
     return bank.width, bank.height
 
@@ -22,12 +25,15 @@ def _read_region(image: int, x: int, y: int, w: int, h: int) -> np.ndarray:
     into this snapshot (data_ptr aliases live memory).
     """
     import pyxel
+
     bank = pyxel.images[image]
     bw, bh = bank.width, bank.height
     full = np.frombuffer(
-        bank.data_ptr(), dtype=np.uint8, count=bw * bh,
+        bank.data_ptr(),
+        dtype=np.uint8,
+        count=bw * bh,
     ).reshape((bh, bw))
-    return full[y:y + h, x:x + w].copy()
+    return full[y : y + h, x : x + w].copy()
 
 
 def _color_count(region: np.ndarray) -> dict[int, int]:
@@ -38,8 +44,9 @@ def _color_count(region: np.ndarray) -> dict[int, int]:
 
 
 def _render_png(region: np.ndarray, render_path: Path) -> None:
-    from PIL import Image
     import pyxel
+    from PIL import Image
+
     palette_rgb = []
     for c in pyxel.colors:
         palette_rgb.append(((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF))

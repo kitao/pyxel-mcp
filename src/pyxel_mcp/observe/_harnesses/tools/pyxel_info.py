@@ -1,7 +1,10 @@
 """pyxel_info() — discovery."""
+
 from __future__ import annotations
+
 import sys
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +13,7 @@ from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_e
 
 def _stubs_path() -> str:
     import pyxel
+
     pyi = Path(pyxel.__file__).parent / "pyxel.pyi"
     return str(pyi) if pyi.is_file() else ""
 
@@ -17,6 +21,7 @@ def _stubs_path() -> str:
 def _examples() -> list[dict[str, Any]]:
     """Locate Pyxel example scripts shipped with the package."""
     import pyxel
+
     examples_dir = Path(pyxel.__file__).parent / "examples"
     if not examples_dir.is_dir():
         return []

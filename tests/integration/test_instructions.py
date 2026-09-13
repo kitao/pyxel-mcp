@@ -5,11 +5,16 @@ def test_instructions_present():
     # Resolve relative to this file so the test works regardless of CWD.
     repo_root = Path(__file__).parent.parent.parent
     text = (repo_root / "src/pyxel_mcp/instructions.md").read_text()
-    for marker in ["## Contract", "## Tools", "## Resources", "pyxel://run-snapshots-schema"]:
+    for marker in [
+        "## Contract",
+        "## Tools",
+        "## Resources",
+        "pyxel://run-snapshots-schema",
+    ]:
         assert marker in text, f"missing section: {marker}"
 
 
-def test_instructions_match_the_factual_v2_surface():
+def test_instructions_match_the_tool_surface():
     repo_root = Path(__file__).parent.parent.parent
     text = (repo_root / "src/pyxel_mcp/instructions.md").read_text()
 
@@ -40,7 +45,9 @@ def test_run_examples_do_not_show_relative_artifact_paths():
     from pyxel_mcp.server import run as run_tool
 
     repo_root = Path(__file__).parent.parent.parent
-    schema = (repo_root / "src/pyxel_mcp/_resources/run-snapshots-schema.md").read_text()
+    schema = (
+        repo_root / "src/pyxel_mcp/_resources/run-snapshots-schema.md"
+    ).read_text()
     doc = run_tool.__doc__ or ""
 
     assert '"output": "out.png"' not in doc

@@ -2,7 +2,9 @@
 
 Runs the script to the pre-loop checkpoint, then analyzes the palette.
 """
+
 from __future__ import annotations
+
 from typing import Any
 
 from pyxel_mcp.observe._harnesses._common.analyzers.palette import analyze_palette
@@ -13,7 +15,9 @@ def _empty(error: dict) -> dict[str, Any]:
     """Error-shape response (no analysis performed)."""
     return {
         "ok": False,
-        "colors": {}, "extended_palette": False, "palette_size": 0,
+        "colors": {},
+        "extended_palette": False,
+        "palette_size": 0,
         "used_indices": [],
         "errors": [error],
     }

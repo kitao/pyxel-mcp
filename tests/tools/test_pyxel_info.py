@@ -1,11 +1,19 @@
 import re
+
 from pyxel_mcp.observe._harnesses.tools.pyxel_info import run as pyxel_info_run
 
 
 def test_returns_required_fields():
     result = pyxel_info_run({})
-    for key in ("pyxel_mcp_version", "pyxel_version", "python_version",
-                "stubs_path", "examples", "resources", "errors"):
+    for key in (
+        "pyxel_mcp_version",
+        "pyxel_version",
+        "python_version",
+        "stubs_path",
+        "examples",
+        "resources",
+        "errors",
+    ):
         assert key in result
 
 

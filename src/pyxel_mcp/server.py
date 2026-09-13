@@ -1,13 +1,26 @@
-"""FastMCP registration for Pyxel observation tools."""
+"""MCPServer registration for Pyxel observation tools."""
 
 from __future__ import annotations
 
+import asyncio
+import base64
 import sys
+import tempfile
+from collections.abc import Sequence
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
-from mcp.server.fastmcp import FastMCP
-from mcp.types import ToolAnnotations
+import pydantic_core
+from mcp.server.mcpserver import MCPServer
+from mcp.types import (
+    CallToolResult,
+    ContentBlock,
+    ImageContent,
+    TextContent,
+    ToolAnnotations,
+)
 from pydantic import BaseModel
 
 from pyxel_mcp._resources import register_resources
@@ -29,24 +42,44 @@ from pyxel_mcp.contracts import (
 )
 from pyxel_mcp.dispatch import dispatch
 
-
+_HOMEPAGE = "https://github.com/kitao/pyxel-mcp"
 _INSTRUCTIONS_PATH = Path(__file__).parent / "instructions.md"
 try:
     _INSTRUCTIONS = _INSTRUCTIONS_PATH.read_text()
 except FileNotFoundError:
     _INSTRUCTIONS = "pyxel-mcp instructions are missing from this installation."
 
-mcp = FastMCP(name="pyxel", instructions=_INSTRUCTIONS)
+# Inline PNGs are cheap for Pyxel-sized screens, but an unbounded multi-frame
+# request could still flood one tool result. Extra frames stay on disk.
+MAX_INLINE_IMAGES = 12
+
+
+def _package_version() -> str:
+    try:
+        return _pkg_version("pyxel-mcp")
+    except PackageNotFoundError:
+        return ""
+
+
+mcp = MCPServer(
+    name="pyxel",
+    title="Pyxel MCP",
+    instructions=_INSTRUCTIONS,
+    website_url=_HOMEPAGE,
+    version=_package_version(),
+)
 register_resources(mcp)
 
 
 def _annotations(title: str, *, pure: bool) -> ToolAnnotations:
+    # Every tool works on local files and local subprocesses, so none of them
+    # reaches an open world of external entities.
     return ToolAnnotations(
         title=title,
-        readOnlyHint=pure,
-        destructiveHint=False,
-        idempotentHint=pure,
-        openWorldHint=not pure,
+        read_only_hint=pure,
+        destructive_hint=False,
+        idempotent_hint=pure,
+        open_world_hint=False,
     )
 
 
@@ -60,10 +93,100 @@ def _json_list(values: list[Any] | None) -> list[Any]:
     return [_json_value(value) for value in values or []]
 
 
+def _png_block(path: str) -> ImageContent:
+    data = base64.b64encode(Path(path).read_bytes()).decode("ascii")
+    return ImageContent(type="image", data=data, mime_type="image/png")
+
+
+def _reply(
+    model: type[BaseModel], result: dict[str, Any], image_paths: Sequence[str] = ()
+) -> CallToolResult:
+    """Build the tool result: structured data, its JSON text, and inline PNGs.
+
+    The harness dict is normalised through the result model so every reply
+    carries the same fields whichever path produced it. Inline images follow
+    the JSON so the model sees captured pixels without a second file read;
+    images that could not be embedded are noted as text rather than written
+    into the harness facts.
+    """
+    structured = model.model_validate(result).model_dump(mode="json")
+    text = pydantic_core.to_json(structured).decode()
+    content: list[ContentBlock] = [TextContent(type="text", text=text)]
+    notes: list[str] = []
+    for index, path in enumerate(image_paths):
+        if index >= MAX_INLINE_IMAGES:
+            extra = len(image_paths) - MAX_INLINE_IMAGES
+            notes.append(
+                f"{extra} inline image(s) beyond the limit of {MAX_INLINE_IMAGES} stay on disk."
+            )
+            break
+        try:
+            content.append(_png_block(path))
+        except OSError as exc:
+            notes.append(f"Could not embed {path}: {exc.strerror or exc}.")
+    content.extend(
+        TextContent(type="text", text=f"[pyxel-mcp] {note}") for note in notes
+    )
+    return CallToolResult(content=content, structured_content=structured)
+
+
+def _inline_dir() -> Path:
+    """A fresh directory for PNGs the caller asked to see but not to keep.
+
+    It lives under the system temp directory and is left for the OS to clean,
+    so the reported paths stay valid for follow-up `diff_frames` calls.
+    """
+    return Path(tempfile.mkdtemp(prefix="pyxel-mcp-inline-"))
+
+
+def _discard_if_empty(root: Path | None) -> None:
+    """Drop an inline directory that received no PNG, such as after a crash."""
+    if root is not None and root.is_dir() and not any(root.iterdir()):
+        root.rmdir()
+
+
+def _assign_inline_outputs(snapshots: list[dict[str, Any]]) -> Path | None:
+    """Give path-less inline screen_image requests one file each in a new directory."""
+    root: Path | None = None
+    for index, snap in enumerate(snapshots):
+        if snap.get("kind") != "screen_image" or not snap.get("inline"):
+            continue
+        if "output" in snap or "output_pattern" in snap:
+            continue
+        root = root or _inline_dir()
+        snap["output"] = str(root / f"{index}-frame-{snap['frame']}.png")
+    return root
+
+
+def _inline_render_path(
+    inline: bool, render_path: str | None, stem: str
+) -> tuple[Path | None, str | None]:
+    """Pick a temp destination for an inline render when the caller gave none."""
+    if not inline or render_path is not None:
+        return None, render_path
+    root = _inline_dir()
+    return root, str(root / f"{stem}.png")
+
+
+def _inline_snapshot_paths(result: dict[str, Any]) -> list[str]:
+    return [
+        snapshot["path"]
+        for snapshot in result.get("snapshots", [])
+        if snapshot.get("kind") == "screen_image" and snapshot.get("inline")
+    ]
+
+
+def _rendered_path(result: dict[str, Any], inline: bool) -> list[str]:
+    rendered = result.get("rendered")
+    return [rendered] if inline and isinstance(rendered, str) and rendered else []
+
+
 @mcp.tool(
     description=(
         "Run a Pyxel script headlessly for a frame budget or until a condition "
-        "holds, with scheduled input and state, screen, or video capture."
+        "holds, with scheduled input and state, screen, or video capture. "
+        "screen_image snapshots with inline=true also return the PNG as image "
+        "content, and a single inline frame may omit its output path."
     ),
     annotations=_annotations("Run Pyxel script headlessly", pure=False),
     structured_output=True,
@@ -77,19 +200,25 @@ def run(
     timeout: PositiveInt = 10,
     stall_window_frames: PositiveInt | None = None,
     until: NonEmptyStr | None = None,
-) -> RunResult:
+) -> Annotated[CallToolResult, RunResult]:
     """Drive a trusted local script through deterministic headless frames."""
+    snapshot_payload = _json_list(snapshots)
+    inline_root = _assign_inline_outputs(snapshot_payload)
     payload = {
         "script": script,
         "frames": frames,
         "inputs": _json_list(inputs),
-        "snapshots": _json_list(snapshots),
+        "snapshots": snapshot_payload,
         "random_seed": random_seed,
         "timeout": timeout,
         "stall_window_frames": stall_window_frames,
         "until": until,
     }
-    return dispatch("run", payload, timeout=timeout + 5)
+    try:
+        result = dispatch("run", payload, timeout=timeout + 5)
+    finally:
+        _discard_if_empty(inline_root)
+    return _reply(RunResult, result, _inline_snapshot_paths(result))
 
 
 @mcp.tool(
@@ -97,9 +226,9 @@ def run(
     annotations=_annotations("Validate Pyxel script", pure=True),
     structured_output=True,
 )
-def validate(script: NonEmptyStr) -> ValidateResult:
+def validate(script: NonEmptyStr) -> Annotated[CallToolResult, ValidateResult]:
     """Read a script without executing it."""
-    return dispatch("validate", {"script": script})
+    return _reply(ValidateResult, dispatch("validate", {"script": script}))
 
 
 @mcp.tool(
@@ -107,8 +236,8 @@ def validate(script: NonEmptyStr) -> ValidateResult:
     annotations=_annotations("Pyxel environment info", pure=True),
     structured_output=True,
 )
-def pyxel_info() -> PyxelInfoResult:
-    return dispatch("pyxel_info", {})
+def pyxel_info() -> Annotated[CallToolResult, PyxelInfoResult]:
+    return _reply(PyxelInfoResult, dispatch("pyxel_info", {}))
 
 
 @mcp.tool(
@@ -116,12 +245,16 @@ def pyxel_info() -> PyxelInfoResult:
     annotations=_annotations("Read Pyxel palette", pure=False),
     structured_output=True,
 )
-def read_palette(script: NonEmptyStr) -> PaletteResult:
-    return dispatch("read_palette", {"script": script})
+def read_palette(script: NonEmptyStr) -> Annotated[CallToolResult, PaletteResult]:
+    return _reply(PaletteResult, dispatch("read_palette", {"script": script}))
 
 
 @mcp.tool(
-    description="Read palette-index pixels from a Pyxel image-bank region and optionally render it to PNG.",
+    description=(
+        "Read palette-index pixels from a Pyxel image-bank region and optionally "
+        "render it to PNG; inline=true returns the render as image content and "
+        "makes render_path optional."
+    ),
     annotations=_annotations("Read image bank region", pure=False),
     structured_output=True,
 )
@@ -133,23 +266,33 @@ def read_image(
     w: PositiveInt | None = None,
     h: PositiveInt | None = None,
     render_path: NonEmptyStr | None = None,
-) -> ImageResult:
-    return dispatch(
-        "read_image",
-        {
-            "script": script,
-            "image": image,
-            "x": x,
-            "y": y,
-            "w": w,
-            "h": h,
-            "render_path": render_path,
-        },
+    inline: bool = False,
+) -> Annotated[CallToolResult, ImageResult]:
+    inline_root, render_path = _inline_render_path(
+        inline, render_path, f"image-{image}"
     )
+    payload = {
+        "script": script,
+        "image": image,
+        "x": x,
+        "y": y,
+        "w": w,
+        "h": h,
+        "render_path": render_path,
+    }
+    try:
+        result = dispatch("read_image", payload)
+    finally:
+        _discard_if_empty(inline_root)
+    return _reply(ImageResult, result, _rendered_path(result, inline))
 
 
 @mcp.tool(
-    description="Read Pyxel tile coordinates, usage, bounds, source bank, and optional rendered output.",
+    description=(
+        "Read Pyxel tile coordinates, usage, bounds, source bank, and optional "
+        "rendered output; inline=true returns the render as image content and "
+        "makes render_path optional."
+    ),
     annotations=_annotations("Read tilemap", pure=False),
     structured_output=True,
 )
@@ -157,11 +300,17 @@ def read_tilemap(
     script: NonEmptyStr,
     tilemap: NonNegativeInt,
     render_path: NonEmptyStr | None = None,
-) -> TilemapResult:
-    return dispatch(
-        "read_tilemap",
-        {"script": script, "tilemap": tilemap, "render_path": render_path},
+    inline: bool = False,
+) -> Annotated[CallToolResult, TilemapResult]:
+    inline_root, render_path = _inline_render_path(
+        inline, render_path, f"tilemap-{tilemap}"
     )
+    payload = {"script": script, "tilemap": tilemap, "render_path": render_path}
+    try:
+        result = dispatch("read_tilemap", payload)
+    finally:
+        _discard_if_empty(inline_root)
+    return _reply(TilemapResult, result, _rendered_path(result, inline))
 
 
 @mcp.tool(
@@ -173,11 +322,13 @@ def read_audio(
     script: NonEmptyStr,
     target: AudioTarget,
     output_path: NonEmptyStr,
-) -> AudioResult:
-    return dispatch(
-        "read_audio",
-        {"script": script, "target": _json_value(target), "output_path": output_path},
-    )
+) -> Annotated[CallToolResult, AudioResult]:
+    payload = {
+        "script": script,
+        "target": _json_value(target),
+        "output_path": output_path,
+    }
+    return _reply(AudioResult, dispatch("read_audio", payload))
 
 
 @mcp.tool(
@@ -185,13 +336,16 @@ def read_audio(
     annotations=_annotations("Diff two frames", pure=True),
     structured_output=True,
 )
-def diff_frames(frame_a: NonEmptyStr, frame_b: NonEmptyStr) -> DiffFramesResult:
-    return dispatch("diff_frames", {"frame_a": frame_a, "frame_b": frame_b})
+def diff_frames(
+    frame_a: NonEmptyStr, frame_b: NonEmptyStr
+) -> Annotated[CallToolResult, DiffFramesResult]:
+    payload = {"frame_a": frame_a, "frame_b": frame_b}
+    return _reply(DiffFramesResult, dispatch("diff_frames", payload))
 
 
 def _log_startup() -> None:
     try:
-        tool_count = len(mcp._tool_manager._tools)  # type: ignore[attr-defined]
+        tool_count = len(asyncio.run(mcp.list_tools()))
     except Exception:
         tool_count = 0
     sys.stderr.write(f"[pyxel-mcp] starting - {tool_count} tools\n")

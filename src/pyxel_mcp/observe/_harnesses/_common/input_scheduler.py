@@ -1,5 +1,7 @@
 """Scheduled input application."""
+
 from __future__ import annotations
+
 from typing import TypedDict
 
 
@@ -21,11 +23,10 @@ class InputScheduler:
         self._validate(events)
         self.events = sorted(events, key=lambda e: e["frame"])
         self._held_buttons: set[str] = set()
-        # Tracks which buttons were held in the previous apply_to_pyxel() call.
-        # Pyxel 2.9.4 derives btnp from set_btn(True) being called on a fresh
-        # post-flip slate; re-calling set_btn(True) for already-held buttons
-        # would spuriously re-fire btnp. Only new-press edges call set_btn(True);
-        # continued holds skip the call; releases call set_btn(False).
+        # Buttons held during the previous apply_to_pyxel() call. Pyxel fires
+        # btnp when set_btn(True) lands on a fresh post-flip slate, so only new
+        # presses may call it; continued holds skip the call and releases call
+        # set_btn(False).
         self._prev_held_buttons: set[str] = set()
         self._held_axes: dict[str, float] = {}
         self._mouse_pos: tuple[int, int] = (0, 0)
@@ -42,7 +43,9 @@ class InputScheduler:
 
             if "buttons" in ev and ev["buttons"] is not None:
                 if not isinstance(ev["buttons"], list):
-                    raise ValidationError(f"buttons must be list, got {type(ev['buttons'])}")
+                    raise ValidationError(
+                        f"buttons must be list, got {type(ev['buttons'])}"
+                    )
                 for name in ev["buttons"]:
                     self._verify_pyxel_constant(name, "button")
 
@@ -51,11 +54,16 @@ class InputScheduler:
                     raise ValidationError(f"axes must be dict, got {type(ev['axes'])}")
                 for name, value in ev["axes"].items():
                     self._verify_pyxel_constant(name, "axis")
-                    if not isinstance(value, (int, float)) or not (-1.0 <= float(value) <= 1.0):
-                        raise ValidationError(f"axes value out of [-1.0, 1.0]: {name}={value}")
+                    if not isinstance(value, (int, float)) or not (
+                        -1.0 <= float(value) <= 1.0
+                    ):
+                        raise ValidationError(
+                            f"axes value out of [-1.0, 1.0]: {name}={value}"
+                        )
 
     def _verify_pyxel_constant(self, name: str, kind: str) -> None:
         import pyxel
+
         if not hasattr(pyxel, name):
             raise ValidationError(f"unknown {kind} name: {name}")
 
@@ -90,15 +98,12 @@ class InputScheduler:
     def apply_to_pyxel(self) -> None:
         """Push held state into pyxel using set_btn / set_btnv / set_mouse_pos.
 
-        Called at the start of each frame F by the run loop. The scheduler must
-        first have been advanced to F via advance_to_frame(F).
+        Called at the start of each frame after advance_to_frame(frame).
 
-        Edge-detection contract (Pyxel 2.9.4):
-        - set_btn(K, True) on a post-flip fresh slate → btnp(K) returns True
-        - Skipping set_btn(K, ...) for a held key → btn(K) stays True, btnp False
-        - set_btn(K, False) → btn(K) becomes False, btnp False
-        To correctly model btnp, only newly-pressed buttons (press edges) call
-        set_btn(True); continuously-held buttons skip the call; releases call False.
+        Edge contract: set_btn(K, True) on a fresh post-flip slate makes btnp(K)
+        true; skipping the call for a held key keeps btn(K) true and btnp false;
+        set_btn(K, False) releases it. Only press edges therefore call
+        set_btn(True).
         """
         import pyxel
 
@@ -119,7 +124,7 @@ class InputScheduler:
 
         # Axes: scale [-1.0, 1.0] → int range -32768..32767 (Pyxel set_btnv convention).
         for name, value in self._held_axes.items():
-            scaled = int(round(value * 32767))
+            scaled = round(value * 32767)
             pyxel.set_btnv(getattr(pyxel, name), scaled)
 
         # Mouse position: prefer Pyxel 2.9+ set_mouse_pos; fall back to attribute patch.

@@ -4,13 +4,13 @@ Lives here (not in a shared `_common`) so that resource modules stay
 self-contained under `_resources/`. Returns None if Pyxel cannot be imported,
 allowing register() to degrade gracefully.
 """
+
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 
-def pyxel_dir() -> Optional[str]:
+def pyxel_dir() -> str | None:
     """Return the path of the installed pyxel module, or None if unavailable."""
     try:
         import pyxel

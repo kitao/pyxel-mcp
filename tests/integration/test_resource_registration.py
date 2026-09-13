@@ -1,9 +1,11 @@
 """Registration coverage for the small, local-only resource surface."""
 
 import pytest
+from mcp.server.mcpserver.exceptions import ResourceError, ResourceNotFoundError
 
-from pyxel_mcp.server import mcp, pyxel_info as pyxel_info_tool
-
+from pyxel_mcp.server import mcp
+from pyxel_mcp.server import pyxel_info as pyxel_info_tool
+from tests.conftest import structured
 
 _EXPECTED_FIXED_URIS = {
     "pyxel://palette/default",
@@ -13,11 +15,8 @@ _EXPECTED_FIXED_URIS = {
 
 
 async def test_pyxel_info_matches_registered_resources():
-    info = pyxel_info_tool()
-    fixed = {
-        uri for uri in info["resources"].values()
-        if "{" not in uri
-    }
+    info = structured(pyxel_info_tool())
+    fixed = {uri for uri in info["resources"].values() if "{" not in uri}
     assert fixed == _EXPECTED_FIXED_URIS
     assert info["resources"]["examples"] == "pyxel://examples/{name}"
 
@@ -25,7 +24,7 @@ async def test_pyxel_info_matches_registered_resources():
     assert {str(resource.uri) for resource in resources} == _EXPECTED_FIXED_URIS
 
     templates = await mcp.list_resource_templates()
-    assert {str(template.uriTemplate) for template in templates} == {
+    assert {str(template.uri_template) for template in templates} == {
         "pyxel://examples/{name}",
     }
 
@@ -74,14 +73,14 @@ async def test_static_resource_reads_nonempty(uri, marker):
 
 async def test_snapshot_resource_documents_chronological_result_order():
     result = await mcp.read_resource("pyxel://run-snapshots-schema")
-    text = list(result)[0].content.lower()
+    text = next(iter(result)).content.lower()
 
     assert "chronological" in text
     assert "same order as the input `snapshots` list" not in text
 
 
 async def test_example_template_reads_installed_example():
-    examples = pyxel_info_tool()["examples"]
+    examples = structured(pyxel_info_tool())["examples"]
     if not examples:
         pytest.skip("Pyxel examples not present in this install")
 
@@ -92,5 +91,10 @@ async def test_example_template_reads_installed_example():
 
 
 async def test_example_template_rejects_unknown_names():
-    with pytest.raises(ValueError, match="not found"):
+    with pytest.raises(ResourceError, match="not found"):
         await mcp.read_resource("pyxel://examples/not-an-installed-example")
+
+
+async def test_example_template_rejects_path_traversal():
+    with pytest.raises(ResourceNotFoundError):
+        await mcp.read_resource("pyxel://examples/..%2F__init__")

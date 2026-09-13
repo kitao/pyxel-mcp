@@ -1,5 +1,7 @@
-"""Script import + cwd handling."""
+"""Script import and process context handling."""
+
 from __future__ import annotations
+
 import os
 import sys
 import types
@@ -18,28 +20,22 @@ def resolve_script_path(script: str) -> Path:
 
 
 def load_script_module(script_path: Path) -> types.ModuleType:
-    """chdir to script's parent and execute the script as __main__.
+    """Execute the script as `__main__` from its own directory and return it.
 
-    Returns the executed module object. The script may call `pyxel.init()` and
-    `pyxel.run()` during execution; the caller is expected to have monkey-patched
-    `pyxel.run` to intercept the loop.
-
-    `__name__` is set to `"__main__"` so that `if __name__ == "__main__":` guards
-    in user scripts are honoured — most real Pyxel scripts use this pattern.
+    The working directory, `sys.path`, and `sys.argv` become what `python
+    <script>` would give the script, so relative assets, sibling imports, and
+    argv access behave normally. The caller is expected to have patched
+    `pyxel.run` so the game loop is intercepted rather than started.
     """
     parent = script_path.parent
     os.chdir(parent)
     if str(parent) not in sys.path:
         sys.path.insert(0, str(parent))
+    sys.argv = [str(script_path)]
 
+    mod = types.ModuleType("__main__")
+    mod.__file__ = str(script_path)
     source = script_path.read_text(encoding="utf-8")
     code = compile(source, str(script_path), "exec")
-
-    mod = types.ModuleType("_user_script")
-    mod.__file__ = str(script_path)
-    mod.__name__ = "__main__"  # honour `if __name__ == "__main__":` guards
-    mod.__spec__ = None
-    sys.modules["_user_script"] = mod
-
-    exec(code, mod.__dict__)
+    exec(code, mod.__dict__)  # noqa: S102 - trusted local script, by design
     return mod

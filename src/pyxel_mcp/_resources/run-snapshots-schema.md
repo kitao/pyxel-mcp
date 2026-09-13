@@ -18,24 +18,6 @@ errors. Construct paths with `os.path.abspath(...)`,
 
 ## Snapshot Kinds (4)
 
-### state — `attrs` path syntax
-
-The `state` snapshot kind reads attributes from the App instance (or the
-imported module if no App class was found). Each entry in `attrs` is a
-dotted path resolved against the target — there are two consistent
-mistakes worth flagging up front:
-
-- **Do not include `self.`**. The path is evaluated against the App
-  instance directly, so write `player.x`, not `self.player.x`.
-- **No function calls or expressions**. `len(hazards)` and similar
-  derived values are not allowed in the path. Expose the value as a
-  plain attribute first (`self.n_hazards = len(self.hazards)` in
-  `update`), then read it as `n_hazards`.
-
-Both mistakes are reported in the snapshot's `warnings` list with a
-specific hint message, so they surface without having to trace silent
-zero values.
-
 ### 1. screen_image
 
 Saves a PNG screenshot of the Pyxel screen at a given frame.
@@ -46,7 +28,8 @@ Saves a PNG screenshot of the Pyxel screen at a given frame.
   "kind": "screen_image",
   "frame": <int>,
   "output": "<absolute path>.png",
-  "scale": 1
+  "scale": 1,
+  "inline": false
 }
 ```
 
@@ -56,12 +39,22 @@ Saves a PNG screenshot of the Pyxel screen at a given frame.
   "kind": "screen_image",
   "frames": <list[int] | range-string>,
   "output_pattern": "<absolute path>/{frame}_screen.png",
-  "scale": 1
+  "scale": 1,
+  "inline": false
 }
 ```
 
 - `scale`: integer zoom factor; nearest-neighbor only (no smoothing). Default `1`.
+- `inline`: when `true`, the captured PNG is also returned as image content in
+  the `run` result, so the model sees the frame without a separate file read.
+  A single-frame inline snapshot may omit `output`: the PNG is written to a
+  fresh `pyxel-mcp-inline-*` directory under the system temp directory and the
+  result still reports its `path`, so `diff_frames` keeps working. Multi-frame
+  snapshots always need `output_pattern`. At most 12 inline images are embedded
+  per call; extra frames stay on disk and the reply says so in a text note.
+  Pair `inline` with `scale` 2 to 4 for legibility.
 - `output` and `output_pattern` are mutually exclusive (validation error if both present).
+- One of them is required, except that a single inline frame may omit `output`.
 - Both output forms must end with `.png`.
 - `output_pattern` must contain `{frame}` — substituted as a 5-digit zero-padded integer
   (e.g. frame 3 → `00003`).
@@ -73,9 +66,13 @@ Saves a PNG screenshot of the Pyxel screen at a given frame.
   "kind": "screen_image",
   "frame": <int>,
   "path": "<absolute-path>.png",
-  "size": [<width>, <height>]
+  "size": [<width>, <height>],
+  "inline": false
 }
 ```
+
+- `inline` echoes the request flag so the result lists which frames were also
+  returned as image content.
 
 ---
 
@@ -160,6 +157,11 @@ game logic (scores, positions, flags) without image comparison.
 - Dotted: `"player.x"` resolves to `app.player.x`
 - Indexed: `"hazards[0].y"` resolves to `app.hazards[0].y`
 - Combinations: `"enemies[2].pos.x"` resolves to `app.enemies[2].pos.x`
+- Do not include `self.`: paths resolve against the App instance, so write
+  `player.x`, not `self.player.x`.
+- No calls or expressions such as `len(hazards)`: expose the value as an
+  attribute first (`self.n_hazards = len(self.hazards)` in `update`).
+  Both mistakes are reported in the snapshot's `warnings` with a hint.
 - `attrs: null` (or omit key): returns the App's top-level scalar primitives only
   (int, float, str, bool, None). Lists, dicts, and custom objects are skipped.
 - `attrs: []` (explicit empty list): returns `values: {}` (reads nothing).
@@ -279,6 +281,7 @@ Mismatches are validation errors:
 - `frames` + `output` → error
 - `frame` and `frames` both present → error
 - `output` and `output_pattern` both present → error
+- neither `output` nor `output_pattern`, unless a single frame with `inline: true` → error
 
 ---
 
@@ -342,4 +345,10 @@ Combine with `run(until=...)` to capture the moment a condition first holds:
 
 `until` is a Python expression over App attributes, evaluated after each
 frame. Undefined names count as "not yet satisfied" (warned once in `log`).
-The run result reports `until_met` and the reached `frame_count`.
+The run result reports `until_met` and the reached `frame_count`:
+
+| `until_met` | Meaning |
+|---|---|
+| `true` | The condition held; the run stopped at that frame. |
+| `false` | The condition was evaluated at least once and never held before the run ended (cap, crash, or stall). |
+| `null` | It was never evaluated: no `until`, an invalid payload, a crash before the first frame completed, or a timeout. |

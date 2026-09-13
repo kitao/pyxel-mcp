@@ -1,4 +1,5 @@
 """MCP resource registration aggregator."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,7 +22,7 @@ def _register_run_snapshots_schema(mcp) -> None:
 
 
 def register_resources(mcp) -> None:
-    """Register all MCP resources on the given FastMCP instance."""
+    """Register all MCP resources on the given MCPServer instance."""
     _register_run_snapshots_schema(mcp)
     palette.register(mcp)
     examples.register(mcp)

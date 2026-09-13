@@ -1,9 +1,12 @@
 """Headless Pyxel + run-intercept."""
+
 from __future__ import annotations
+
 import contextlib
 import os
+import sys
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 
 class RunNotCalledError(RuntimeError):
@@ -13,6 +16,7 @@ class RunNotCalledError(RuntimeError):
 @dataclass
 class PreLoopState:
     """Captured at the pre-loop checkpoint."""
+
     update_callback: Callable | None = None
     draw_callback: Callable | None = None
     app_instance: object | None = None  # update_callback.__self__ if bound; else None
@@ -36,6 +40,7 @@ def headless_pyxel(*, random_seed: int | None = None):
     test processes that share Pyxel state; production calls use subprocesses.
     """
     import pyxel
+
     state = PreLoopState()
 
     if random_seed is not None:
@@ -62,7 +67,9 @@ def headless_pyxel(*, random_seed: int | None = None):
             if random_seed is not None:
                 pyxel.rseed(random_seed)
             return
-        kwargs["headless"] = True  # override: headless mode is mandatory in harness context
+        kwargs["headless"] = (
+            True  # override: headless mode is mandatory in harness context
+        )
         # Pyxel's `flip()` sleeps to maintain the fps target; under harness
         # control the frame loop is driven externally (run.py), so Pyxel's
         # internal fps only governs flip() wait. Forcing a high fps makes
@@ -70,7 +77,14 @@ def headless_pyxel(*, random_seed: int | None = None):
         # than real-time playback. Game logic that reads pyxel.frame_count is
         # unaffected (run.py sets it explicitly each iteration).
         kwargs["fps"] = 10000
-        saved_init(*args, **kwargs)
+        # pyxel.init chdirs to the directory of the file that called it. Seen
+        # from Pyxel that file is this wrapper, so redo the move for the real
+        # caller, exactly where `python game.py` would have ended up.
+        caller_dir = os.path.dirname(sys._getframe(1).f_code.co_filename) or "."
+        try:
+            saved_init(*args, **kwargs)
+        finally:
+            os.chdir(caller_dir)
         if random_seed is not None:
             pyxel.rseed(random_seed)
 

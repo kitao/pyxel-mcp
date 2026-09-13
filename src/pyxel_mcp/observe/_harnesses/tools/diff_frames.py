@@ -3,7 +3,9 @@
 Pixel-wise diff between two PNG files. Returns size_match, identical,
 changed_pixels, ratio, and bounding region of differing pixels.
 """
+
 from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
 
@@ -54,12 +56,16 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         img_a = Image.open(a).convert("RGB")
     except (UnidentifiedImageError, OSError) as e:
-        return _error_result(make_validation_error(f"cannot decode image: {a}: {e}", path=a))
+        return _error_result(
+            make_validation_error(f"cannot decode image: {a}: {e}", path=a)
+        )
 
     try:
         img_b = Image.open(b).convert("RGB")
     except (UnidentifiedImageError, OSError) as e:
-        return _error_result(make_validation_error(f"cannot decode image: {b}: {e}", path=b))
+        return _error_result(
+            make_validation_error(f"cannot decode image: {b}: {e}", path=b)
+        )
 
     size_a = list(img_a.size)  # [width, height]
     size_b = list(img_b.size)

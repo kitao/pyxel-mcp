@@ -1,12 +1,20 @@
 import pytest
+
 from pyxel_mcp.observe._harnesses._common.error_capture import (
-    ToolError, ErrorPhase, make_error, make_validation_error
+    ErrorPhase,
+    make_error,
+    make_validation_error,
 )
 
 
 def test_phases_match_spec():
     expected = {
-        "validation", "script_import", "asset_load", "game_loop", "artifact", "until",
+        "validation",
+        "script_import",
+        "asset_load",
+        "game_loop",
+        "artifact",
+        "until",
     }
     assert {p.value for p in ErrorPhase} == expected
 
@@ -42,5 +50,7 @@ def test_make_error_unknown_phase_rejected():
 
 def test_make_error_capture_traceback_outside_except_returns_none():
     """capture_traceback=True outside an except block must NOT return 'NoneType: None\\n'."""
-    err = make_error(ErrorPhase.GAME_LOOP, "no active exception", capture_traceback=True)
+    err = make_error(
+        ErrorPhase.GAME_LOOP, "no active exception", capture_traceback=True
+    )
     assert err["traceback"] is None

@@ -6,7 +6,6 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
-
 NonEmptyStr = Annotated[str, Field(min_length=1)]
 NonNegativeInt = Annotated[int, Field(strict=True, ge=0)]
 PositiveInt = Annotated[int, Field(strict=True, gt=0)]
@@ -58,14 +57,33 @@ class ScreenImageSnapshotRequest(_TimedSnapshot):
     output: NonEmptyStr | None = None
     output_pattern: NonEmptyStr | None = None
     scale: PositiveInt = 1
+    inline: bool = Field(
+        default=False,
+        description=(
+            "Also return the captured PNG as image content. A single inline frame "
+            "may omit `output`; the PNG then lands under the system temp directory "
+            "and its path is still reported."
+        ),
+    )
 
     @model_validator(mode="after")
     def _matching_output(self):
-        if self.frame is not None and (not self.output or self.output_pattern is not None):
-            raise ValueError("single-frame screen_image requires only `output`")
-        if self.frames is not None and (not self.output_pattern or self.output is not None):
-            raise ValueError("multi-frame screen_image requires only `output_pattern`")
-        selected = self.output if self.frame is not None else self.output_pattern
+        if self.output is not None and self.output_pattern is not None:
+            raise ValueError("set only one of `output` or `output_pattern`")
+        if self.frame is not None and self.output_pattern is not None:
+            raise ValueError(
+                "single-frame screen_image uses `output`, not `output_pattern`"
+            )
+        if self.frames is not None and self.output is not None:
+            raise ValueError(
+                "multi-frame screen_image uses `output_pattern`, not `output`"
+            )
+        selected = self.output or self.output_pattern
+        if selected is None and not (self.inline and self.frame is not None):
+            raise ValueError(
+                "screen_image requires `output`, or `output_pattern` for several "
+                "frames; only a single inline frame may omit it"
+            )
         if selected and not selected.endswith(".png"):
             raise ValueError("screen_image output must end with `.png`")
         return self
@@ -146,6 +164,7 @@ class ScreenImageSnapshotResult(_ResultModel):
     frame: int
     path: str
     size: tuple[int, int]
+    inline: bool = False
 
 
 class VideoSnapshotResult(_ResultModel):
@@ -173,7 +192,13 @@ class RunResult(ObservationResult):
     elapsed_seconds: float
     log: str
     seeded: bool
-    until_met: bool | None = None
+    until_met: bool | None = Field(
+        default=None,
+        description=(
+            "True once `until` held, False when it was evaluated without ever "
+            "holding, None when it was never evaluated."
+        ),
+    )
 
 
 class ValidationIssue(_ResultModel):

@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from mcp.server.mcpserver.exceptions import ResourceError
+
 from pyxel_mcp._resources._pyxel_env import pyxel_dir
 
 
@@ -16,12 +18,12 @@ def _examples_dir() -> Path | None:
 def _load_example(name: str) -> str:
     d = _examples_dir()
     if not d:
-        raise ValueError("Pyxel examples are unavailable")
+        raise ResourceError("Pyxel examples are unavailable")
     if not name or Path(name).name != name:
-        raise ValueError(f"Example '{name}' not found")
+        raise ResourceError(f"Example '{name}' not found")
     path = (d / f"{name}.py").resolve()
     if path.parent != d or not path.is_file():
-        raise ValueError(f"Example '{name}' not found")
+        raise ResourceError(f"Example '{name}' not found")
     return path.read_text()
 
 

@@ -1,5 +1,7 @@
 """read_image tool."""
+
 from __future__ import annotations
+
 from typing import Any
 
 from pyxel_mcp.observe._harnesses._common.analyzers.image import analyze_image
@@ -11,9 +13,12 @@ from pyxel_mcp.observe._harnesses._common.preloop import PreloopFailed, run_to_p
 def _empty(error: dict) -> dict:
     return {
         "ok": False,
-        "image_index": -1, "bank_size": [0, 0],
+        "image_index": -1,
+        "bank_size": [0, 0],
         "region": {"x": 0, "y": 0, "w": 0, "h": 0},
-        "pixels": None, "color_count": {}, "rendered": None,
+        "pixels": None,
+        "color_count": {},
+        "rendered": None,
         "errors": [error],
     }
 
@@ -48,19 +53,28 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         with run_to_preloop(payload, empty_factory=_empty):
             import pyxel
+
             if image < 0 or image >= len(pyxel.images):
-                return _empty(make_validation_error(
-                    f"image index {image} out of range [0, {len(pyxel.images)})"))
+                return _empty(
+                    make_validation_error(
+                        f"image index {image} out of range [0, {len(pyxel.images)})"
+                    )
+                )
             bank = pyxel.images[image]
             if x >= bank.width or y >= bank.height:
-                return _empty(make_validation_error(
-                    f"image origin ({x}, {y}) outside bank size "
-                    f"({bank.width}, {bank.height})"
-                ))
+                return _empty(
+                    make_validation_error(
+                        f"image origin ({x}, {y}) outside bank size "
+                        f"({bank.width}, {bank.height})"
+                    )
+                )
 
             result = analyze_image(
                 image=image,
-                x=x, y=y, w=w, h=h,
+                x=x,
+                y=y,
+                w=w,
+                h=h,
                 render_path=render_path,
             )
     except PreloopFailed as f:

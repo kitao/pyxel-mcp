@@ -1,5 +1,7 @@
 """run(script, frames, ...) — dynamic execution driver."""
+
 from __future__ import annotations
+
 import contextlib
 import re
 import time
@@ -12,18 +14,43 @@ from PIL import Image
 
 from pyxel_mcp.observe._harnesses._common.artifact_path import absolute_path_error
 from pyxel_mcp.observe._harnesses._common.error_capture import (
-    make_error, make_validation_error, ErrorPhase,
+    ErrorPhase,
+    make_error,
+    make_validation_error,
 )
-from pyxel_mcp.observe._harnesses._common.input_scheduler import InputScheduler, ValidationError
-from pyxel_mcp.observe._harnesses._common.pyxel_patcher import headless_pyxel, RunNotCalledError
-from pyxel_mcp.observe._harnesses._common.range_parser import resolve_frames as _resolve_frames, RangeError
-from pyxel_mcp.observe._harnesses._common.script_loader import resolve_script_path, load_script_module
-from pyxel_mcp.observe._harnesses._common.until_condition import UntilCondition, UntilError
+from pyxel_mcp.observe._harnesses._common.input_scheduler import (
+    InputScheduler,
+    ValidationError,
+)
+from pyxel_mcp.observe._harnesses._common.pyxel_patcher import (
+    RunNotCalledError,
+    headless_pyxel,
+)
+from pyxel_mcp.observe._harnesses._common.range_parser import (
+    RangeError,
+)
+from pyxel_mcp.observe._harnesses._common.range_parser import (
+    resolve_frames as _resolve_frames,
+)
+from pyxel_mcp.observe._harnesses._common.script_loader import (
+    load_script_module,
+    resolve_script_path,
+)
+from pyxel_mcp.observe._harnesses._common.snapshot_kinds import (
+    screen_grid as _sg_kind,
+)
 from pyxel_mcp.observe._harnesses._common.snapshot_kinds import (
     screen_image as _si_kind,
-    screen_grid as _sg_kind,
+)
+from pyxel_mcp.observe._harnesses._common.snapshot_kinds import (
     state as _state_kind,
+)
+from pyxel_mcp.observe._harnesses._common.snapshot_kinds import (
     video as _video_kind,
+)
+from pyxel_mcp.observe._harnesses._common.until_condition import (
+    UntilCondition,
+    UntilError,
 )
 
 
@@ -63,7 +90,9 @@ def _substitute_output_pattern(pattern: str, frame: int) -> str:
     Raises ValueError for format specifiers ({frame:03d}) or unknown tokens ({foo}).
     """
     if re.search(r"\{[^}]*:[^}]*\}", pattern):
-        raise ValueError(f"output_pattern: format specifiers like {{frame:03d}} not supported")
+        raise ValueError(
+            "output_pattern: format specifiers like {frame:03d} not supported"
+        )
     if "{frame}" not in pattern:
         raise ValueError(f"output_pattern must contain literal {{frame}}: {pattern!r}")
     other = re.search(r"\{(?!frame\b)[^}]+\}", pattern)
@@ -92,15 +121,19 @@ def _expand_multi_frame_snapshots(
 
         # Mutual exclusivity: frame + frames
         if has_frame and has_frames:
-            raise _ValidationFailed(make_validation_error(
-                f"`snapshots[{i}]` must not have both `frame` and `frames`"
-            ))
+            raise _ValidationFailed(
+                make_validation_error(
+                    f"`snapshots[{i}]` must not have both `frame` and `frames`"
+                )
+            )
 
         # Mutual exclusivity: output + output_pattern
         if has_output and has_pattern:
-            raise _ValidationFailed(make_validation_error(
-                f"`snapshots[{i}]` must not have both `output` and `output_pattern`"
-            ))
+            raise _ValidationFailed(
+                make_validation_error(
+                    f"`snapshots[{i}]` must not have both `output` and `output_pattern`"
+                )
+            )
 
         kind = snap.get("kind")
 
@@ -108,9 +141,11 @@ def _expand_multi_frame_snapshots(
             # Single-frame snapshot (or video): pass through, but reject
             # output_pattern in single-frame mode.
             if has_pattern and kind != "video":
-                raise _ValidationFailed(make_validation_error(
-                    f"`snapshots[{i}]` single-frame mode requires `output`, not `output_pattern`"
-                ))
+                raise _ValidationFailed(
+                    make_validation_error(
+                        f"`snapshots[{i}]` single-frame mode requires `output`, not `output_pattern`"
+                    )
+                )
             expanded.append(snap)
             continue
 
@@ -120,9 +155,11 @@ def _expand_multi_frame_snapshots(
         # screen_image multi-frame requires output_pattern (not output)
         if kind == "screen_image":
             if not has_pattern:
-                raise _ValidationFailed(make_validation_error(
-                    f"`snapshots[{i}]` multi-frame screen_image requires `output_pattern`"
-                ))
+                raise _ValidationFailed(
+                    make_validation_error(
+                        f"`snapshots[{i}]` multi-frame screen_image requires `output_pattern`"
+                    )
+                )
             path_error = absolute_path_error(
                 snap.get("output_pattern"), f"snapshots[{i}].output_pattern"
             )
@@ -132,17 +169,19 @@ def _expand_multi_frame_snapshots(
             try:
                 _substitute_output_pattern(snap["output_pattern"], 0)
             except ValueError as e:
-                raise _ValidationFailed(make_validation_error(
-                    f"`snapshots[{i}].output_pattern` error: {e}"
-                ))
+                raise _ValidationFailed(
+                    make_validation_error(f"`snapshots[{i}].output_pattern` error: {e}")
+                )
 
         # Resolve frames list
         try:
-            resolved, was_normalized = _resolve_frames(snap["frames"], total_frames=total_frames)
+            resolved, was_normalized = _resolve_frames(
+                snap["frames"], total_frames=total_frames
+            )
         except RangeError as e:
-            raise _ValidationFailed(make_validation_error(
-                f"`snapshots[{i}].frames` error: {e}"
-            ))
+            raise _ValidationFailed(
+                make_validation_error(f"`snapshots[{i}].frames` error: {e}")
+            )
 
         if was_normalized:
             warnings.append(
@@ -151,10 +190,14 @@ def _expand_multi_frame_snapshots(
 
         # Build one derived snapshot per resolved frame
         for f in resolved:
-            derived = {k: v for k, v in snap.items() if k not in ("frames", "output_pattern")}
+            derived = {
+                k: v for k, v in snap.items() if k not in ("frames", "output_pattern")
+            }
             derived["frame"] = f
             if kind == "screen_image":
-                derived["output"] = _substitute_output_pattern(snap["output_pattern"], f)
+                derived["output"] = _substitute_output_pattern(
+                    snap["output_pattern"], f
+                )
             expanded.append(derived)
 
     return expanded, warnings
@@ -181,8 +224,12 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
         raise _ValidationFailed(make_validation_error(str(e), path=script))
 
     random_seed = payload.get("random_seed")
-    if random_seed is not None and (not isinstance(random_seed, int) or random_seed < 0):
-        raise _ValidationFailed(make_validation_error("`random_seed` must be non-negative int"))
+    if random_seed is not None and (
+        not isinstance(random_seed, int) or random_seed < 0
+    ):
+        raise _ValidationFailed(
+            make_validation_error("`random_seed` must be non-negative int")
+        )
 
     timeout = payload.get("timeout", 10)
     if not isinstance(timeout, int) or timeout < 1:
@@ -190,24 +237,26 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
     # timeout is informational at this layer; server enforces wall-clock kill.
 
     stall_window = payload.get("stall_window_frames")
-    if stall_window is not None and (not isinstance(stall_window, int) or stall_window < 1):
-        raise _ValidationFailed(make_validation_error(
-            "`stall_window_frames` must be int >= 1 or null"
-        ))
+    if stall_window is not None and (
+        not isinstance(stall_window, int) or stall_window < 1
+    ):
+        raise _ValidationFailed(
+            make_validation_error("`stall_window_frames` must be int >= 1 or null")
+        )
 
     until = payload.get("until")
     until_condition = None
     if until is not None:
         if not isinstance(until, str) or not until.strip():
-            raise _ValidationFailed(make_validation_error(
-                "`until` must be a non-empty str or null"
-            ))
+            raise _ValidationFailed(
+                make_validation_error("`until` must be a non-empty str or null")
+            )
         try:
             until_condition = UntilCondition(until)
         except SyntaxError as e:
-            raise _ValidationFailed(make_validation_error(
-                f"`until` is not a valid Python expression: {e}"
-            ))
+            raise _ValidationFailed(
+                make_validation_error(f"`until` is not a valid Python expression: {e}")
+            )
 
     raw_snapshots = payload.get("snapshots", [])
     if not isinstance(raw_snapshots, list):
@@ -216,45 +265,59 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
     # First pass: shape validation (kind, video range/extension)
     for i, snap in enumerate(raw_snapshots):
         if not isinstance(snap, dict):
-            raise _ValidationFailed(make_validation_error(
-                f"`snapshots[{i}]` must be a dict"
-            ))
+            raise _ValidationFailed(
+                make_validation_error(f"`snapshots[{i}]` must be a dict")
+            )
         kind = snap.get("kind")
         if kind not in _VALID_SNAPSHOT_KINDS:
-            raise _ValidationFailed(make_validation_error(
-                f"`snapshots[{i}].kind` must be one of {sorted(_VALID_SNAPSHOT_KINDS)}, got: {kind!r}"
-            ))
+            raise _ValidationFailed(
+                make_validation_error(
+                    f"`snapshots[{i}].kind` must be one of {sorted(_VALID_SNAPSHOT_KINDS)}, got: {kind!r}"
+                )
+            )
         if kind == "video":
             # video uses start_frame/end_frame, not the multi-frame `frames` field
             if "frames" in snap:
-                raise _ValidationFailed(make_validation_error(
-                    f"`snapshots[{i}]` video kind does not support `frames`; use `start_frame`/`end_frame`"
-                ))
-            path_error = absolute_path_error(snap.get("output"), f"snapshots[{i}].output")
+                raise _ValidationFailed(
+                    make_validation_error(
+                        f"`snapshots[{i}]` video kind does not support `frames`; use `start_frame`/`end_frame`"
+                    )
+                )
+            path_error = absolute_path_error(
+                snap.get("output"), f"snapshots[{i}].output"
+            )
             if path_error:
                 raise _ValidationFailed(make_validation_error(path_error))
             # Validate extension early without keeping the instance.
             out = snap.get("output", "")
             ext = Path(str(out)).suffix.lower()
             if ext not in (".gif", ".mp4"):
-                raise _ValidationFailed(make_validation_error(
-                    f"`snapshots[{i}]` video output extension must be .gif or .mp4, got: {ext or '(none)'}"
-                ))
+                raise _ValidationFailed(
+                    make_validation_error(
+                        f"`snapshots[{i}]` video output extension must be .gif or .mp4, got: {ext or '(none)'}"
+                    )
+                )
             # Validate video frame range.
             start = snap.get("start_frame")
             end = snap.get("end_frame")
             if not isinstance(start, int) or start < 0:
-                raise _ValidationFailed(make_validation_error(
-                    f"`snapshots[{i}].start_frame` must be int >= 0"
-                ))
+                raise _ValidationFailed(
+                    make_validation_error(
+                        f"`snapshots[{i}].start_frame` must be int >= 0"
+                    )
+                )
             if not isinstance(end, int) or end > frames:
-                raise _ValidationFailed(make_validation_error(
-                    f"`snapshots[{i}].end_frame` must be int <= frames ({frames})"
-                ))
+                raise _ValidationFailed(
+                    make_validation_error(
+                        f"`snapshots[{i}].end_frame` must be int <= frames ({frames})"
+                    )
+                )
             if start >= end:
-                raise _ValidationFailed(make_validation_error(
-                    f"`snapshots[{i}]` start_frame ({start}) must be < end_frame ({end})"
-                ))
+                raise _ValidationFailed(
+                    make_validation_error(
+                        f"`snapshots[{i}]` start_frame ({start}) must be < end_frame ({end})"
+                    )
+                )
 
     # Pre-expansion: resolve `frames` lists into single-frame snapshots
     snapshots, pending_warnings = _expand_multi_frame_snapshots(raw_snapshots, frames)
@@ -264,30 +327,39 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
         kind = snap.get("kind")
         if kind != "video":
             frame = snap.get("frame")
-            if frame is not None and frame != "end":
-                if not isinstance(frame, int) or frame < 0 or frame >= frames:
-                    raise _ValidationFailed(make_validation_error(
+            out_of_range = not isinstance(frame, int) or frame < 0 or frame >= frames
+            if frame is not None and frame != "end" and out_of_range:
+                raise _ValidationFailed(
+                    make_validation_error(
                         f"`snapshots[{i}].frame` must be an int with 0 <= frame < "
-                        f"frames ({frames}) or the string \"end\", got: {frame!r}"
-                    ))
+                        f'frames ({frames}) or the string "end", got: {frame!r}'
+                    )
+                )
         if kind == "screen_image":
             output = snap.get("output")
             if not isinstance(output, str) or not output:
-                raise _ValidationFailed(make_validation_error(
-                    f"`snapshots[{i}].output` must be a non-empty str for screen_image snapshots"
-                ))
+                raise _ValidationFailed(
+                    make_validation_error(
+                        f"`snapshots[{i}].output` must be a non-empty str for screen_image snapshots"
+                    )
+                )
             path_error = absolute_path_error(output, f"snapshots[{i}].output")
             if path_error:
                 raise _ValidationFailed(make_validation_error(path_error))
             if Path(output).suffix != ".png":
-                raise _ValidationFailed(make_validation_error(
-                    f"`snapshots[{i}].output` must end with .png"
-                ))
+                raise _ValidationFailed(
+                    make_validation_error(f"`snapshots[{i}].output` must end with .png")
+                )
             scale = snap.get("scale", 1)
             if not isinstance(scale, int) or scale < 1:
-                raise _ValidationFailed(make_validation_error(
-                    f"`snapshots[{i}].scale` must be int >= 1"
-                ))
+                raise _ValidationFailed(
+                    make_validation_error(f"`snapshots[{i}].scale` must be int >= 1")
+                )
+            inline = snap.get("inline", False)
+            if not isinstance(inline, bool):
+                raise _ValidationFailed(
+                    make_validation_error(f"`snapshots[{i}].inline` must be a bool")
+                )
 
     inputs = payload.get("inputs", [])
     if not isinstance(inputs, list):
@@ -298,26 +370,31 @@ def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
         raise _ValidationFailed(make_validation_error(str(e)))
 
     return (
-        path, frames, random_seed, snapshots, scheduler, pending_warnings,
-        stall_window, until_condition,
+        path,
+        frames,
+        random_seed,
+        snapshots,
+        scheduler,
+        pending_warnings,
+        stall_window,
+        until_condition,
     )
 
 
 def _capture_screen_as_pil() -> Image.Image:
-    """Return current pyxel.screen contents as a PIL.Image (RGB mode).
+    """Return the current pyxel.screen as an RGB PIL image.
 
-    Reads pyxel.screen.data_ptr() directly into a numpy array of palette
-    indices, then converts to RGB via a (256, 3) LUT built from
-    pyxel.colors. Avoids the disk round-trip (write PNG, read PNG) that
-    earlier versions of this code did per video frame — for a 600-frame
-    video that's 600 redundant filesystem operations gone.
+    Reads the palette indices straight from `pyxel.screen.data_ptr()` and maps
+    them through `pyxel.colors`, so video capture never touches the disk.
     """
-    import pyxel
     import numpy as np
+    import pyxel
 
     w, h = pyxel.width, pyxel.height
     arr = np.frombuffer(
-        pyxel.screen.data_ptr(), dtype=np.uint8, count=w * h,
+        pyxel.screen.data_ptr(),
+        dtype=np.uint8,
+        count=w * h,
     ).reshape((h, w))
 
     # Build the palette LUT — pad to 256 entries so direct indexing is safe
@@ -333,28 +410,17 @@ def _capture_screen_as_pil() -> Image.Image:
 
 
 def _grid_signature(grid: list) -> tuple:
-    """Convert a screen_grid 2D list into a hashable, comparable nested tuple.
-
-    The grid is `list[list[int]]`; tuples with the same nesting are hashable
-    and compare structurally by value, so equal grids compare equal even
-    without hashing — avoiding the (rare but possible) hash collisions that
-    `hash(...)` equality would risk.
-    """
+    """Turn a screen_grid into a nested tuple that compares by value."""
     return tuple(tuple(row) for row in grid)
 
 
 def _is_asset_load_error(tb_text: str) -> bool:
-    """Heuristic: classify an exception as asset_load if the traceback text
-    mentions patterns produced by Pyxel's file-open failures.
+    """Classify a traceback as an asset-load failure by its message.
 
-    Pyxel 2.9.4 raises a generic Exception with message "Failed to open file
-    '<path>'". Python FileNotFoundError and "could not open" are kept as
-    additional guards for forward compatibility.
-
-    Caveat: this is a string-match heuristic — a user script that raises a
-    custom exception whose message happens to contain these phrases will be
-    misclassified as asset_load. Revisit if Pyxel exposes a typed asset-error
-    API.
+    Pyxel raises a plain Exception reading "Failed to open file '<path>'";
+    Python's FileNotFoundError and "could not open" are accepted as well. A
+    script raising a custom error with the same words is misclassified, so
+    revisit this if Pyxel ever exposes a typed asset error.
     """
     lower = tb_text.lower()
     return (
@@ -378,8 +444,14 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     """
     try:
         (
-            path, frames, random_seed, snapshots, scheduler, pending_warnings,
-            stall_window, until_condition,
+            path,
+            frames,
+            random_seed,
+            snapshots,
+            scheduler,
+            pending_warnings,
+            stall_window,
+            until_condition,
         ) = _validate(payload)
     except _ValidationFailed as vf:
         return _empty_result(exit_status="invalid", errors=[vf.err])
@@ -389,7 +461,8 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     seeded = False
     frame_count = 0
     exit_status = "ok"
-    until_met: bool | None = None if until_condition is None else False
+    # Stays None until `until` has actually been evaluated once.
+    until_met: bool | None = None
 
     # Pre-loop: split snapshots into per-frame captures vs. video accumulators.
     video_accumulators: list[_video_kind.VideoAccumulator] = []
@@ -399,12 +472,17 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
             try:
                 video_accumulators.append(_video_kind.VideoAccumulator(snap))
             except Exception as e:
-                return _empty_result(exit_status="crashed", errors=[make_error(
-                    ErrorPhase.ARTIFACT,
-                    f"video setup failed: {e}",
-                    path=snap.get("output"),
-                    capture_traceback=True,
-                )])
+                return _empty_result(
+                    exit_status="crashed",
+                    errors=[
+                        make_error(
+                            ErrorPhase.ARTIFACT,
+                            f"video setup failed: {e}",
+                            path=snap.get("output"),
+                            capture_traceback=True,
+                        )
+                    ],
+                )
         else:
             single_frame_snaps.append(snap)
     snapshot_results: list[dict] = []
@@ -413,9 +491,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     # is known, so they are excluded from the per-frame dispatch loop below.
     end_snaps = [s for s in single_frame_snaps if s.get("frame") == "end"]
     if end_snaps:
-        single_frame_snaps = [
-            s for s in single_frame_snaps if s.get("frame") != "end"
-        ]
+        single_frame_snaps = [s for s in single_frame_snaps if s.get("frame") != "end"]
 
     # Stall detection setup. We track the rolling buffer here so we can also
     # warn (after the loop) if the agent set stall_window_frames but did not
@@ -431,247 +507,288 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     # The real stdout is reserved for the JSON result written by main.py,
     # so the redirect must be closed before run() returns.
     log_buf = StringIO()
-    with headless_pyxel(random_seed=random_seed) as state:
-        with contextlib.redirect_stdout(log_buf), contextlib.redirect_stderr(log_buf):
-            # Write any validation warnings collected during pre-expansion
-            for w in pending_warnings:
-                log_buf.write(f"[pyxel-mcp] warning: {w}\n")
+    with (
+        headless_pyxel(random_seed=random_seed) as state,
+        contextlib.redirect_stdout(log_buf),
+        contextlib.redirect_stderr(log_buf),
+    ):
+        # Write any validation warnings collected during pre-expansion
+        for w in pending_warnings:
+            log_buf.write(f"[pyxel-mcp] warning: {w}\n")
 
-            # Stall detection cannot run without a signal — warn the agent
-            # that the param is informational-only in this configuration.
-            if stall_window is not None and not stall_active:
-                log_buf.write(
-                    "[pyxel-mcp] warning: stall_window_frames is set but no "
-                    "`state` or `screen_grid` snapshot is scheduled; "
-                    "stall detection has no signal to compare and is disabled.\n"
+        # Stall detection cannot run without a signal — warn the agent
+        # that the param is informational-only in this configuration.
+        if stall_window is not None and not stall_active:
+            log_buf.write(
+                "[pyxel-mcp] warning: stall_window_frames is set but no "
+                "`state` or `screen_grid` snapshot is scheduled; "
+                "stall detection has no signal to compare and is disabled.\n"
+            )
+
+        # Seed stdlib random before importing the script so module-level
+        # code and App.__init__ are deterministic too. headless_pyxel seeds
+        # Pyxel before import and again after init in case init resets it.
+        if random_seed is not None:
+            import random as _random
+
+            _random.seed(random_seed)
+            seeded = True
+
+        # Phase 1: import script (pyxel.run is intercepted by headless_pyxel)
+        imported_module = None
+        try:
+            imported_module = load_script_module(path)
+        except FileNotFoundError as e:
+            # Asset path is in the exception message; we don't know it here.
+            errors.append(
+                make_error(
+                    ErrorPhase.ASSET_LOAD,
+                    str(e),
+                    capture_traceback=True,
                 )
+            )
+            exit_status = "crashed"
+        except Exception as e:
+            tb_text = _tb.format_exc()
+            if _is_asset_load_error(tb_text):
+                errors.append(
+                    make_error(
+                        ErrorPhase.ASSET_LOAD,
+                        str(e),
+                        capture_traceback=True,
+                    )
+                )
+            else:
+                errors.append(
+                    make_error(
+                        ErrorPhase.SCRIPT_IMPORT,
+                        str(e),
+                        capture_traceback=True,
+                    )
+                )
+            exit_status = "crashed"
 
-            # Seed stdlib random before importing the script so module-level
-            # code and App.__init__ are deterministic too. headless_pyxel seeds
-            # Pyxel before import and again after init in case init resets it.
-            if random_seed is not None:
-                import random as _random
-
-                _random.seed(random_seed)
-                seeded = True
-
-            # Phase 1: import script (pyxel.run is intercepted by headless_pyxel)
-            imported_module = None
+        if not errors:
             try:
-                imported_module = load_script_module(path)
-            except FileNotFoundError as e:
-                # Asset path is in the exception message; we don't know it here.
-                errors.append(make_error(
-                    ErrorPhase.ASSET_LOAD, str(e), capture_traceback=True,
-                ))
-                exit_status = "crashed"
-            except Exception as e:
-                tb_text = _tb.format_exc()
-                if _is_asset_load_error(tb_text):
-                    errors.append(make_error(
-                        ErrorPhase.ASSET_LOAD, str(e), capture_traceback=True,
-                    ))
-                else:
-                    errors.append(make_error(
-                        ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=True,
-                    ))
-                exit_status = "crashed"
-
-            if not errors:
-                try:
-                    state.require_run_called()
-                except RunNotCalledError as e:
-                    errors.append(make_error(
-                        ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=False,
-                    ))
-                    exit_status = "crashed"
-
-            if not errors:
-                import pyxel
-
-                # until expressions resolve names on the App instance when one
-                # exists, else on the module (same fallback as state snapshots).
-                until_target = (
-                    state.app_instance if state.app_instance is not None
-                    else imported_module
+                state.require_run_called()
+            except RunNotCalledError as e:
+                errors.append(
+                    make_error(
+                        ErrorPhase.SCRIPT_IMPORT,
+                        str(e),
+                        capture_traceback=False,
+                    )
                 )
+                exit_status = "crashed"
 
-                # Phase 3: drive the update/draw loop
-                for f in range(frames):
+        if not errors:
+            import pyxel
+
+            # until expressions resolve names on the App instance when one
+            # exists, else on the module (same fallback as state snapshots).
+            until_target = (
+                state.app_instance
+                if state.app_instance is not None
+                else imported_module
+            )
+
+            # Phase 3: drive the update/draw loop
+            for f in range(frames):
+                try:
+                    pyxel.frame_count = f
+                    scheduler.advance_to_frame(f)
+                    scheduler.apply_to_pyxel()
+                    state.update_callback()
+                    state.draw_callback()
+                    frame_count = f + 1
+                except Exception as e:
+                    errors.append(
+                        make_error(
+                            ErrorPhase.GAME_LOOP,
+                            str(e),
+                            frame=f,
+                            capture_traceback=True,
+                        )
+                    )
+                    exit_status = "crashed"
+                    frame_count = f
+                    break
+
+                # Single-frame snapshot dispatch
+                captured_state_this_frame: dict | None = None
+                captured_grid_this_frame: list | None = None
+                artifact_failed = False
+                for snap in single_frame_snaps:
+                    if snap.get("frame") != f:
+                        continue
+                    kind = snap["kind"]
                     try:
-                        pyxel.frame_count = f
-                        scheduler.advance_to_frame(f)
-                        scheduler.apply_to_pyxel()
-                        state.update_callback()
-                        state.draw_callback()
-                        frame_count = f + 1
+                        if kind == "screen_image":
+                            snapshot_results.append(_si_kind.capture(snap))
+                        elif kind == "screen_grid":
+                            res = _sg_kind.capture(snap)
+                            snapshot_results.append(res)
+                            captured_grid_this_frame = res.get("grid")
+                        elif kind == "state":
+                            res = _state_kind.capture(
+                                snap,
+                                app_instance=state.app_instance,
+                                module=imported_module,
+                            )
+                            snapshot_results.append(res)
+                            captured_state_this_frame = res.get("values")
                     except Exception as e:
-                        errors.append(make_error(
-                            ErrorPhase.GAME_LOOP, str(e), frame=f, capture_traceback=True,
-                        ))
-                        exit_status = "crashed"
-                        frame_count = f
-                        break
-
-                    # Single-frame snapshot dispatch
-                    captured_state_this_frame: dict | None = None
-                    captured_grid_this_frame: list | None = None
-                    artifact_failed = False
-                    for snap in single_frame_snaps:
-                        if snap.get("frame") != f:
-                            continue
-                        kind = snap["kind"]
-                        try:
-                            if kind == "screen_image":
-                                snapshot_results.append(_si_kind.capture(snap))
-                            elif kind == "screen_grid":
-                                res = _sg_kind.capture(snap)
-                                snapshot_results.append(res)
-                                captured_grid_this_frame = res.get("grid")
-                            elif kind == "state":
-                                res = _state_kind.capture(
-                                    snap,
-                                    app_instance=state.app_instance,
-                                    module=imported_module,
-                                )
-                                snapshot_results.append(res)
-                                captured_state_this_frame = res.get("values")
-                        except Exception as e:
-                            errors.append(make_error(
+                        errors.append(
+                            make_error(
                                 ErrorPhase.ARTIFACT,
                                 f"{kind} snapshot failed: {e}",
                                 path=snap.get("output"),
                                 frame=f,
                                 capture_traceback=True,
-                            ))
-                            exit_status = "crashed"
-                            artifact_failed = True
-                            break
-
-                    if artifact_failed:
+                            )
+                        )
+                        exit_status = "crashed"
+                        artifact_failed = True
                         break
 
-                    # Video frame accumulation
-                    if video_accumulators:
-                        try:
-                            img = _capture_screen_as_pil()
-                            for accum in video_accumulators:
-                                accum.add_frame(f, img)
-                        except Exception as e:
-                            errors.append(make_error(
+                if artifact_failed:
+                    break
+
+                # Video frame accumulation
+                if video_accumulators:
+                    try:
+                        img = _capture_screen_as_pil()
+                        for accum in video_accumulators:
+                            accum.add_frame(f, img)
+                    except Exception as e:
+                        errors.append(
+                            make_error(
                                 ErrorPhase.ARTIFACT,
                                 f"video frame capture failed: {e}",
                                 frame=f,
                                 capture_traceback=True,
-                            ))
-                            exit_status = "crashed"
-                            break
-
-                    # Until condition: evaluated after the frame completes, so
-                    # the stop frame's draw and snapshots are already done.
-                    if until_condition is not None:
-                        try:
-                            met = until_condition.evaluate(until_target)
-                        except UntilError as e:
-                            errors.append(make_error(
-                                ErrorPhase.UNTIL, str(e), frame=f,
-                            ))
-                            exit_status = "crashed"
-                            break
-                        if until_condition.pending_warning:
-                            log_buf.write(
-                                f"[pyxel-mcp] warning: {until_condition.pending_warning}\n"
                             )
-                            until_condition.pending_warning = None
-                        if met:
-                            until_met = True
-                            break
+                        )
+                        exit_status = "crashed"
+                        break
 
-                    # Stall detection: maintain rolling buffer of the most
-                    # recent N captured state-values and grid-signatures. If at
-                    # least one buffer is full and every entry is identical,
-                    # the run has not advanced for N consecutive frames despite
-                    # scheduled inputs — break early and surface "stalled".
-                    if stall_active:
-                        if captured_state_this_frame is not None:
-                            state_buffer.append(captured_state_this_frame)
-                            if len(state_buffer) > stall_window:
-                                state_buffer.pop(0)
-                        if captured_grid_this_frame is not None:
-                            grid_buffer.append(_grid_signature(captured_grid_this_frame))
-                            if len(grid_buffer) > stall_window:
-                                grid_buffer.pop(0)
+                # Until condition: evaluated after the frame completes, so
+                # the stop frame's draw and snapshots are already done.
+                if until_condition is not None:
+                    try:
+                        met = until_condition.evaluate(until_target)
+                    except UntilError as e:
+                        errors.append(
+                            make_error(
+                                ErrorPhase.UNTIL,
+                                str(e),
+                                frame=f,
+                            )
+                        )
+                        exit_status = "crashed"
+                        break
+                    if until_condition.pending_warning:
+                        log_buf.write(
+                            f"[pyxel-mcp] warning: {until_condition.pending_warning}\n"
+                        )
+                        until_condition.pending_warning = None
+                    until_met = met
+                    if met:
+                        break
 
-                        if (
-                            (len(state_buffer) == stall_window
-                             and all(v == state_buffer[0] for v in state_buffer[1:]))
-                            or
-                            (len(grid_buffer) == stall_window
-                             and all(g == grid_buffer[0] for g in grid_buffer[1:]))
-                        ):
-                            exit_status = "stalled"
-                            break
+                # Stall detection: maintain rolling buffer of the most
+                # recent N captured state-values and grid-signatures. If at
+                # least one buffer is full and every entry is identical,
+                # the run has not advanced for N consecutive frames despite
+                # scheduled inputs — break early and surface "stalled".
+                if stall_active:
+                    if captured_state_this_frame is not None:
+                        state_buffer.append(captured_state_this_frame)
+                        if len(state_buffer) > stall_window:
+                            state_buffer.pop(0)
+                    if captured_grid_this_frame is not None:
+                        grid_buffer.append(_grid_signature(captured_grid_this_frame))
+                        if len(grid_buffer) > stall_window:
+                            grid_buffer.pop(0)
 
-                    # Observe the completed draw before flip(): presentation
-                    # may rotate or clear the back buffer. Flip only when a
-                    # following frame needs fresh input-edge state. Leaving the
-                    # final frame unflipped also keeps `frame: "end"` exact.
-                    if f + 1 < frames:
-                        try:
-                            pyxel.flip()
-                        except Exception as e:
-                            errors.append(make_error(
+                    if (
+                        len(state_buffer) == stall_window
+                        and all(v == state_buffer[0] for v in state_buffer[1:])
+                    ) or (
+                        len(grid_buffer) == stall_window
+                        and all(g == grid_buffer[0] for g in grid_buffer[1:])
+                    ):
+                        exit_status = "stalled"
+                        break
+
+                # Observe the completed draw before flip(): presentation
+                # may rotate or clear the back buffer. Flip only when a
+                # following frame needs fresh input-edge state. Leaving the
+                # final frame unflipped also keeps `frame: "end"` exact.
+                if f + 1 < frames:
+                    try:
+                        pyxel.flip()
+                    except Exception as e:
+                        errors.append(
+                            make_error(
                                 ErrorPhase.GAME_LOOP,
                                 str(e),
                                 frame=f,
                                 capture_traceback=True,
-                            ))
-                            exit_status = "crashed"
-                            break
+                            )
+                        )
+                        exit_status = "crashed"
+                        break
 
-            # Fire `"frame": "end"` snapshots at the last completed frame.
-            # Crashed runs are excluded because their remaining observations
-            # cannot be trusted even when update/draw happened to complete.
-            if end_snaps and frame_count > 0 and exit_status in ("ok", "stalled"):
-                last = frame_count - 1
-                for snap in end_snaps:
-                    resolved = {**snap, "frame": last}
-                    kind = resolved["kind"]
-                    try:
-                        if kind == "screen_image":
-                            snapshot_results.append(_si_kind.capture(resolved))
-                        elif kind == "screen_grid":
-                            snapshot_results.append(_sg_kind.capture(resolved))
-                        elif kind == "state":
-                            snapshot_results.append(_state_kind.capture(
+        # Fire `"frame": "end"` snapshots at the last completed frame.
+        # Crashed runs are excluded because their remaining observations
+        # cannot be trusted even when update/draw happened to complete.
+        if end_snaps and frame_count > 0 and exit_status in ("ok", "stalled"):
+            last = frame_count - 1
+            for snap in end_snaps:
+                resolved = {**snap, "frame": last}
+                kind = resolved["kind"]
+                try:
+                    if kind == "screen_image":
+                        snapshot_results.append(_si_kind.capture(resolved))
+                    elif kind == "screen_grid":
+                        snapshot_results.append(_sg_kind.capture(resolved))
+                    elif kind == "state":
+                        snapshot_results.append(
+                            _state_kind.capture(
                                 resolved,
                                 app_instance=state.app_instance,
                                 module=imported_module,
-                            ))
-                    except Exception as e:
-                        errors.append(make_error(
+                            )
+                        )
+                except Exception as e:
+                    errors.append(
+                        make_error(
                             ErrorPhase.ARTIFACT,
                             f"{kind} end snapshot failed: {e}",
                             path=resolved.get("output"),
                             frame=last,
                             capture_traceback=True,
-                        ))
-                        exit_status = "crashed"
-                        break
+                        )
+                    )
+                    exit_status = "crashed"
+                    break
 
-            # Post-loop: encode all video accumulators (partial videos are useful for debugging)
-            for accum in video_accumulators:
-                try:
-                    snapshot_results.append(accum.encode())
-                except Exception as e:
-                    errors.append(make_error(
+        # Post-loop: encode all video accumulators (partial videos are useful for debugging)
+        for accum in video_accumulators:
+            try:
+                snapshot_results.append(accum.encode())
+            except Exception as e:
+                errors.append(
+                    make_error(
                         ErrorPhase.ARTIFACT,
                         f"video encode failed: {e}",
                         path=str(accum.requested_output),
                         frame=frame_count - 1 if frame_count else None,
                         capture_traceback=True,
-                    ))
-                    exit_status = "crashed"
+                    )
+                )
+                exit_status = "crashed"
 
     # redirect_stdout/stderr context is now closed — real stdout is restored
     log_text = log_buf.getvalue()

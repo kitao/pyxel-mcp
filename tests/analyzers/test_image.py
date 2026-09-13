@@ -1,9 +1,10 @@
-"""Tests for image bank analyzer (spec §7.2)."""
+"""Tests for image bank analyzer."""
+
 import pytest
 import pyxel
 
 
-# Initialize pyxel once for this module (second call panics in Pyxel 2.9.4).
+# Initialize pyxel once for this module (a second call panics).
 def _ensure_pyxel():
     try:
         _ = pyxel.images[0].width
@@ -61,10 +62,11 @@ def test_analyze_image_full_bank_under_500ms():
     Pre-fix: nested pget loops; post-fix: numpy slice on data_ptr().
     """
     import time
+
     t0 = time.monotonic()
     result = analyze_image(image=0, x=0, y=0, w=None, h=None)
     elapsed = time.monotonic() - t0
     assert elapsed < 0.5, (
-        f"analyze_image full-bank took {elapsed*1000:.1f}ms (limit 500ms)"
+        f"analyze_image full-bank took {elapsed * 1000:.1f}ms (limit 500ms)"
     )
     assert result["bank_size"] == [256, 256]

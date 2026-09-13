@@ -1,25 +1,55 @@
 # Contributing
 
 Bug reports and small fixes are welcome. For larger changes, please open an
-issue first.
+issue first so the tool contract can be discussed before code is written.
+
+## Scope
+
+pyxel-mcp observes Pyxel programs and reports facts. Game-building guidance,
+quality judgments, and workflow advice belong in
+[pyxel-skill](https://github.com/kitao/pyxel-skill), not here.
 
 ## Development setup
 
 ```bash
 git clone https://github.com/kitao/pyxel-mcp.git
 cd pyxel-mcp
-uv sync --extra test
+uv sync --extra dev
 ```
 
-## Running tests
+## Checks
 
 ```bash
-uv run pytest
+uv run pytest -q
+uv run ruff check
+uv run ruff format --check
 ```
+
+CI runs pytest on Python 3.11 and 3.14 and the two ruff checks on Python 3.12.
 
 Notes:
 
-- Tests marked `integration` require Pyxel (installed as a dependency). The
-  harness runs it headlessly via SDL dummy drivers, so no display is needed.
+- Tests drive Pyxel (installed as a dependency) headlessly through SDL dummy
+  drivers, so no display is needed.
 - `tests/conftest.py` generates the PNG fixtures under
   `tests/fixtures/images/` on first run; they are intentionally gitignored.
+- Anything that changes how the subprocess harness loads or drives a script
+  needs a test in `tests/integration/test_subprocess_roundtrip.py`, because
+  in-process tests share one already-imported Pyxel.
+
+## Layout
+
+- `src/pyxel_mcp/server.py` registers the eight tools with the MCP SDK.
+- `src/pyxel_mcp/contracts.py` holds the public input and output models.
+- `src/pyxel_mcp/dispatch.py` is the subprocess boundary.
+- `src/pyxel_mcp/observe/_harnesses/` runs inside the subprocess: one module
+  per tool under `tools/`, shared pieces under `_common/`.
+- `src/pyxel_mcp/_resources/` serves the `pyxel://` resources.
+
+## Releasing
+
+1. Update the version in `pyproject.toml` and `server.json` (two places), and
+   add a `## x.y.z` section to `CHANGELOG.md`.
+2. Commit, tag `vX.Y.Z`, and push the tag. The release workflow builds the
+   package, publishes it to PyPI through trusted publishing, and then
+   publishes `server.json` to the MCP Registry through GitHub OIDC.

@@ -1,9 +1,10 @@
-"""Tests for tilemap analyzer (spec §7.4)."""
+"""Tests for tilemap analyzer."""
+
 import pytest
 import pyxel
 
 
-# Initialize pyxel once for this module (second call panics in Pyxel 2.9.4).
+# Initialize pyxel once for this module (a second call panics).
 def _ensure_pyxel():
     try:
         _ = pyxel.tilemaps[0].width
@@ -78,6 +79,7 @@ def test_invalid_index_via_tool():
     """read_tilemap should report validation phase for invalid index."""
     from pyxel_mcp.observe._harnesses.tools.read_tilemap import run as tool_run
     from tests.conftest import SCRIPTS
+
     result = tool_run({"script": str(SCRIPTS / "minimal.py"), "tilemap": 999})
     assert result["errors"][0]["phase"] == "validation"
 
@@ -92,16 +94,17 @@ def test_analyze_tilemap_full_scan_under_500ms():
     data_ptr() snapshots.
     """
     import time
+
     # Place some content so usage/bbox paths run.
-    for tx in range(0, 32):
-        for ty in range(0, 32):
+    for tx in range(32):
+        for ty in range(32):
             pyxel.tilemaps[0].pset(tx, ty, (tx % 8, ty % 8))
     try:
         t0 = time.monotonic()
         result = analyze_tilemap(tilemap=0)
         elapsed = time.monotonic() - t0
         assert elapsed < 0.5, (
-            f"analyze_tilemap full scan took {elapsed*1000:.1f}ms (limit 500ms)"
+            f"analyze_tilemap full scan took {elapsed * 1000:.1f}ms (limit 500ms)"
         )
         assert result["region"] is not None
     finally:

@@ -1,4 +1,5 @@
 """Validation helpers for caller-requested artifact output paths."""
+
 from __future__ import annotations
 
 from pathlib import Path

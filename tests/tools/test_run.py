@@ -1,7 +1,9 @@
-"""Tests for run() — dynamic execution driver (spec §6)."""
+"""Tests for run() — dynamic execution driver."""
+
 import random
 
 import pytest
+
 from pyxel_mcp.observe._harnesses.tools.run import run as run_tool
 from tests.conftest import SCRIPTS
 
@@ -14,7 +16,9 @@ def test_minimal_script_completes():
 
 
 def test_random_seed_seeds():
-    result = run_tool({"script": str(SCRIPTS / "minimal.py"), "frames": 1, "random_seed": 42})
+    result = run_tool(
+        {"script": str(SCRIPTS / "minimal.py"), "frames": 1, "random_seed": 42}
+    )
     assert result["seeded"] is True
 
 
@@ -52,21 +56,25 @@ def test_random_seed_controls_rngs_during_app_initialization():
         random.seed(ambient_seed)
         if pyxel.width > 0:
             pyxel.rseed(ambient_seed)
-        result = run_tool({
-            "script": str(SCRIPTS / "import_time_random.py"),
-            "frames": 1,
-            "random_seed": 2468,
-            "snapshots": [{
-                "frame": 0,
-                "kind": "state",
-                "attrs": [
-                    "module_stdlib_value",
-                    "module_pyxel_value",
-                    "stdlib_value",
-                    "pyxel_value",
+        result = run_tool(
+            {
+                "script": str(SCRIPTS / "import_time_random.py"),
+                "frames": 1,
+                "random_seed": 2468,
+                "snapshots": [
+                    {
+                        "frame": 0,
+                        "kind": "state",
+                        "attrs": [
+                            "module_stdlib_value",
+                            "module_pyxel_value",
+                            "stdlib_value",
+                            "pyxel_value",
+                        ],
+                    }
                 ],
-            }],
-        })
+            }
+        )
         assert result["exit_status"] == "ok"
         return result["snapshots"][0]["values"]
 
@@ -130,7 +138,9 @@ def test_crash_at_first_frame():
 
 def test_negative_random_seed_is_validation_error():
     """random_seed must be non-negative int."""
-    result = run_tool({"script": str(SCRIPTS / "minimal.py"), "frames": 1, "random_seed": -1})
+    result = run_tool(
+        {"script": str(SCRIPTS / "minimal.py"), "frames": 1, "random_seed": -1}
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
@@ -142,7 +152,9 @@ def test_timeout_default_is_10():
 
 
 def test_timeout_must_be_positive():
-    result = run_tool({"script": str(SCRIPTS / "minimal.py"), "frames": 1, "timeout": 0})
+    result = run_tool(
+        {"script": str(SCRIPTS / "minimal.py"), "frames": 1, "timeout": 0}
+    )
     assert result["exit_status"] == "invalid"
     assert "timeout" in result["errors"][0]["message"].lower()
 
@@ -168,9 +180,11 @@ def test_log_includes_stderr():
 
 # --- Inputs ---
 
+
 def _mouse_simulation_supported() -> bool:
     """Check whether Pyxel exposes either set_mouse_pos or mutable mouse_x/y."""
     import pyxel
+
     if hasattr(pyxel, "set_mouse_pos"):
         return True
     try:
@@ -181,12 +195,14 @@ def _mouse_simulation_supported() -> bool:
 
 
 def test_inputs_drive_state():
-    result = run_tool({
-        "script": str(SCRIPTS / "btn_responder.py"),
-        "frames": 10,
-        "inputs": [{"frame": 0, "buttons": ["KEY_RIGHT"]}],
-        "snapshots": [{"frame": 9, "kind": "state", "attrs": ["x"]}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "btn_responder.py"),
+            "frames": 10,
+            "inputs": [{"frame": 0, "buttons": ["KEY_RIGHT"]}],
+            "snapshots": [{"frame": 9, "kind": "state", "attrs": ["x"]}],
+        }
+    )
     # Right held for 10 frames → x should be 10 (one increment per update)
     assert result["exit_status"] == "ok"
     assert result["errors"] == []
@@ -194,17 +210,19 @@ def test_inputs_drive_state():
 
 
 def test_btnp_only_on_press_edge():
-    result = run_tool({
-        "script": str(SCRIPTS / "btnp_responder.py"),
-        "frames": 20,
-        "inputs": [
-            {"frame": 0, "buttons": ["KEY_SPACE"]},
-            {"frame": 3, "buttons": []},
-            {"frame": 6, "buttons": ["KEY_SPACE"]},
-            {"frame": 10, "buttons": []},
-        ],
-        "snapshots": [{"frame": 19, "kind": "state", "attrs": ["jumps"]}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "btnp_responder.py"),
+            "frames": 20,
+            "inputs": [
+                {"frame": 0, "buttons": ["KEY_SPACE"]},
+                {"frame": 3, "buttons": []},
+                {"frame": 6, "buttons": ["KEY_SPACE"]},
+                {"frame": 10, "buttons": []},
+            ],
+            "snapshots": [{"frame": 19, "kind": "state", "attrs": ["jumps"]}],
+        }
+    )
     # Two press edges → jumps == 2
     assert result["exit_status"] == "ok"
     assert result["errors"] == []
@@ -212,15 +230,17 @@ def test_btnp_only_on_press_edge():
 
 
 def test_input_release_stops_movement():
-    result = run_tool({
-        "script": str(SCRIPTS / "btn_responder.py"),
-        "frames": 10,
-        "inputs": [
-            {"frame": 0, "buttons": ["KEY_RIGHT"]},
-            {"frame": 5, "buttons": []},
-        ],
-        "snapshots": [{"frame": 9, "kind": "state", "attrs": ["x"]}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "btn_responder.py"),
+            "frames": 10,
+            "inputs": [
+                {"frame": 0, "buttons": ["KEY_RIGHT"]},
+                {"frame": 5, "buttons": []},
+            ],
+            "snapshots": [{"frame": 9, "kind": "state", "attrs": ["x"]}],
+        }
+    )
     # x should increment for frames 0-4 (5 increments), held at 5 onwards
     assert result["exit_status"] == "ok"
     assert result["errors"] == []
@@ -228,26 +248,32 @@ def test_input_release_stops_movement():
 
 
 def test_axes_input():
-    result = run_tool({
-        "script": str(SCRIPTS / "axes_responder.py"),
-        "frames": 5,
-        "inputs": [{"frame": 2, "axes": {"GAMEPAD1_AXIS_LEFTX": 0.5}}],
-        "snapshots": [{"frame": 4, "kind": "state", "attrs": ["last_x_axis"]}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "axes_responder.py"),
+            "frames": 5,
+            "inputs": [{"frame": 2, "axes": {"GAMEPAD1_AXIS_LEFTX": 0.5}}],
+            "snapshots": [{"frame": 4, "kind": "state", "attrs": ["last_x_axis"]}],
+        }
+    )
     # Verify the script saw the axis value (modulo Pyxel's internal int range)
     assert result["exit_status"] == "ok"
     assert result["errors"] == []
     assert result["snapshots"][0]["values"]["last_x_axis"] != 0
 
 
-@pytest.mark.skipif(not _mouse_simulation_supported(), reason="Pyxel version lacks mouse simulation API")
+@pytest.mark.skipif(
+    not _mouse_simulation_supported(), reason="Pyxel version lacks mouse simulation API"
+)
 def test_mouse_pos_input():
-    result = run_tool({
-        "script": str(SCRIPTS / "mouse_responder.py"),
-        "frames": 3,
-        "inputs": [{"frame": 0, "mouse_pos": [42, 17]}],
-        "snapshots": [{"frame": 2, "kind": "state", "attrs": ["last_x", "last_y"]}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "mouse_responder.py"),
+            "frames": 3,
+            "inputs": [{"frame": 0, "mouse_pos": [42, 17]}],
+            "snapshots": [{"frame": 2, "kind": "state", "attrs": ["last_x", "last_y"]}],
+        }
+    )
     assert result["exit_status"] == "ok"
     assert result["errors"] == []
     assert result["snapshots"][0]["values"]["last_x"] == 42
@@ -256,13 +282,16 @@ def test_mouse_pos_input():
 
 # --- Snapshot integration tests ---
 
+
 def test_run_with_screen_image_snapshot(tmp_path):
     out = tmp_path / "f2.png"
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"frame": 2, "kind": "screen_image", "output": str(out)}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [{"frame": 2, "kind": "screen_image", "output": str(out)}],
+        }
+    )
     assert result["exit_status"] == "ok"
     assert len(result["snapshots"]) == 1
     assert result["snapshots"][0]["frame"] == 2
@@ -272,6 +301,7 @@ def test_run_with_screen_image_snapshot(tmp_path):
 
 def test_screen_snapshot_is_captured_before_flip(monkeypatch, tmp_path):
     import pyxel
+
     from pyxel_mcp.observe._harnesses.tools import run as run_module
 
     events = []
@@ -288,15 +318,19 @@ def test_screen_snapshot_is_captured_before_flip(monkeypatch, tmp_path):
     monkeypatch.setattr(pyxel, "flip", lambda: events.append("flip"))
     monkeypatch.setattr(run_module._si_kind, "capture", capture)
 
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 2,
-        "snapshots": [{
-            "frame": 0,
-            "kind": "screen_image",
-            "output": str(tmp_path / "frame.png"),
-        }],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 2,
+            "snapshots": [
+                {
+                    "frame": 0,
+                    "kind": "screen_image",
+                    "output": str(tmp_path / "frame.png"),
+                }
+            ],
+        }
+    )
 
     assert result["exit_status"] == "ok"
     assert events.index("capture") < events.index("flip")
@@ -304,6 +338,7 @@ def test_screen_snapshot_is_captured_before_flip(monkeypatch, tmp_path):
 
 def test_end_snapshot_keeps_the_last_drawn_frame_before_flip(monkeypatch, tmp_path):
     import pyxel
+
     from pyxel_mcp.observe._harnesses.tools import run as run_module
 
     events = []
@@ -320,15 +355,19 @@ def test_end_snapshot_keeps_the_last_drawn_frame_before_flip(monkeypatch, tmp_pa
     monkeypatch.setattr(pyxel, "flip", lambda: events.append("flip"))
     monkeypatch.setattr(run_module._si_kind, "capture", capture)
 
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 2,
-        "snapshots": [{
-            "frame": "end",
-            "kind": "screen_image",
-            "output": str(tmp_path / "end.png"),
-        }],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 2,
+            "snapshots": [
+                {
+                    "frame": "end",
+                    "kind": "screen_image",
+                    "output": str(tmp_path / "end.png"),
+                }
+            ],
+        }
+    )
 
     assert result["exit_status"] == "ok"
     assert events == ["flip", "capture"]
@@ -342,11 +381,13 @@ def test_flip_failure_keeps_the_completed_frame_and_snapshot(monkeypatch):
 
     monkeypatch.setattr(pyxel, "flip", fail_flip)
 
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 2,
-        "snapshots": [{"frame": 0, "kind": "state"}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 2,
+            "snapshots": [{"frame": 0, "kind": "state"}],
+        }
+    )
 
     assert result["exit_status"] == "crashed"
     assert result["frame_count"] == 1
@@ -362,15 +403,19 @@ def test_snapshot_failure_returns_a_complete_run_result(monkeypatch, tmp_path):
 
     monkeypatch.setattr(run_module._si_kind, "capture", fail_capture)
 
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 1,
-        "snapshots": [{
-            "frame": 0,
-            "kind": "screen_image",
-            "output": str(tmp_path / "frame.png"),
-        }],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 1,
+            "snapshots": [
+                {
+                    "frame": 0,
+                    "kind": "screen_image",
+                    "output": str(tmp_path / "frame.png"),
+                }
+            ],
+        }
+    )
 
     assert result["exit_status"] == "crashed"
     assert result["frame_count"] == 1
@@ -387,16 +432,20 @@ def test_video_encode_failure_returns_a_complete_run_result(monkeypatch, tmp_pat
 
     monkeypatch.setattr(video.VideoAccumulator, "encode", fail_encode)
 
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 1,
-        "snapshots": [{
-            "kind": "video",
-            "start_frame": 0,
-            "end_frame": 1,
-            "output": str(tmp_path / "play.gif"),
-        }],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 1,
+            "snapshots": [
+                {
+                    "kind": "video",
+                    "start_frame": 0,
+                    "end_frame": 1,
+                    "output": str(tmp_path / "play.gif"),
+                }
+            ],
+        }
+    )
 
     assert result["exit_status"] == "crashed"
     assert result["frame_count"] == 1
@@ -404,11 +453,13 @@ def test_video_encode_failure_returns_a_complete_run_result(monkeypatch, tmp_pat
 
 
 def test_run_with_screen_grid_snapshot():
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 3,
-        "snapshots": [{"frame": 1, "kind": "screen_grid"}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 3,
+            "snapshots": [{"frame": 1, "kind": "screen_grid"}],
+        }
+    )
     snap = result["snapshots"][0]
     assert snap["kind"] == "screen_grid"
     assert "grid" in snap
@@ -417,22 +468,33 @@ def test_run_with_screen_grid_snapshot():
 def test_run_with_state_snapshot():
     """stateful_app.App.update increments counter each frame.
     After 5 frames (f=0..4), update is called 5 times → counter == 5."""
-    result = run_tool({
-        "script": str(SCRIPTS / "stateful_app.py"),
-        "frames": 5,
-        "snapshots": [{"frame": 4, "kind": "state", "attrs": ["counter"]}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "stateful_app.py"),
+            "frames": 5,
+            "snapshots": [{"frame": 4, "kind": "state", "attrs": ["counter"]}],
+        }
+    )
     assert result["snapshots"][0]["values"]["counter"] == 5
 
 
 def test_run_with_video_snapshot(tmp_path):
     out = tmp_path / "play.gif"
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 10,
-        "snapshots": [{"kind": "video", "start_frame": 0, "end_frame": 10,
-                       "fps": 30, "output": str(out)}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 10,
+            "snapshots": [
+                {
+                    "kind": "video",
+                    "start_frame": 0,
+                    "end_frame": 10,
+                    "fps": 30,
+                    "output": str(out),
+                }
+            ],
+        }
+    )
     assert out.exists()
     snap = result["snapshots"][0]
     assert snap["kind"] == "video"
@@ -440,27 +502,34 @@ def test_run_with_video_snapshot(tmp_path):
 
 
 def test_invalid_snapshot_kind_is_validation_error():
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 1,
-        "snapshots": [{"frame": 0, "kind": "bogus"}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 1,
+            "snapshots": [{"frame": 0, "kind": "bogus"}],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
 
 # --- Multi-frame snapshots ---
 
+
 def test_multi_frame_screen_image(tmp_path):
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 10,
-        "snapshots": [{
-            "frames": "0:10:2",
-            "kind": "screen_image",
-            "output_pattern": str(tmp_path / "f-{frame}.png"),
-        }],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 10,
+            "snapshots": [
+                {
+                    "frames": "0:10:2",
+                    "kind": "screen_image",
+                    "output_pattern": str(tmp_path / "f-{frame}.png"),
+                }
+            ],
+        }
+    )
     assert result["exit_status"] == "ok"
     assert result["errors"] == []
     assert len(result["snapshots"]) == 5
@@ -469,11 +538,13 @@ def test_multi_frame_screen_image(tmp_path):
 
 
 def test_multi_frame_state():
-    result = run_tool({
-        "script": str(SCRIPTS / "stateful_app.py"),
-        "frames": 5,
-        "snapshots": [{"frames": [1, 3], "kind": "state", "attrs": ["counter"]}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "stateful_app.py"),
+            "frames": 5,
+            "snapshots": [{"frames": [1, 3], "kind": "state", "attrs": ["counter"]}],
+        }
+    )
     assert result["exit_status"] == "ok"
     assert result["errors"] == []
     assert len(result["snapshots"]) == 2
@@ -482,11 +553,13 @@ def test_multi_frame_state():
 
 
 def test_explicit_list_dedupe_warning():
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 10,
-        "snapshots": [{"frames": [3, 1, 3], "kind": "state"}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 10,
+            "snapshots": [{"frames": [3, 1, 3], "kind": "state"}],
+        }
+    )
     assert result["exit_status"] == "ok"
     assert result["errors"] == []
     # Dedupe + sort → [1, 3]
@@ -496,51 +569,63 @@ def test_explicit_list_dedupe_warning():
 
 
 def test_frame_and_frames_conflict_is_validation_error():
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"frame": 1, "frames": [2, 3], "kind": "state"}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [{"frame": 1, "frames": [2, 3], "kind": "state"}],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
 
 def test_output_and_output_pattern_conflict_is_validation_error(tmp_path):
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{
-            "frames": [1, 2],
-            "kind": "screen_image",
-            "output": str(tmp_path / "f.png"),
-            "output_pattern": str(tmp_path / "f-{frame}.png"),
-        }],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [
+                {
+                    "frames": [1, 2],
+                    "kind": "screen_image",
+                    "output": str(tmp_path / "f.png"),
+                    "output_pattern": str(tmp_path / "f-{frame}.png"),
+                }
+            ],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
 
 def test_single_frame_with_output_pattern_is_validation_error(tmp_path):
-    """Per spec §6.6, single-frame mode requires `output`, not `output_pattern`."""
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{
-            "frame": 1,
-            "kind": "screen_image",
-            "output_pattern": str(tmp_path / "f-{frame}.png"),
-        }],
-    })
+    """Single-frame mode requires `output`, not `output_pattern`."""
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [
+                {
+                    "frame": 1,
+                    "kind": "screen_image",
+                    "output_pattern": str(tmp_path / "f-{frame}.png"),
+                }
+            ],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
 
 def test_single_frame_screen_image_without_output_is_validation_error():
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"frame": 1, "kind": "screen_image"}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [{"frame": 1, "kind": "screen_image"}],
+        }
+    )
     assert result["ok"] is False
     assert result["exit_status"] == "invalid"
     assert result["snapshots"] == []
@@ -549,22 +634,28 @@ def test_single_frame_screen_image_without_output_is_validation_error():
 
 
 def test_single_frame_screen_image_output_must_be_absolute():
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"frame": 1, "kind": "screen_image", "output": "frame.png"}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [{"frame": 1, "kind": "screen_image", "output": "frame.png"}],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
     assert "absolute" in result["errors"][0]["message"]
 
 
 def test_single_frame_screen_image_output_rejects_unexpanded_home():
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"frame": 1, "kind": "screen_image", "output": "~/frame.png"}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [
+                {"frame": 1, "kind": "screen_image", "output": "~/frame.png"}
+            ],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
     assert "absolute" in result["errors"][0]["message"]
@@ -572,30 +663,38 @@ def test_single_frame_screen_image_output_rejects_unexpanded_home():
 
 @pytest.mark.parametrize("extension", ["jpg", "PNG"])
 def test_single_frame_screen_image_output_requires_png(tmp_path, extension):
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 1,
-        "snapshots": [{
-            "frame": 0,
-            "kind": "screen_image",
-            "output": str(tmp_path / f"frame.{extension}"),
-        }],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 1,
+            "snapshots": [
+                {
+                    "frame": 0,
+                    "kind": "screen_image",
+                    "output": str(tmp_path / f"frame.{extension}"),
+                }
+            ],
+        }
+    )
 
     assert result["exit_status"] == "invalid"
     assert ".png" in result["errors"][0]["message"]
 
 
 def test_multi_frame_screen_image_output_pattern_requires_png(tmp_path):
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 1,
-        "snapshots": [{
-            "frames": [0],
-            "kind": "screen_image",
-            "output_pattern": str(tmp_path / "frame-{frame}.jpg"),
-        }],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 1,
+            "snapshots": [
+                {
+                    "frames": [0],
+                    "kind": "screen_image",
+                    "output_pattern": str(tmp_path / "frame-{frame}.jpg"),
+                }
+            ],
+        }
+    )
 
     assert result["exit_status"] == "invalid"
     assert ".png" in result["errors"][0]["message"]
@@ -603,55 +702,69 @@ def test_multi_frame_screen_image_output_pattern_requires_png(tmp_path):
 
 def test_video_with_frames_is_validation_error(tmp_path):
     out = tmp_path / "play.gif"
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{
-            "kind": "video",
-            "frames": [0, 1, 2],
-            "output": str(out),
-        }],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [
+                {
+                    "kind": "video",
+                    "frames": [0, 1, 2],
+                    "output": str(out),
+                }
+            ],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
     assert "frames" in result["errors"][0]["message"].lower()
 
 
 def test_multi_frame_screen_image_without_output_pattern_is_validation_error():
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"frames": [0, 1], "kind": "screen_image"}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [{"frames": [0, 1], "kind": "screen_image"}],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
 
 def test_output_pattern_missing_frame_token_is_validation_error(tmp_path):
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{
-            "frames": [0, 1],
-            "kind": "screen_image",
-            "output_pattern": str(tmp_path / "no-token.png"),
-        }],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [
+                {
+                    "frames": [0, 1],
+                    "kind": "screen_image",
+                    "output_pattern": str(tmp_path / "no-token.png"),
+                }
+            ],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
 
 def test_output_pattern_zero_padded(tmp_path):
     """Resolved filenames use 5-digit zero-padded {frame}."""
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{
-            "frames": [3],
-            "kind": "screen_image",
-            "output_pattern": str(tmp_path / "f-{frame}.png"),
-        }],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [
+                {
+                    "frames": [3],
+                    "kind": "screen_image",
+                    "output_pattern": str(tmp_path / "f-{frame}.png"),
+                }
+            ],
+        }
+    )
     assert result["exit_status"] == "ok"
     assert result["errors"] == []
     # Path should be f-00003.png, not f-3.png
@@ -661,25 +774,37 @@ def test_output_pattern_zero_padded(tmp_path):
 
 def test_output_pattern_unrecognized_token_validation_error(tmp_path):
     """Format specifiers like {frame:03d} are rejected."""
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 10,
-        "snapshots": [{"frames": [0], "kind": "screen_image", "output_pattern": str(tmp_path / "f-{frame:03d}.png")}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 10,
+            "snapshots": [
+                {
+                    "frames": [0],
+                    "kind": "screen_image",
+                    "output_pattern": str(tmp_path / "f-{frame:03d}.png"),
+                }
+            ],
+        }
+    )
     assert result["exit_status"] == "invalid"
 
 
 def test_output_pattern_unknown_token_validation_error(tmp_path):
     """Unknown tokens like {foo} are rejected."""
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{
-            "frames": [0],
-            "kind": "screen_image",
-            "output_pattern": str(tmp_path / "f-{frame}-{foo}.png"),
-        }],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [
+                {
+                    "frames": [0],
+                    "kind": "screen_image",
+                    "output_pattern": str(tmp_path / "f-{frame}-{foo}.png"),
+                }
+            ],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
@@ -694,67 +819,94 @@ def test_script_output_is_retained_verbatim_in_log():
 
 # --- Frame-bounds validation tests ---
 
+
 def test_snapshot_frame_out_of_bounds_is_validation_error():
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"frame": 99, "kind": "state"}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [{"frame": 99, "kind": "state"}],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
 
 def test_snapshot_negative_frame_is_validation_error():
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"frame": -1, "kind": "state"}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [{"frame": -1, "kind": "state"}],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
 
 def test_snapshot_frame_at_last_valid_index_passes():
     """frame == frames - 1 must be accepted (last valid index)."""
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"frame": 4, "kind": "state"}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [{"frame": 4, "kind": "state"}],
+        }
+    )
     assert result["exit_status"] == "ok"
 
 
 def test_snapshot_frame_equal_to_frames_is_validation_error():
     """frame == frames is out of range (0-based, strictly < frames)."""
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"frame": 5, "kind": "state"}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [{"frame": 5, "kind": "state"}],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
 
 def test_video_end_frame_exceeds_run_frames(tmp_path):
     out = tmp_path / "play.gif"
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"kind": "video", "start_frame": 0, "end_frame": 99,
-                       "fps": 30, "output": str(out)}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [
+                {
+                    "kind": "video",
+                    "start_frame": 0,
+                    "end_frame": 99,
+                    "fps": 30,
+                    "output": str(out),
+                }
+            ],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
 
 def test_video_start_geq_end_is_validation_error(tmp_path):
     out = tmp_path / "play.gif"
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"kind": "video", "start_frame": 3, "end_frame": 3,
-                       "fps": 30, "output": str(out)}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [
+                {
+                    "kind": "video",
+                    "start_frame": 3,
+                    "end_frame": 3,
+                    "fps": 30,
+                    "output": str(out),
+                }
+            ],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
@@ -762,12 +914,21 @@ def test_video_start_geq_end_is_validation_error(tmp_path):
 def test_video_negative_start_frame_is_validation_error(tmp_path):
     """start_frame < 0 must be rejected."""
     out = tmp_path / "play.gif"
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"kind": "video", "start_frame": -1, "end_frame": 5,
-                       "fps": 30, "output": str(out)}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [
+                {
+                    "kind": "video",
+                    "start_frame": -1,
+                    "end_frame": 5,
+                    "fps": 30,
+                    "output": str(out),
+                }
+            ],
+        }
+    )
     assert result["exit_status"] == "invalid"
     assert result["errors"][0]["phase"] == "validation"
 
@@ -775,10 +936,55 @@ def test_video_negative_start_frame_is_validation_error(tmp_path):
 def test_video_full_range_passes(tmp_path):
     """start_frame=0, end_frame=frames must pass (end_frame <= frames is allowed)."""
     out = tmp_path / "play.gif"
-    result = run_tool({
-        "script": str(SCRIPTS / "minimal.py"),
-        "frames": 5,
-        "snapshots": [{"kind": "video", "start_frame": 0, "end_frame": 5,
-                       "fps": 30, "output": str(out)}],
-    })
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 5,
+            "snapshots": [
+                {
+                    "kind": "video",
+                    "start_frame": 0,
+                    "end_frame": 5,
+                    "fps": 30,
+                    "output": str(out),
+                }
+            ],
+        }
+    )
     assert result["exit_status"] == "ok"
+
+
+def test_screen_image_inline_flag_is_echoed_and_validated(tmp_path):
+    flagged = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 2,
+            "snapshots": [
+                {"kind": "screen_image", "frame": 0, "output": str(tmp_path / "a.png")},
+                {
+                    "kind": "screen_image",
+                    "frame": 1,
+                    "output": str(tmp_path / "b.png"),
+                    "inline": True,
+                },
+            ],
+        }
+    )
+    assert [snap["inline"] for snap in flagged["snapshots"]] == [False, True]
+
+    rejected = run_tool(
+        {
+            "script": str(SCRIPTS / "minimal.py"),
+            "frames": 1,
+            "snapshots": [
+                {
+                    "kind": "screen_image",
+                    "frame": 0,
+                    "output": str(tmp_path / "c.png"),
+                    "inline": "yes",
+                },
+            ],
+        }
+    )
+    assert rejected["exit_status"] == "invalid"
+    assert "inline" in rejected["errors"][0]["message"]

@@ -1,5 +1,7 @@
 """Tests for the pyxel-mcp CLI install and serve subcommands."""
+
 from __future__ import annotations
+
 import json
 import re
 import textwrap
@@ -22,7 +24,9 @@ def test_install_snippet_constant_is_valid_json():
 def test_registry_metadata_matches_project_version():
     """MCP registry metadata should not drift from the Python package."""
     pyproject = (ROOT / "pyproject.toml").read_text()
-    project_version = re.search(r'^version = "([^"]+)"$', pyproject, re.MULTILINE).group(1)
+    project_version = re.search(
+        r'^version = "([^"]+)"$', pyproject, re.MULTILINE
+    ).group(1)
     project_name = re.search(r'^name = "([^"]+)"$', pyproject, re.MULTILINE).group(1)
     registry = json.loads((ROOT / "server.json").read_text())
 
@@ -33,9 +37,14 @@ def test_registry_metadata_matches_project_version():
     assert registry["packages"][0]["transport"]["type"] == "stdio"
 
 
-def test_release_version_is_1_2_0():
+def test_release_version_is_1_3_0():
     pyproject = (ROOT / "pyproject.toml").read_text()
-    assert 'version = "1.2.0"' in pyproject
+    assert 'version = "1.3.0"' in pyproject
+
+
+def test_depends_on_mcp_sdk_2():
+    pyproject = (ROOT / "pyproject.toml").read_text()
+    assert '"mcp>=2.0.0,<3.0.0"' in pyproject
 
 
 def test_public_descriptions_preserve_observation_boundary():
@@ -65,12 +74,19 @@ def test_install_output_contains_snippet_text(capsys):
     assert "read_animation" not in out
 
 
-def test_install_lists_known_host_config_paths(capsys):
-    """The guide should at least mention Claude Code's config location."""
+def test_install_lists_verified_client_commands_and_paths(capsys):
+    """Every client line must match that client's documented setup."""
     cli.main(["install"])
     out = capsys.readouterr().out
-    assert ".mcp.json" in out  # generic path users will recognise
-    assert "claude" in out.lower()
+    assert "claude mcp add --scope user pyxel -- uvx pyxel-mcp" in out
+    assert "codex mcp add pyxel -- uvx pyxel-mcp" in out
+    assert "gemini mcp add pyxel uvx pyxel-mcp" in out
+    assert ".mcp.json" in out
+    assert "~/.cursor/mcp.json" in out
+    assert "~/.codex/config.toml" in out and "[mcp_servers.pyxel]" in out
+    assert ".vscode/mcp.json" in out and '"servers"' in out
+    assert "~/.claude/.mcp.json" not in out
+    assert "~/.codex/mcp.json" not in out
 
 
 def test_install_does_not_mention_skill_distribution(capsys):
@@ -96,6 +112,7 @@ def test_no_args_is_serve_default(monkeypatch):
         called["yes"] = True
 
     import pyxel_mcp.server
+
     monkeypatch.setattr(pyxel_mcp.server, "main", fake_server_main)
     cli.main([])
     assert called["yes"] is True
@@ -108,6 +125,7 @@ def test_serve_subcommand_invokes_server(monkeypatch):
         called["yes"] = True
 
     import pyxel_mcp.server
+
     monkeypatch.setattr(pyxel_mcp.server, "main", fake_server_main)
     cli.main(["serve"])
     assert called["yes"] is True

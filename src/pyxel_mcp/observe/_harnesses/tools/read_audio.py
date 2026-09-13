@@ -4,7 +4,9 @@ Renders a Pyxel sound or music slot to WAV. Delegates synthesis to Pyxel's
 built-in .save() method, then reads the WAV back to compute metadata.
 Music targets render a fixed 10-second window.
 """
+
 from __future__ import annotations
+
 import struct
 import wave
 from pathlib import Path
@@ -89,17 +91,31 @@ def _build_notes(sound) -> list[dict]:
     result = []
     for frame, note_num in enumerate(notes_list):
         # Resolve per-frame tone/volume/effect (Pyxel repeats last value if shorter)
-        tone_val = tones_list[frame] if frame < len(tones_list) else (tones_list[-1] if tones_list else 0)
-        vol_val = volumes_list[frame] if frame < len(volumes_list) else (volumes_list[-1] if volumes_list else 0)
-        eff_val = effects_list[frame] if frame < len(effects_list) else (effects_list[-1] if effects_list else 0)
+        tone_val = (
+            tones_list[frame]
+            if frame < len(tones_list)
+            else (tones_list[-1] if tones_list else 0)
+        )
+        vol_val = (
+            volumes_list[frame]
+            if frame < len(volumes_list)
+            else (volumes_list[-1] if volumes_list else 0)
+        )
+        eff_val = (
+            effects_list[frame]
+            if frame < len(effects_list)
+            else (effects_list[-1] if effects_list else 0)
+        )
 
-        result.append({
-            "frame": frame,
-            "note": _midi_to_name(note_num),
-            "tone": _tone_to_str(tone_val),
-            "volume": vol_val,
-            "effect": _effect_to_str(eff_val),
-        })
+        result.append(
+            {
+                "frame": frame,
+                "note": _midi_to_name(note_num),
+                "tone": _tone_to_str(tone_val),
+                "volume": vol_val,
+                "effect": _effect_to_str(eff_val),
+            }
+        )
 
     return result
 
@@ -107,33 +123,53 @@ def _build_notes(sound) -> list[dict]:
 def _validate_target(target: Any) -> tuple[str | None, int | None, dict | None]:
     """Validate target dict. Returns (kind, slot_index, error_or_None)."""
     if not isinstance(target, dict):
-        return None, None, make_validation_error("`target` must be a dict with exactly one key: 'sound' or 'music'")
+        return (
+            None,
+            None,
+            make_validation_error(
+                "`target` must be a dict with exactly one key: 'sound' or 'music'"
+            ),
+        )
 
     valid_keys = {"sound", "music"}
     present = {k for k in target if k in valid_keys}
     extra = {k for k in target if k not in valid_keys}
 
     if extra:
-        return None, None, make_validation_error(
-            f"`target` has unexpected keys: {sorted(extra)}; only 'sound' and 'music' are allowed"
+        return (
+            None,
+            None,
+            make_validation_error(
+                f"`target` has unexpected keys: {sorted(extra)}; only 'sound' and 'music' are allowed"
+            ),
         )
 
     if len(present) != 1:
-        return None, None, make_validation_error(
-            f"`target` must have exactly one of 'sound' or 'music', got: {sorted(present)}"
+        return (
+            None,
+            None,
+            make_validation_error(
+                f"`target` must have exactly one of 'sound' or 'music', got: {sorted(present)}"
+            ),
         )
 
     kind = next(iter(present))
     slot = target[kind]
 
     if not isinstance(slot, int) or isinstance(slot, bool):
-        return None, None, make_validation_error(
-            f"`target.{kind}` must be a non-negative int, got: {slot!r}"
+        return (
+            None,
+            None,
+            make_validation_error(
+                f"`target.{kind}` must be a non-negative int, got: {slot!r}"
+            ),
         )
 
     if slot < 0:
-        return None, None, make_validation_error(
-            f"`target.{kind}` must be non-negative, got: {slot}"
+        return (
+            None,
+            None,
+            make_validation_error(f"`target.{kind}` must be non-negative, got: {slot}"),
         )
 
     return kind, slot, None
@@ -166,15 +202,19 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
             # --- Validate slot index range ---
             if kind == "sound":
                 if slot >= len(pyxel.sounds):
-                    return _empty(make_validation_error(
-                        f"sound slot {slot} out of range [0, {len(pyxel.sounds)})"
-                    ))
+                    return _empty(
+                        make_validation_error(
+                            f"sound slot {slot} out of range [0, {len(pyxel.sounds)})"
+                        )
+                    )
                 audio_obj = pyxel.sounds[slot]
             else:  # music
                 if slot >= len(pyxel.musics):
-                    return _empty(make_validation_error(
-                        f"music slot {slot} out of range [0, {len(pyxel.musics)})"
-                    ))
+                    return _empty(
+                        make_validation_error(
+                            f"music slot {slot} out of range [0, {len(pyxel.musics)})"
+                        )
+                    )
                 audio_obj = pyxel.musics[slot]
 
             # --- Detect empty slot ---
@@ -188,7 +228,11 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                     warnings.append(f"sound slot {slot} is empty / not populated")
             else:
                 # Music: check if all constituent channel lists are empty
-                seqs = audio_obj.seqs if hasattr(audio_obj, "seqs") else getattr(audio_obj, "snds_list", [])
+                seqs = (
+                    audio_obj.seqs
+                    if hasattr(audio_obj, "seqs")
+                    else getattr(audio_obj, "snds_list", [])
+                )
                 has_content = any(len(list(ch)) > 0 for ch in seqs)
                 if not has_content:
                     is_empty_slot = True
@@ -216,7 +260,9 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
             audio_obj.save(out_path, duration_hint)
 
             # --- Read WAV metadata ---
-            sample_rate, channels, duration_seconds, peak_amplitude = _read_wav_metadata(out_path)
+            sample_rate, channels, duration_seconds, peak_amplitude = (
+                _read_wav_metadata(out_path)
+            )
 
             # --- Build notes list (sound only) ---
             if kind == "sound" and not is_empty_slot:

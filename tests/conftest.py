@@ -1,11 +1,22 @@
 """pytest configuration shared across the test tree."""
-import pytest
+
 from pathlib import Path
+from typing import Any
+
+import pytest
+from mcp.types import CallToolResult
 from PIL import Image
 
 FIXTURES = Path(__file__).parent / "fixtures"
 SCRIPTS = FIXTURES / "scripts"
 IMAGES = FIXTURES / "images"
+
+
+def structured(reply: CallToolResult) -> dict[str, Any]:
+    """Unwrap the structured payload from a tool reply."""
+    assert isinstance(reply, CallToolResult)
+    assert reply.structured_content is not None
+    return reply.structured_content
 
 
 @pytest.fixture(scope="session", autouse=True)
