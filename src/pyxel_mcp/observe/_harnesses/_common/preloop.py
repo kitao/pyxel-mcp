@@ -1,21 +1,28 @@
-"""Pre-loop checkpoint helper used by all script-loading read_* tools.
+"""Pre-loop checkpoint shared by the script-loading read_* tools.
 
-Centralises the script validation + headless_pyxel + load_script_module +
-require_run_called dance shared by read_palette, read_image,
-read_tilemap, and read_audio. Each of those tools
-previously copy-pasted the same ~12 lines of try/except plumbing; consolidating
-here keeps the error mapping and phase tagging consistent across tools.
+Validates `script`, enters headless Pyxel, loads the module, and requires the
+`pyxel.run` call, so read_palette, read_image, read_tilemap, and read_audio
+report the same error phases.
 """
+
 from __future__ import annotations
+
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any, Callable, Iterator
+from typing import Any
 
 from pyxel_mcp.observe._harnesses._common.error_capture import (
-    make_error, make_validation_error, ErrorPhase,
+    ErrorPhase,
+    make_error,
+    make_validation_error,
 )
-from pyxel_mcp.observe._harnesses._common.pyxel_patcher import headless_pyxel, RunNotCalledError
+from pyxel_mcp.observe._harnesses._common.pyxel_patcher import (
+    RunNotCalledError,
+    headless_pyxel,
+)
 from pyxel_mcp.observe._harnesses._common.script_loader import (
-    resolve_script_path, load_script_module,
+    load_script_module,
+    resolve_script_path,
 )
 
 
@@ -49,28 +56,28 @@ def run_to_preloop(
     """
     script = payload.get("script")
     if not isinstance(script, str):
-        raise PreloopFailed(empty_factory(
-            make_validation_error("missing or non-str `script`")
-        ))
+        raise PreloopFailed(
+            empty_factory(make_validation_error("missing or non-str `script`"))
+        )
 
     try:
         path = resolve_script_path(script)
     except FileNotFoundError as e:
-        raise PreloopFailed(empty_factory(
-            make_validation_error(str(e), path=script)
-        ))
+        raise PreloopFailed(empty_factory(make_validation_error(str(e), path=script)))
 
     with headless_pyxel() as state:
         try:
             load_script_module(path)
             state.require_run_called()
         except RunNotCalledError as e:
-            raise PreloopFailed(empty_factory(
-                make_error(ErrorPhase.SCRIPT_IMPORT, str(e))
-            ))
+            raise PreloopFailed(
+                empty_factory(make_error(ErrorPhase.SCRIPT_IMPORT, str(e)))
+            )
         except Exception as e:
-            raise PreloopFailed(empty_factory(
-                make_error(ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=True)
-            ))
+            raise PreloopFailed(
+                empty_factory(
+                    make_error(ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=True)
+                )
+            )
 
         yield state

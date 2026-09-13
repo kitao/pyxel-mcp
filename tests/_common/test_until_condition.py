@@ -1,8 +1,10 @@
 """Unit tests for UntilCondition (no Pyxel dependency)."""
+
 import pytest
 
 from pyxel_mcp.observe._harnesses._common.until_condition import (
-    UntilCondition, UntilError,
+    UntilCondition,
+    UntilError,
 )
 
 

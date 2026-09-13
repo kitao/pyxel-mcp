@@ -3,13 +3,17 @@
 Usage: python -m pyxel_mcp.observe._harnesses.main <subcommand>
        reads JSON parameters from stdin, writes JSON result to stdout.
 """
+
 from __future__ import annotations
+
 import json
 import sys
-from typing import Callable
+from collections.abc import Callable
 
 from pyxel_mcp.observe._harnesses._common.error_capture import (
-    ErrorPhase, make_error, make_validation_error,
+    ErrorPhase,
+    make_error,
+    make_validation_error,
 )
 
 
@@ -19,10 +23,16 @@ def _build_tools() -> dict[str, Callable[[dict], dict]]:
     error paths that never need a tool handler).
     """
     from pyxel_mcp.observe._harnesses.tools import (
-        run, validate, pyxel_info,
-        read_palette, read_image, read_tilemap,
-        read_audio, diff_frames,
+        diff_frames,
+        pyxel_info,
+        read_audio,
+        read_image,
+        read_palette,
+        read_tilemap,
+        run,
+        validate,
     )
+
     return {
         "run": run.run,
         "validate": validate.run,
@@ -57,7 +67,9 @@ def main(argv: list[str] | None = None) -> int:
     tools = _build_tools()
 
     if subcommand not in tools:
-        result = {"errors": [make_validation_error(f"unknown subcommand: {subcommand}")]}
+        result = {
+            "errors": [make_validation_error(f"unknown subcommand: {subcommand}")]
+        }
         print(json.dumps(result))
         return 0
 

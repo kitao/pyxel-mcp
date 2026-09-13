@@ -1,10 +1,12 @@
-"""Tests for snapshot_kinds.screen_grid (spec §6.4.2)."""
+"""Tests for snapshot_kinds.screen_grid."""
+
 from pyxel_mcp.observe._harnesses._common.pyxel_patcher import headless_pyxel
 from pyxel_mcp.observe._harnesses._common.snapshot_kinds.screen_grid import capture
 
 
 def test_full_screen_capture():
     import pyxel
+
     with headless_pyxel():
         pyxel.init(8, 8)
         pyxel.cls(7)
@@ -21,6 +23,7 @@ def test_full_screen_capture():
 
 def test_bbox_crop():
     import pyxel
+
     with headless_pyxel():
         pyxel.init(16, 16)
         pyxel.cls(0)
@@ -35,6 +38,7 @@ def test_bbox_crop():
 def test_bbox_clamping_with_warning():
     """bbox input extending past screen edges is clamped with a warning."""
     import pyxel
+
     with headless_pyxel():
         pyxel.init(8, 8)
         result = capture({"frame": 0, "kind": "screen_grid", "bbox": [4, 4, 99, 99]})

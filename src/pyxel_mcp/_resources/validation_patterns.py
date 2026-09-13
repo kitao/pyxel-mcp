@@ -9,8 +9,8 @@ Source of truth for these rows is
 `src/pyxel_mcp/observe/_harnesses/tools/validate.py`. If a detector's
 category string changes, update the row here as well.
 """
-from __future__ import annotations
 
+from __future__ import annotations
 
 # (category, severity, rationale, fix) per detector.
 # Order mirrors `_DETECTORS` in validate.py for easy cross-reference.
@@ -60,8 +60,8 @@ _ROWS: list[tuple[str, str, str, str]] = [
     (
         "anti_pattern.cls_missing",
         "warning",
-        "Calling any pixel-emitting API (blt, bltm, pset, line, rect, rectb, circ, circb, tri, trib, text) before pyxel.cls() in draw() leaves last frame's pixels behind, producing ghost trails.",
-        "Make pyxel.cls(BG) the first statement of draw() (only assignments, conditional return, pal/dither calls may precede it).",
+        "The draw callback passed to pyxel.run, or a draw method it delegates to before clearing, calls a pixel-emitting API (blt, bltm, pset, line, rect, rectb, circ, circb, tri, trib, text) before pyxel.cls(), so last frame's pixels remain as ghost trails. Draw methods reached only after the clear are not checked.",
+        "Make pyxel.cls(BG) the first drawing statement of the callback, or of the draw method it hands the frame to (assignments, conditional returns, and pal/dither calls may precede it).",
     ),
     (
         "anti_pattern.degree_radian_mix",

@@ -1,5 +1,24 @@
 # Change Log
 
+## 1.3.0
+
+- Resolve relative asset paths from the script directory in script tools
+- Migrate to MCP Python SDK 2.x (`MCPServer`) and require `mcp>=2.0.0,<3.0.0`
+- Add `inline` to screen_image, read_image, and read_tilemap for image content
+- Let a single inline frame omit its path; the PNG lands in a temp directory
+- Cap inline images at 12 per call and report skipped ones in a text note
+- Normalise every reply through its result model and send compact JSON text
+- Report `until_met` as `null` whenever `until` was never evaluated
+- Check `cls_missing` on `pyxel.run` callbacks and the draws they delegate to
+- Mark every tool `openWorldHint: false`; all work is local
+- Advertise server `title`, `version`, and `websiteUrl`
+- Count startup tools through the public listing instead of a private field
+- Rewrite `pyxel-mcp install` with verified commands for five MCP clients
+- Document multi-client installation and inline images in the README
+- Add ruff lint and format checks to CI
+- Add a tag-driven release workflow for PyPI and the MCP Registry
+- Add Dependabot plus issue and pull request templates
+
 ## 1.2.0
 
 - BREAKING: reduce the public surface from nine tools to eight by removing

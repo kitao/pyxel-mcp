@@ -1,4 +1,5 @@
-"""Tests for read_palette tool (spec §7.1)."""
+"""Tests for read_palette tool."""
+
 from pyxel_mcp.observe._harnesses.tools.read_palette import run as read_palette_run
 from tests.conftest import SCRIPTS
 

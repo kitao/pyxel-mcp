@@ -1,16 +1,15 @@
 """screen_image snapshot — PNG capture."""
+
 from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
 
 
 def capture(snapshot: dict[str, Any]) -> dict[str, Any]:
-    """Save pyxel.screen as PNG with optional integer scale.
+    """Save pyxel.screen as a PNG with an integer scale.
 
-    pyxel.screen.save(filename, scale) appends ".png" automatically when the
-    extension is absent; Pyxel 2.9.4 also normalises "foo.png" → "foo.png"
-    (no double extension).  We strip a caller-supplied ".png" suffix as a
-    safety measure so behaviour is identical regardless of Pyxel patch level.
+    `pyxel.screen.save` appends ".png" itself, so the suffix is stripped first.
     """
     import pyxel
 
@@ -27,4 +26,6 @@ def capture(snapshot: dict[str, Any]) -> dict[str, Any]:
         "kind": "screen_image",
         "path": str(out_path.resolve()),
         "size": [pyxel.width * scale, pyxel.height * scale],
+        # The server embeds flagged PNGs as image content after the run.
+        "inline": bool(snapshot.get("inline", False)),
     }

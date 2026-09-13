@@ -1,5 +1,7 @@
 """read_tilemap tool."""
+
 from __future__ import annotations
+
 from typing import Any
 
 from pyxel_mcp.observe._harnesses._common.analyzers.tilemap import analyze_tilemap
@@ -11,10 +13,16 @@ from pyxel_mcp.observe._harnesses._common.preloop import PreloopFailed, run_to_p
 def _empty(error: dict) -> dict:
     return {
         "ok": False,
-        "tilemap_index": -1, "size": [0, 0], "imgsrc": 0,
-        "tiles": None, "usage": {}, "region": None,
-        "zero_tile_used": False, "zero_tile_nonempty": False,
-        "rendered": None, "errors": [error],
+        "tilemap_index": -1,
+        "size": [0, 0],
+        "imgsrc": 0,
+        "tiles": None,
+        "usage": {},
+        "region": None,
+        "zero_tile_used": False,
+        "zero_tile_nonempty": False,
+        "rendered": None,
+        "errors": [error],
     }
 
 
@@ -36,9 +44,13 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         with run_to_preloop(payload, empty_factory=_empty):
             import pyxel
+
             if tilemap < 0 or tilemap >= len(pyxel.tilemaps):
-                return _empty(make_validation_error(
-                    f"tilemap index {tilemap} out of range [0, {len(pyxel.tilemaps)})"))
+                return _empty(
+                    make_validation_error(
+                        f"tilemap index {tilemap} out of range [0, {len(pyxel.tilemaps)})"
+                    )
+                )
 
             result = analyze_tilemap(tilemap=tilemap, render_path=render_path)
     except PreloopFailed as f:

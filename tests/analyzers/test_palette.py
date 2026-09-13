@@ -1,7 +1,7 @@
 """Tests for direct palette observations."""
 
-import pyxel
 import pytest
+import pyxel
 
 from pyxel_mcp.observe._harnesses._common.analyzers.palette import analyze_palette
 
@@ -25,7 +25,9 @@ def test_default_palette_reports_color_values():
 
     assert result["palette_size"] == 16
     assert result["extended_palette"] is False
-    assert all(value.startswith("#") and len(value) == 7 for value in result["colors"].values())
+    assert all(
+        value.startswith("#") and len(value) == 7 for value in result["colors"].values()
+    )
 
 
 def test_extended_palette_is_reported_without_interpretation():

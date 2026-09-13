@@ -1,9 +1,12 @@
 import shutil
-import pytest
 from pathlib import Path
+
+import pytest
 from PIL import Image
+
 from pyxel_mcp.observe._harnesses._common.snapshot_kinds.video import (
-    VideoAccumulator, ExtensionError
+    ExtensionError,
+    VideoAccumulator,
 )
 
 
@@ -13,10 +16,16 @@ def _dummy_frames(n: int, size: tuple[int, int] = (16, 16)) -> list[Image.Image]
 
 def test_gif_output(tmp_path):
     out = tmp_path / "anim.gif"
-    accum = VideoAccumulator({
-        "kind": "video", "start_frame": 0, "end_frame": 5,
-        "fps": 30, "output": str(out), "scale": 1,
-    })
+    accum = VideoAccumulator(
+        {
+            "kind": "video",
+            "start_frame": 0,
+            "end_frame": 5,
+            "fps": 30,
+            "output": str(out),
+            "scale": 1,
+        }
+    )
     for i, img in enumerate(_dummy_frames(5)):
         accum.add_frame(i, img)
     result = accum.encode()
@@ -28,18 +37,30 @@ def test_gif_output(tmp_path):
 
 def test_invalid_extension_raises(tmp_path):
     with pytest.raises(ExtensionError):
-        VideoAccumulator({
-            "kind": "video", "start_frame": 0, "end_frame": 5,
-            "fps": 30, "output": str(tmp_path / "anim.webm"), "scale": 1,
-        })
+        VideoAccumulator(
+            {
+                "kind": "video",
+                "start_frame": 0,
+                "end_frame": 5,
+                "fps": 30,
+                "output": str(tmp_path / "anim.webm"),
+                "scale": 1,
+            }
+        )
 
 
 def test_encode_failure_cleans_temporary_directory(tmp_path, monkeypatch):
     out = tmp_path / "anim.gif"
-    accum = VideoAccumulator({
-        "kind": "video", "start_frame": 0, "end_frame": 1,
-        "fps": 30, "output": str(out), "scale": 1,
-    })
+    accum = VideoAccumulator(
+        {
+            "kind": "video",
+            "start_frame": 0,
+            "end_frame": 1,
+            "fps": 30,
+            "output": str(out),
+            "scale": 1,
+        }
+    )
     accum.add_frame(0, _dummy_frames(1)[0])
     tempdir = Path(accum._tempdir)
 
@@ -57,10 +78,16 @@ def test_encode_failure_cleans_temporary_directory(tmp_path, monkeypatch):
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not on PATH")
 def test_mp4_output(tmp_path):
     out = tmp_path / "anim.mp4"
-    accum = VideoAccumulator({
-        "kind": "video", "start_frame": 0, "end_frame": 5,
-        "fps": 30, "output": str(out), "scale": 1,
-    })
+    accum = VideoAccumulator(
+        {
+            "kind": "video",
+            "start_frame": 0,
+            "end_frame": 5,
+            "fps": 30,
+            "output": str(out),
+            "scale": 1,
+        }
+    )
     for i, img in enumerate(_dummy_frames(5)):
         accum.add_frame(i, img)
     result = accum.encode()
@@ -71,12 +98,19 @@ def test_mp4_output(tmp_path):
 def test_mp4_falls_back_to_gif_when_ffmpeg_missing(tmp_path, monkeypatch):
     """If ffmpeg isn't available, output is rewritten to .gif and warned."""
     import pyxel_mcp.observe._harnesses._common.snapshot_kinds.video as vid_mod
+
     monkeypatch.setattr(vid_mod, "_ffmpeg_available", lambda: False)
     out = tmp_path / "anim.mp4"
-    accum = VideoAccumulator({
-        "kind": "video", "start_frame": 0, "end_frame": 5,
-        "fps": 30, "output": str(out), "scale": 1,
-    })
+    accum = VideoAccumulator(
+        {
+            "kind": "video",
+            "start_frame": 0,
+            "end_frame": 5,
+            "fps": 30,
+            "output": str(out),
+            "scale": 1,
+        }
+    )
     for i, img in enumerate(_dummy_frames(5)):
         accum.add_frame(i, img)
     result = accum.encode()
@@ -89,10 +123,16 @@ def test_truncation_when_fewer_frames_added(tmp_path):
     """If only 3 of 5 expected frames were added (run crashed mid-range),
     frames_encoded should reflect 3."""
     out = tmp_path / "anim.gif"
-    accum = VideoAccumulator({
-        "kind": "video", "start_frame": 0, "end_frame": 5,
-        "fps": 30, "output": str(out), "scale": 1,
-    })
+    accum = VideoAccumulator(
+        {
+            "kind": "video",
+            "start_frame": 0,
+            "end_frame": 5,
+            "fps": 30,
+            "output": str(out),
+            "scale": 1,
+        }
+    )
     for i, img in enumerate(_dummy_frames(3)):
         accum.add_frame(i, img)
     result = accum.encode()

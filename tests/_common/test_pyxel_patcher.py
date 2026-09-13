@@ -1,12 +1,15 @@
 import os
+
 import pytest
+
 from pyxel_mcp.observe._harnesses._common.pyxel_patcher import (
-    PreLoopState, headless_pyxel, RunNotCalledError
+    RunNotCalledError,
+    headless_pyxel,
 )
 
 
 def test_sets_sdl_videodriver():
-    with headless_pyxel() as state:
+    with headless_pyxel():
         assert os.environ.get("SDL_VIDEODRIVER") == "dummy"
 
 
@@ -26,6 +29,7 @@ def test_removes_sdl_audiodriver_when_absent(monkeypatch):
 
 def test_captures_callbacks():
     import pyxel
+
     update_fn = lambda: None
     draw_fn = lambda: None
     with headless_pyxel() as state:
@@ -39,8 +43,11 @@ def test_app_instance_resolved_from_bound_method():
     import pyxel
 
     class App:
-        def update(self): pass
-        def draw(self): pass
+        def update(self):
+            pass
+
+        def draw(self):
+            pass
 
     app = App()
     with headless_pyxel() as state:
@@ -51,6 +58,7 @@ def test_app_instance_resolved_from_bound_method():
 
 def test_app_instance_none_for_bare_function():
     import pyxel
+
     update_fn = lambda: None
     draw_fn = lambda: None
     with headless_pyxel() as state:
@@ -72,6 +80,7 @@ def test_fps_override_makes_flip_near_instant():
     Without the override, a 60-flip loop would take ~2s at fps=30.
     """
     import time
+
     import pyxel
 
     with headless_pyxel():

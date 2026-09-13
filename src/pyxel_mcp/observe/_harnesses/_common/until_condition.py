@@ -1,13 +1,21 @@
 """Until-condition evaluation for run(until=...)."""
+
 from __future__ import annotations
+
 from typing import Any
 
 # Minimal builtins whitelist. The observed script is trusted local code;
 # this is not a sandbox, just a guard against accidental side effects
 # (open, __import__) inside a condition expression.
 _SAFE_BUILTINS: dict[str, Any] = {
-    "abs": abs, "len": len, "min": min, "max": max,
-    "int": int, "float": float, "round": round, "bool": bool,
+    "abs": abs,
+    "len": len,
+    "min": min,
+    "max": max,
+    "int": int,
+    "float": float,
+    "round": round,
+    "bool": bool,
 }
 
 
@@ -45,9 +53,13 @@ class UntilCondition:
 
     def evaluate(self, target: object) -> bool:
         try:
-            return bool(eval(
-                self._code, {"__builtins__": _SAFE_BUILTINS}, _AttrNamespace(target),
-            ))
+            return bool(
+                eval(
+                    self._code,
+                    {"__builtins__": _SAFE_BUILTINS},
+                    _AttrNamespace(target),
+                )
+            )
         except (NameError, AttributeError) as e:
             if not self._warned:
                 self._warned = True

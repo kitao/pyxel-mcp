@@ -1,5 +1,7 @@
 """Tilemap analyzer."""
+
 from __future__ import annotations
+
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +20,7 @@ def _resolve_imgsrc(tm) -> int:
     index in that case; default to 0 for any other surprise.
     """
     import pyxel
+
     val = getattr(tm, "imgsrc", 0)
     if isinstance(val, int):
         return val
@@ -31,16 +34,23 @@ def _resolve_imgsrc(tm) -> int:
 def _zero_zero_is_visible(imgsrc: int) -> bool:
     """Check if the (0,0) 8x8 tile in the source bank has any non-zero pixels."""
     import pyxel
+
     bank = pyxel.images[imgsrc]
     bw, bh = bank.width, bank.height
     arr = np.frombuffer(
-        bank.data_ptr(), dtype=np.uint8, count=bw * bh,
+        bank.data_ptr(),
+        dtype=np.uint8,
+        count=bw * bh,
     ).reshape((bh, bw))
     return bool(np.any(arr[:8, :8] != 0))
 
 
 def _render_tilemap_png(
-    tilemap: int, imgsrc: int, tm_w: int, tm_h: int, render_path: Path,
+    tilemap: int,
+    imgsrc: int,
+    tm_w: int,
+    tm_h: int,
+    render_path: Path,
 ) -> None:
     """Render visible tilemap region to a PNG using PIL.
 
@@ -52,13 +62,15 @@ def _render_tilemap_png(
          and place it into the indices buffer; convert to RGB at the end
          via a single LUT lookup.
     """
-    from PIL import Image as PILImage
     import pyxel
+    from PIL import Image as PILImage
 
     bank = pyxel.images[imgsrc]
     bw, bh = bank.width, bank.height
     bank_arr = np.frombuffer(
-        bank.data_ptr(), dtype=np.uint8, count=bw * bh,
+        bank.data_ptr(),
+        dtype=np.uint8,
+        count=bw * bh,
     ).reshape((bh, bw))
 
     # Palette LUT: index → (r, g, b). Pad to 256 to allow direct indexing.
@@ -74,7 +86,9 @@ def _render_tilemap_png(
 
     tm = pyxel.tilemaps[tilemap]
     tm_arr = np.frombuffer(
-        tm.data_ptr(), dtype=np.uint16, count=tm.width * tm.height * 2,
+        tm.data_ptr(),
+        dtype=np.uint16,
+        count=tm.width * tm.height * 2,
     ).reshape((tm.height, tm.width, 2))
 
     for ty in range(tm_h):
@@ -85,7 +99,9 @@ def _render_tilemap_png(
             sy, sx = v * 8, u * 8
             if sy + 8 > bh or sx + 8 > bw or sy < 0 or sx < 0:
                 continue
-            indices[ty * 8:ty * 8 + 8, tx * 8:tx * 8 + 8] = bank_arr[sy:sy + 8, sx:sx + 8]
+            indices[ty * 8 : ty * 8 + 8, tx * 8 : tx * 8 + 8] = bank_arr[
+                sy : sy + 8, sx : sx + 8
+            ]
 
     rgb = lut[indices]  # (img_h, img_w, 3)
 
@@ -109,9 +125,15 @@ def analyze_tilemap(
     # Snapshot the tilemap as a (h, w, 2) uint16 array — Pyxel exposes the
     # tilemap memory as ushort pairs (u, v), little-endian on supported
     # platforms. `.copy()` once so subsequent script writes don't alias.
-    tm_arr = np.frombuffer(
-        tm.data_ptr(), dtype=np.uint16, count=tm_w * tm_h * 2,
-    ).reshape((tm_h, tm_w, 2)).copy()
+    tm_arr = (
+        np.frombuffer(
+            tm.data_ptr(),
+            dtype=np.uint16,
+            count=tm_w * tm_h * 2,
+        )
+        .reshape((tm_h, tm_w, 2))
+        .copy()
+    )
 
     # Detect (0,0) tile presence and non-(0,0) bounding box.
     is_zero = (tm_arr[..., 0] == 0) & (tm_arr[..., 1] == 0)

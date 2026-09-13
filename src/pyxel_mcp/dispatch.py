@@ -9,6 +9,7 @@ import sys
 import tempfile
 from typing import Any, Literal
 
+from pyxel_mcp.contracts import RunResult
 from pyxel_mcp.observe._harnesses._common.error_capture import ErrorPhase, make_error
 
 
@@ -69,14 +70,7 @@ def _join_log(current: str, diagnostic: str) -> str:
 
 
 _RUN_RESULT_FIELDS = {
-    "ok",
-    "snapshots",
-    "exit_status",
-    "frame_count",
-    "elapsed_seconds",
-    "log",
-    "seeded",
-    "errors",
+    name for name, field in RunResult.model_fields.items() if field.is_required()
 }
 
 
@@ -95,7 +89,9 @@ def _normalize_run_result(result: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> dict[str, Any]:
+def dispatch(
+    subcommand: str, payload: dict[str, Any], timeout: int = 60
+) -> dict[str, Any]:
     cmd = [sys.executable, "-m", "pyxel_mcp.observe._harnesses.main", subcommand]
     try:
         with tempfile.TemporaryDirectory(prefix="pyxel-mcp-dispatch-") as temp_root:
@@ -108,6 +104,7 @@ def dispatch(subcommand: str, payload: dict[str, Any], timeout: int = 60) -> dic
                 text=True,
                 timeout=timeout,
                 env=env,
+                check=False,
             )
     except subprocess.TimeoutExpired:
         message = f"subprocess timed out after {timeout}s"

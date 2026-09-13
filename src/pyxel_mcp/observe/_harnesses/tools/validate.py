@@ -1,18 +1,30 @@
 """validate(script) — static analysis on script source."""
+
 from __future__ import annotations
+
 import ast
-from pathlib import Path
 from typing import Any
 
 from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_error
 from pyxel_mcp.observe._harnesses._common.script_loader import resolve_script_path
 
-
 _SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}
 
 # Pixel-emitting pyxel APIs — any call to these renders pixels (cls_missing detector)
 _PIXEL_EMIT_APIS = frozenset(
-    ["blt", "bltm", "pset", "line", "rect", "rectb", "circ", "circb", "tri", "trib", "text"]
+    [
+        "blt",
+        "bltm",
+        "pset",
+        "line",
+        "rect",
+        "rectb",
+        "circ",
+        "circb",
+        "tri",
+        "trib",
+        "text",
+    ]
 )
 
 # assets_in_update detector
@@ -27,10 +39,30 @@ _MATH_TRIG = frozenset(["sin", "cos", "tan", "asin", "acos", "atan", "atan2"])
 _PYXEL_TRIG = frozenset(["sin", "cos"])
 
 
+def _pyxel_api(node: ast.AST) -> str | None:
+    """Return `<attr>` when `node` is a call `pyxel.<attr>(...)`, else None."""
+    if not isinstance(node, ast.Call):
+        return None
+    func = node.func
+    if (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "pyxel"
+    ):
+        return func.attr
+    return None
+
+
 def _make_issue(
     severity: str, line: int, col: int | None, category: str, message: str
 ) -> dict[str, Any]:
-    return {"severity": severity, "line": line, "col": col, "category": category, "message": message}
+    return {
+        "severity": severity,
+        "line": line,
+        "col": col,
+        "category": category,
+        "message": message,
+    }
 
 
 def _walk_excluding_scopes(node: ast.AST):
@@ -41,7 +73,9 @@ def _walk_excluding_scopes(node: ast.AST):
     """
     for child in ast.iter_child_nodes(node):
         yield child
-        if not isinstance(child, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+        if not isinstance(
+            child, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+        ):
             yield from _walk_excluding_scopes(child)
 
 
@@ -65,15 +99,22 @@ def _detect_missing_colkey(tree: ast.AST) -> list[dict[str, Any]]:
         if not isinstance(node, ast.Call):
             continue
         func = node.func
-        if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
-            if func.value.id == "pyxel" and func.attr == "blt":
-                # colkey is the 8th positional arg or a keyword arg
-                if len(node.args) < 8 and not any(kw.arg == "colkey" for kw in node.keywords):
-                    issues.append(_make_issue(
-                        "warning", node.lineno, node.col_offset,
-                        "anti_pattern.missing_colkey",
-                        "pyxel.blt called without `colkey=` — sprite background will not be transparent",
-                    ))
+        if not (isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name)):
+            continue
+        if func.value.id != "pyxel" or func.attr != "blt":
+            continue
+        # colkey is the 8th positional arg or a keyword arg
+        if len(node.args) >= 8 or any(kw.arg == "colkey" for kw in node.keywords):
+            continue
+        issues.append(
+            _make_issue(
+                "warning",
+                node.lineno,
+                node.col_offset,
+                "anti_pattern.missing_colkey",
+                "pyxel.blt called without `colkey=` — sprite background will not be transparent",
+            )
+        )
     return issues
 
 
@@ -100,11 +141,15 @@ def _detect_update_in_draw(tree: ast.AST) -> list[dict[str, Any]]:
                     and isinstance(target.value, ast.Name)
                     and target.value.id == "self"
                 ):
-                    issues.append(_make_issue(
-                        "warning", child.lineno, child.col_offset,
-                        "anti_pattern.update_in_draw",
-                        f"draw() mutates self.{target.attr} — move to update()",
-                    ))
+                    issues.append(
+                        _make_issue(
+                            "warning",
+                            child.lineno,
+                            child.col_offset,
+                            "anti_pattern.update_in_draw",
+                            f"draw() mutates self.{target.attr} — move to update()",
+                        )
+                    )
     return issues
 
 
@@ -129,27 +174,32 @@ def _detect_tilemap_zero_zero(tree: ast.AST) -> list[dict[str, Any]]:
             continue
         subscript_value = receiver.value
         is_tilemaps = (
-            (isinstance(subscript_value, ast.Name) and subscript_value.id == "tilemaps")
-            or (
-                isinstance(subscript_value, ast.Attribute)
-                and subscript_value.attr == "tilemaps"
-                and isinstance(subscript_value.value, ast.Name)
-                and subscript_value.value.id == "pyxel"
-            )
+            isinstance(subscript_value, ast.Name) and subscript_value.id == "tilemaps"
+        ) or (
+            isinstance(subscript_value, ast.Attribute)
+            and subscript_value.attr == "tilemaps"
+            and isinstance(subscript_value.value, ast.Name)
+            and subscript_value.value.id == "pyxel"
         )
         if not is_tilemaps:
             continue
         for arg in node.args:
             if isinstance(arg, ast.List):
                 for elt in arg.elts:
-                    if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
-                        if "0000" in elt.value or "0102" in elt.value:
-                            issues.append(_make_issue(
-                                "warning", node.lineno, node.col_offset,
+                    is_text = isinstance(elt, ast.Constant) and isinstance(
+                        elt.value, str
+                    )
+                    if is_text and ("0000" in elt.value or "0102" in elt.value):
+                        issues.append(
+                            _make_issue(
+                                "warning",
+                                node.lineno,
+                                node.col_offset,
                                 "anti_pattern.tilemap_zero_zero",
                                 "tilemap data references source-bank (0,0) — placing visible content there floods the entire tilemap",
-                            ))
-                            break
+                            )
+                        )
+                        break
     return issues
 
 
@@ -176,20 +226,23 @@ def _detect_assets_in_update(tree: ast.AST) -> list[dict[str, Any]]:
                 continue
             sub_val = receiver.value
             is_asset = (
-                (isinstance(sub_val, ast.Name) and sub_val.id in _ASSET_CONTAINERS)
-                or (
-                    isinstance(sub_val, ast.Attribute)
-                    and sub_val.attr in _ASSET_CONTAINERS
-                    and isinstance(sub_val.value, ast.Name)
-                    and sub_val.value.id == "pyxel"
-                )
+                isinstance(sub_val, ast.Name) and sub_val.id in _ASSET_CONTAINERS
+            ) or (
+                isinstance(sub_val, ast.Attribute)
+                and sub_val.attr in _ASSET_CONTAINERS
+                and isinstance(sub_val.value, ast.Name)
+                and sub_val.value.id == "pyxel"
             )
             if is_asset:
-                issues.append(_make_issue(
-                    "warning", child.lineno, child.col_offset,
-                    "anti_pattern.assets_in_update",
-                    f"asset load/set inside {node.name}() runs every frame — move to __init__()",
-                ))
+                issues.append(
+                    _make_issue(
+                        "warning",
+                        child.lineno,
+                        child.col_offset,
+                        "anti_pattern.assets_in_update",
+                        f"asset load/set inside {node.name}() runs every frame — move to __init__()",
+                    )
+                )
     return issues
 
 
@@ -254,11 +307,15 @@ def _detect_iter_modify(tree: ast.AST) -> list[dict[str, Any]]:
                 continue
             receiver_key = _call_receiver_key(child)
             if receiver_key == list_key:
-                issues.append(_make_issue(
-                    "warning", child.lineno, child.col_offset,
-                    "anti_pattern.iter_modify",
-                    f"'{list_key}.{func.attr}()' called while iterating '{list_key}' — use a copy or collect indices",
-                ))
+                issues.append(
+                    _make_issue(
+                        "warning",
+                        child.lineno,
+                        child.col_offset,
+                        "anti_pattern.iter_modify",
+                        f"'{list_key}.{func.attr}()' called while iterating '{list_key}' — use a copy or collect indices",
+                    )
+                )
     return issues
 
 
@@ -279,30 +336,20 @@ def _detect_btn_one_shot(tree: ast.AST) -> list[dict[str, Any]]:
             continue
         # Check if the test is pyxel.btn(...)
         test = node.test
-        if not (
-            isinstance(test, ast.Call)
-            and isinstance(test.func, ast.Attribute)
-            and isinstance(test.func.value, ast.Name)
-            and test.func.value.id == "pyxel"
-            and test.func.attr == "btn"
-        ):
+        if _pyxel_api(test) != "btn":
             continue
         # Check if any statement in the body calls pyxel.play(...)
         for stmt in ast.walk(ast.Module(body=node.body, type_ignores=[])):
-            if not isinstance(stmt, ast.Call):
-                continue
-            func = stmt.func
-            if (
-                isinstance(func, ast.Attribute)
-                and isinstance(func.value, ast.Name)
-                and func.value.id == "pyxel"
-                and func.attr == "play"
-            ):
-                issues.append(_make_issue(
-                    "info", test.lineno, test.col_offset,
-                    "anti_pattern.btn_one_shot",
-                    "pyxel.btn() fires every frame the key is held — use btnp() for one-shot actions like sounds or state changes",
-                ))
+            if _pyxel_api(stmt) == "play":
+                issues.append(
+                    _make_issue(
+                        "info",
+                        test.lineno,
+                        test.col_offset,
+                        "anti_pattern.btn_one_shot",
+                        "pyxel.btn() fires every frame the key is held — use btnp() for one-shot actions like sounds or state changes",
+                    )
+                )
                 break  # one issue per if-block
     return issues
 
@@ -331,78 +378,141 @@ def _detect_palette_animation(tree: ast.AST) -> list[dict[str, Any]]:
                     continue
                 sub_val = target.value
                 is_colors = (
-                    (isinstance(sub_val, ast.Name) and sub_val.id == "colors")
-                    or (
-                        isinstance(sub_val, ast.Attribute)
-                        and sub_val.attr == "colors"
-                        and isinstance(sub_val.value, ast.Name)
-                        and sub_val.value.id == "pyxel"
-                    )
+                    isinstance(sub_val, ast.Name) and sub_val.id == "colors"
+                ) or (
+                    isinstance(sub_val, ast.Attribute)
+                    and sub_val.attr == "colors"
+                    and isinstance(sub_val.value, ast.Name)
+                    and sub_val.value.id == "pyxel"
                 )
                 if is_colors:
-                    issues.append(_make_issue(
-                        "warning", child.lineno, child.col_offset,
-                        "anti_pattern.palette_animation",
-                        "pyxel.colors[N] = X inside a loop — palette mutation per frame is expensive; prefer pal() for per-draw remapping",
-                    ))
+                    issues.append(
+                        _make_issue(
+                            "warning",
+                            child.lineno,
+                            child.col_offset,
+                            "anti_pattern.palette_animation",
+                            "pyxel.colors[N] = X inside a loop — palette mutation per frame is expensive; prefer pal() for per-draw remapping",
+                        )
+                    )
     return issues
 
 
 def _detect_cls_missing(tree: ast.AST) -> list[dict[str, Any]]:
-    """draw() contains a pixel-emitting API call before any pyxel.cls() call.
+    """The frame's draw path emits pixels before any pyxel.cls() call.
 
-    Traverses each `draw` method's body in order. Flags the method if a
-    pixel-emitting call (blt, bltm, pset, line, rect, rectb, circ, circb,
-    tri, trib, text) appears before the first cls() call.
-
-    Permitted before cls(): assignments, conditional return, pal/dither calls,
-    and any other non-pixel-emitting statements.
-
-    Note: helper-method inlining (one-level deep) is intentionally not
-    implemented here.
-    Only direct pixel-emitting calls in the draw body are checked.
+    The callbacks handed to `pyxel.run` are scanned in statement order. When
+    one delegates to another `draw` method before clearing, every other
+    function named `draw` is scanned as well, because one of them now owns the
+    clear; `draw` methods reached only after the clear are left alone. A
+    script without a resolvable `pyxel.run` call checks every `draw`.
     """
+    draws = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "draw"
+    ]
+    callbacks = _draw_callbacks(tree) or draws
     issues: list[dict[str, Any]] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef) or node.name != "draw":
-            continue
-        _check_draw_body(node, issues)
+    delegated = False
+    for func in callbacks:
+        delegated |= _check_draw_body(func, issues)
+    if delegated:
+        for func in draws:
+            if func not in callbacks:
+                _check_draw_body(func, issues)
     return issues
 
 
-def _check_draw_body(func_node: ast.FunctionDef, issues: list[dict[str, Any]]) -> None:
-    """Scan draw() body statements in order; flag the first pixel-emitting call
-    that appears before any cls() call.
+def _draw_callbacks(tree: ast.AST) -> list[ast.FunctionDef]:
+    """Return the functions that `pyxel.run` calls receive as their draw argument.
+
+    `self.<name>` resolves to a method of the innermost enclosing class and a
+    bare name to a module-level function; other forms are skipped.
+    """
+    module_functions = {
+        node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)
+    }
+    callbacks: list[ast.FunctionDef] = []
+    for cls in (node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)):
+        methods = {
+            node.name: node for node in cls.body if isinstance(node, ast.FunctionDef)
+        }
+        for call in _calls_within_class(cls):
+            draw = _draw_argument(call)
+            if (
+                isinstance(draw, ast.Attribute)
+                and isinstance(draw.value, ast.Name)
+                and draw.value.id == "self"
+                and draw.attr in methods
+            ):
+                callbacks.append(methods[draw.attr])
+    for call in (node for node in ast.walk(tree) if isinstance(node, ast.Call)):
+        draw = _draw_argument(call)
+        if isinstance(draw, ast.Name) and draw.id in module_functions:
+            callbacks.append(module_functions[draw.id])
+    return list(dict.fromkeys(callbacks))
+
+
+def _draw_argument(call: ast.Call) -> ast.AST | None:
+    """Return the draw argument of a `pyxel.run(...)` call, else None."""
+    if _pyxel_api(call) != "run":
+        return None
+    if len(call.args) > 1:
+        return call.args[1]
+    return next((kw.value for kw in call.keywords if kw.arg == "draw"), None)
+
+
+def _calls_within_class(cls: ast.ClassDef):
+    """Yield calls lexically inside `cls`, excluding nested classes."""
+    pending = list(cls.body)
+    while pending:
+        node = pending.pop()
+        if isinstance(node, ast.ClassDef):
+            continue
+        if isinstance(node, ast.Call):
+            yield node
+        pending.extend(ast.iter_child_nodes(node))
+
+
+def _check_draw_body(func_node: ast.FunctionDef, issues: list[dict[str, Any]]) -> bool:
+    """Scan a draw body in order and flag pixels emitted before the clear.
+
+    Returns True when the body delegates to another `draw` before clearing.
     """
     for stmt in func_node.body:
-        # Walk this single statement (excluding nested scopes) to find pyxel calls
         for child in _walk_or_single(stmt):
             if not isinstance(child, ast.Call):
                 continue
-            func = child.func
-            if not (
-                isinstance(func, ast.Attribute)
-                and isinstance(func.value, ast.Name)
-                and func.value.id == "pyxel"
-            ):
-                continue
-            api = func.attr
+            api = _pyxel_api(child)
             if api == "cls":
-                # cls() found — everything from here is fine
-                return
+                return False
             if api in _PIXEL_EMIT_APIS:
-                issues.append(_make_issue(
-                    "warning", child.lineno, child.col_offset,
-                    "anti_pattern.cls_missing",
-                    f"pyxel.{api}() called before pyxel.cls() in draw() — screen will accumulate ghost trails",
-                ))
-                return  # report once per draw()
+                issues.append(
+                    _make_issue(
+                        "warning",
+                        child.lineno,
+                        child.col_offset,
+                        "anti_pattern.cls_missing",
+                        f"pyxel.{api}() called before pyxel.cls() in draw() — screen will accumulate ghost trails",
+                    )
+                )
+                return False
+            if (
+                api is None
+                and isinstance(child.func, ast.Attribute)
+                and child.func.attr == "draw"
+            ):
+                return True
+    return False
 
 
 def _walk_or_single(node: ast.AST):
     """Yield node and all descendants, excluding nested scopes."""
     yield node
-    if not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+    if not isinstance(
+        node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+    ):
         yield from _walk_excluding_scopes(node)
 
 
@@ -430,14 +540,11 @@ def _detect_ragged_image_set(tree: ast.AST) -> list[dict[str, Any]]:
         if not isinstance(receiver, ast.Subscript):
             continue
         sub_val = receiver.value
-        is_images = (
-            (isinstance(sub_val, ast.Name) and sub_val.id == "images")
-            or (
-                isinstance(sub_val, ast.Attribute)
-                and sub_val.attr == "images"
-                and isinstance(sub_val.value, ast.Name)
-                and sub_val.value.id == "pyxel"
-            )
+        is_images = (isinstance(sub_val, ast.Name) and sub_val.id == "images") or (
+            isinstance(sub_val, ast.Attribute)
+            and sub_val.attr == "images"
+            and isinstance(sub_val.value, ast.Name)
+            and sub_val.value.id == "pyxel"
         )
         if not is_images:
             continue
@@ -459,13 +566,17 @@ def _detect_ragged_image_set(tree: ast.AST) -> list[dict[str, Any]]:
             continue
         unique = set(lengths)
         if len(unique) > 1:
-            issues.append(_make_issue(
-                "warning", node.lineno, node.col_offset,
-                "anti_pattern.ragged_image_set",
-                f"pyxel.images[N].set() data has rows of differing lengths "
-                f"{sorted(unique)} — Pyxel raises 'byte index out of bounds' "
-                f"at runtime; pad every row to the same hex-string width",
-            ))
+            issues.append(
+                _make_issue(
+                    "warning",
+                    node.lineno,
+                    node.col_offset,
+                    "anti_pattern.ragged_image_set",
+                    f"pyxel.images[N].set() data has rows of differing lengths "
+                    f"{sorted(unique)} — Pyxel raises 'byte index out of bounds' "
+                    f"at runtime; pad every row to the same hex-string width",
+                )
+            )
     return issues
 
 
@@ -491,11 +602,7 @@ def _detect_degree_radian_mix(tree: ast.AST) -> list[dict[str, Any]]:
             and func.attr in _MATH_TRIG
         ):
             math_calls.append(node)
-        elif (
-            isinstance(func.value, ast.Name)
-            and func.value.id == "pyxel"
-            and func.attr in _PYXEL_TRIG
-        ):
+        elif _pyxel_api(node) in _PYXEL_TRIG:
             pyxel_calls.append(node)
 
     if not (math_calls and pyxel_calls):
@@ -503,17 +610,25 @@ def _detect_degree_radian_mix(tree: ast.AST) -> list[dict[str, Any]]:
 
     issues: list[dict[str, Any]] = []
     for call in math_calls:
-        issues.append(_make_issue(
-            "warning", call.lineno, call.col_offset,
-            "anti_pattern.degree_radian_mix",
-            f"math.{call.func.attr}() takes radians but pyxel trig takes degrees — mixing causes silent numerical errors",
-        ))
+        issues.append(
+            _make_issue(
+                "warning",
+                call.lineno,
+                call.col_offset,
+                "anti_pattern.degree_radian_mix",
+                f"math.{call.func.attr}() takes radians but pyxel trig takes degrees — mixing causes silent numerical errors",
+            )
+        )
     for call in pyxel_calls:
-        issues.append(_make_issue(
-            "warning", call.lineno, call.col_offset,
-            "anti_pattern.degree_radian_mix",
-            f"pyxel.{call.func.attr}() takes degrees but math trig takes radians — mixing causes silent numerical errors",
-        ))
+        issues.append(
+            _make_issue(
+                "warning",
+                call.lineno,
+                call.col_offset,
+                "anti_pattern.degree_radian_mix",
+                f"pyxel.{call.func.attr}() takes degrees but math trig takes radians — mixing causes silent numerical errors",
+            )
+        )
     return issues
 
 

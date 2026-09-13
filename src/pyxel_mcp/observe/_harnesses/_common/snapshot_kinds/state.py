@@ -1,5 +1,8 @@
 """state snapshot — read App or module attrs."""
+
 from __future__ import annotations
+
+import contextlib
 import re
 from typing import Any
 
@@ -24,6 +27,7 @@ def _serialize_value(v: object) -> Any:
         return _truncate_repr(v)
     try:
         import numpy as np
+
         if isinstance(v, np.ndarray):
             return v.tolist()
     except ImportError:
@@ -72,12 +76,11 @@ def _top_level_scalars(target: object) -> dict[str, Any]:
         for k in dir(target):
             if k.startswith("_"):
                 continue
-            try:
+            # Properties may raise on access; skip them like any other non-scalar.
+            with contextlib.suppress(Exception):
                 v = getattr(target, k)
-            except Exception:
-                continue
-            if _is_scalar(v):
-                out[k] = v
+                if _is_scalar(v):
+                    out[k] = v
     return out
 
 

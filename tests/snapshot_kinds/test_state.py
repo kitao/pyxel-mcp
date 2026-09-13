@@ -1,16 +1,20 @@
-"""Tests for snapshot_kinds.state (spec §6.4.3)."""
+"""Tests for snapshot_kinds.state."""
+
 from pyxel_mcp.observe._harnesses._common.snapshot_kinds.state import capture
 
 
 class _AppMock:
     """Stand-in for an App instance for unit tests (no Pyxel required)."""
+
     def __init__(self):
         self.counter = 5
         self.lives = 3
         self.message = "hello"
         self.player = type("P", (), {"x": 10, "y": 20})()
-        self.hazards = [type("H", (), {"x": 50, "y": 100})(),
-                        type("H", (), {"x": 60, "y": 110})()]
+        self.hazards = [
+            type("H", (), {"x": 50, "y": 100})(),
+            type("H", (), {"x": 60, "y": 110})(),
+        ]
         self.scores = [100, 200, 300]
 
 
@@ -27,7 +31,9 @@ def test_attrs_none_returns_top_level_scalars():
 
 def test_attrs_empty_list_returns_empty():
     app = _AppMock()
-    result = capture({"frame": 0, "kind": "state", "attrs": []}, app_instance=app, module=None)
+    result = capture(
+        {"frame": 0, "kind": "state", "attrs": []}, app_instance=app, module=None
+    )
     assert result["values"] == {}
 
 
@@ -35,7 +41,8 @@ def test_dotted_path():
     app = _AppMock()
     result = capture(
         {"frame": 0, "kind": "state", "attrs": ["player.x", "player.y"]},
-        app_instance=app, module=None,
+        app_instance=app,
+        module=None,
     )
     assert result["values"]["player.x"] == 10
     assert result["values"]["player.y"] == 20
@@ -45,7 +52,8 @@ def test_indexed_path():
     app = _AppMock()
     result = capture(
         {"frame": 0, "kind": "state", "attrs": ["hazards[0].y", "hazards[1].x"]},
-        app_instance=app, module=None,
+        app_instance=app,
+        module=None,
     )
     assert result["values"]["hazards[0].y"] == 100
     assert result["values"]["hazards[1].x"] == 60
@@ -55,7 +63,8 @@ def test_missing_attr_warning():
     app = _AppMock()
     result = capture(
         {"frame": 0, "kind": "state", "attrs": ["nonexistent"]},
-        app_instance=app, module=None,
+        app_instance=app,
+        module=None,
     )
     assert "nonexistent" not in result["values"]
     assert any("nonexistent" in w for w in result["warnings"])
@@ -63,6 +72,7 @@ def test_missing_attr_warning():
 
 def test_bare_function_warns_and_uses_module():
     import types
+
     mod = types.ModuleType("fake")
     mod.counter = 7
     result = capture({"frame": 0, "kind": "state"}, app_instance=None, module=mod)

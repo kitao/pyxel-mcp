@@ -1,5 +1,6 @@
 import pytest
-from pyxel_mcp.observe._harnesses._common.range_parser import resolve_frames, RangeError
+
+from pyxel_mcp.observe._harnesses._common.range_parser import RangeError, resolve_frames
 
 
 # Explicit list cases
@@ -33,17 +34,20 @@ def test_range_string_all():
 
 
 # Invalid input
-@pytest.mark.parametrize("bad", [
-    ":10",            # open-ended
-    "10:",            # open-ended
-    ":",              # both ends open
-    "0:5:0",          # step = 0
-    "0:5:-1",         # negative step
-    "5:5",            # start == end (empty range)
-    "10:5",           # start > end
-    "abc",            # gibberish
-    "0:abc",          # partial
-])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        ":10",  # open-ended
+        "10:",  # open-ended
+        ":",  # both ends open
+        "0:5:0",  # step = 0
+        "0:5:-1",  # negative step
+        "5:5",  # start == end (empty range)
+        "10:5",  # start > end
+        "abc",  # gibberish
+        "0:abc",  # partial
+    ],
+)
 def test_invalid_range_strings_raise(bad):
     with pytest.raises(RangeError):
         resolve_frames(bad, total_frames=100)

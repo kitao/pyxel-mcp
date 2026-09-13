@@ -1,0 +1,29 @@
+name: Feature request
+description: Propose a new observation or a change to an existing tool contract.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: observation
+    attributes:
+      label: What should the agent be able to observe?
+      description: Describe the fact about a running Pyxel program that is not measurable today.
+    validations:
+      required: true
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Current workaround
+      description: How you approximate it now with `run`, `read_*`, or `diff_frames`.
+  - type: textarea
+    id: shape
+    attributes:
+      label: Proposed input and output
+      description: Sketch the tool arguments and result fields. Results must stay factual; pyxel-mcp does not score quality.
+      render: json
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This is an observation of a Pyxel program, not game-building guidance (which belongs in pyxel-skill).
+          required: true

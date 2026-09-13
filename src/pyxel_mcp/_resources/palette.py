@@ -1,8 +1,6 @@
 """Pyxel default palette as a markdown reference resource."""
 
-# Canonical Pyxel default palette: idx → (name, RGB).
-# RGB values match `pyxel.colors` at runtime (Pyxel 2.9.4); names follow the
-# common-use vocabulary used elsewhere in pyxel-mcp instructions/analysis.
+# Pyxel's default palette: index -> (name, RGB), matching `pyxel.colors`.
 PALETTE: dict[int, tuple[str, tuple[int, int, int]]] = {
     0: ("black", (0, 0, 0)),
     1: ("navy", (43, 51, 95)),

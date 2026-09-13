@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -13,7 +12,13 @@ def test_pyxel_mcp_public_docs_do_not_advertise_skill_distribution():
     public_files = [
         ROOT / "README.md",
         ROOT / "src" / "pyxel_mcp" / "instructions.md",
-        ROOT / "src" / "pyxel_mcp" / "observe" / "_harnesses" / "tools" / "pyxel_info.py",
+        ROOT
+        / "src"
+        / "pyxel_mcp"
+        / "observe"
+        / "_harnesses"
+        / "tools"
+        / "pyxel_info.py",
     ]
     offenders = []
     forbidden = ("publish-skill", "pyxel://workflow", "workflow skill", "SKILL.md")
@@ -88,8 +93,7 @@ def test_pyxel_mcp_cli_has_only_mcp_commands():
 
     parser = cli._build_parser()
     subparsers = [
-        action for action in parser._actions
-        if getattr(action, "choices", None)
+        action for action in parser._actions if getattr(action, "choices", None)
     ]
     choices = set(subparsers[0].choices)
     assert choices == {"serve", "install"}
@@ -99,7 +103,5 @@ def test_no_dangling_spec_references():
     """The internal design spec was removed from the public tree; docstrings
     must not reference its section numbers."""
     src = Path(__file__).parent.parent / "src"
-    offenders = [
-        str(p) for p in src.rglob("*.py") if "spec §" in p.read_text()
-    ]
+    offenders = [str(p) for p in src.rglob("*.py") if "spec §" in p.read_text()]
     assert offenders == []

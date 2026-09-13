@@ -1,0 +1,46 @@
+name: Bug report
+description: A tool returned wrong facts, crashed, or disagreed with its documented contract.
+labels: [bug]
+body:
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Paste the `pyxel_info` result, or the output of `uvx pyxel-mcp --help` plus `python -c "import pyxel; print(pyxel.VERSION)"`.
+      placeholder: pyxel-mcp 1.3.0, Pyxel 2.9.9, Python 3.12, macOS 15
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: MCP client
+      placeholder: Claude Code 2.x / Codex CLI / Cursor / VS Code
+  - type: textarea
+    id: call
+    attributes:
+      label: Tool call
+      description: The tool name and JSON arguments exactly as sent. Redact private paths if needed.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: Result
+      description: The `ok`, `errors`, `exit_status`, and `log` fields, or the full structured result.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected facts
+      description: What the tool should have reported and why.
+    validations:
+      required: true
+  - type: textarea
+    id: script
+    attributes:
+      label: Minimal script
+      description: The smallest Pyxel script that reproduces the problem.
+      render: python

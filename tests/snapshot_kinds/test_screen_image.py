@@ -1,7 +1,9 @@
-"""Tests for snapshot_kinds.screen_image (spec §6.4.1)."""
+"""Tests for snapshot_kinds.screen_image."""
+
 import struct
-from pyxel_mcp.observe._harnesses._common.snapshot_kinds.screen_image import capture
+
 from pyxel_mcp.observe._harnesses._common.pyxel_patcher import headless_pyxel
+from pyxel_mcp.observe._harnesses._common.snapshot_kinds.screen_image import capture
 
 
 def _png_size(path) -> tuple[int, int]:
@@ -17,11 +19,14 @@ def _png_size(path) -> tuple[int, int]:
 def test_capture_writes_png(tmp_path):
     """capture should write a PNG of the current pyxel screen."""
     import pyxel
+
     with headless_pyxel():
         pyxel.init(32, 32)
         pyxel.cls(0)
     out = tmp_path / "shot.png"
-    result = capture({"frame": 0, "kind": "screen_image", "output": str(out), "scale": 1})
+    result = capture(
+        {"frame": 0, "kind": "screen_image", "output": str(out), "scale": 1}
+    )
     assert out.exists()
     assert result["frame"] == 0
     assert result["kind"] == "screen_image"
@@ -35,6 +40,7 @@ def test_capture_writes_png(tmp_path):
 def test_capture_with_scale(tmp_path):
     """capture should scale the PNG by the given integer factor."""
     import pyxel
+
     with headless_pyxel():
         # headless_pyxel skips re-init if Pyxel is already up; use whatever
         # width/height are current (set by the first test that ran init).
@@ -51,6 +57,7 @@ def test_capture_with_scale(tmp_path):
 def test_capture_creates_parent_dirs(tmp_path):
     """capture should create missing parent directories automatically."""
     import pyxel
+
     with headless_pyxel():
         pyxel.init(16, 16)
         pyxel.cls(0)

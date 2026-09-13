@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Pyxel engine questions
+    url: https://github.com/kitao/pyxel/discussions
+    about: Questions about Pyxel itself rather than this MCP server.
+  - name: Game-building workflow (pyxel-skill)
+    url: https://github.com/kitao/pyxel-skill/issues
+    about: Agent workflow guidance lives in the separate pyxel-skill project.

@@ -1,6 +1,7 @@
 """run(until=...) behavior tests."""
-from tests.conftest import SCRIPTS
+
 from pyxel_mcp.observe._harnesses.tools.run import run as run_tool
+from tests.conftest import SCRIPTS
 
 STATEFUL = str(SCRIPTS / "stateful_app.py")
 LATE = str(SCRIPTS / "late_attr.py")
@@ -25,6 +26,44 @@ def test_until_unmet_runs_to_frame_cap():
 def test_until_absent_reports_null():
     result = run_tool({"script": MINIMAL, "frames": 2})
     assert result["until_met"] is None
+
+
+def test_until_is_null_when_the_loop_never_ran():
+    crashed = run_tool(
+        {
+            "script": str(SCRIPTS / "crashing_init.py"),
+            "frames": 5,
+            "until": "counter >= 1",
+        }
+    )
+    invalid = run_tool({"script": MINIMAL, "frames": 0, "until": "counter >= 1"})
+    first_frame = run_tool(
+        {
+            "script": str(SCRIPTS / "crashing_first_frame.py"),
+            "frames": 5,
+            "until": "x > 0",
+        }
+    )
+
+    assert crashed["exit_status"] == "crashed"
+    assert crashed["until_met"] is None
+    assert invalid["exit_status"] == "invalid"
+    assert invalid["until_met"] is None
+    assert first_frame["exit_status"] == "crashed" and first_frame["frame_count"] == 0
+    assert first_frame["until_met"] is None
+
+
+def test_until_is_false_when_the_loop_crashes_before_it_holds():
+    result = run_tool(
+        {
+            "script": str(SCRIPTS / "crashing_update.py"),
+            "frames": 20,
+            "until": "never_set",
+        }
+    )
+    assert result["exit_status"] == "crashed"
+    assert result["frame_count"] == 5
+    assert result["until_met"] is False
 
 
 def test_until_dotted_path():
@@ -61,21 +100,30 @@ def test_until_runtime_error_crashes_with_until_phase():
 
 
 def test_until_with_inputs_stops_before_later_rows():
-    result = run_tool({
-        "script": STATEFUL, "frames": 50,
-        "inputs": [{"frame": 40, "buttons": ["KEY_SPACE"]}],
-        "until": "counter >= 2",
-    })
+    result = run_tool(
+        {
+            "script": STATEFUL,
+            "frames": 50,
+            "inputs": [{"frame": 40, "buttons": ["KEY_SPACE"]}],
+            "until": "counter >= 2",
+        }
+    )
     assert result["until_met"] is True
     assert result["frame_count"] == 2
 
 
 def test_until_with_stall_window_no_interference():
-    result = run_tool({
-        "script": STATEFUL, "frames": 6, "until": "counter >= 999",
-        "stall_window_frames": 3,
-        "snapshots": [{"kind": "state", "frames": [0, 1, 2, 3, 4, 5], "attrs": ["counter"]}],
-    })
+    result = run_tool(
+        {
+            "script": STATEFUL,
+            "frames": 6,
+            "until": "counter >= 999",
+            "stall_window_frames": 3,
+            "snapshots": [
+                {"kind": "state", "frames": [0, 1, 2, 3, 4, 5], "attrs": ["counter"]}
+            ],
+        }
+    )
     assert result["until_met"] is False
     assert result["exit_status"] == "ok"
     assert result["frame_count"] == 6

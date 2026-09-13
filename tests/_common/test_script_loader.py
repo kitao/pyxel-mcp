@@ -1,7 +1,11 @@
-import os
-import pytest
 from pathlib import Path
-from pyxel_mcp.observe._harnesses._common.script_loader import resolve_script_path, load_script_module
+
+import pytest
+
+from pyxel_mcp.observe._harnesses._common.script_loader import (
+    load_script_module,
+    resolve_script_path,
+)
 from tests.conftest import SCRIPTS
 
 
@@ -22,12 +26,33 @@ def test_resolve_nonexistent_raises(tmp_path):
         resolve_script_path(str(tmp_path / "nope.py"))
 
 
-def test_load_script_chdirs_to_parent(monkeypatch, tmp_path):
-    """After load, cwd should be the script's parent."""
-    monkeypatch.chdir(tmp_path)  # restore cwd after test (load_script_module does an unscoped os.chdir)
+@pytest.fixture
+def neutered_pyxel(monkeypatch):
+    """Let fixture scripts import without touching a real Pyxel window."""
+    for name in ("run", "init", "cls"):
+        monkeypatch.setattr(f"pyxel.{name}", lambda *a, **kw: None)
+
+
+def test_load_script_chdirs_to_parent(monkeypatch, tmp_path, neutered_pyxel):
+    monkeypatch.chdir(tmp_path)  # load_script_module changes cwd for good
     abs_path = SCRIPTS / "minimal.py"
-    monkeypatch.setattr("pyxel.run", lambda *a, **kw: None)  # neuter pyxel.run for import
-    monkeypatch.setattr("pyxel.init", lambda *a, **kw: None)  # neuter pyxel.init
-    monkeypatch.setattr("pyxel.cls", lambda *a, **kw: None)
+
     load_script_module(abs_path)
+
     assert Path.cwd() == abs_path.parent.resolve()
+
+
+def test_load_script_presents_the_script_as_main(monkeypatch, tmp_path, neutered_pyxel):
+    """Scripts see the argv, name, and path they would get under `python game.py`."""
+    import sys
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "argv", ["pytest"])
+    abs_path = SCRIPTS / "minimal.py"
+
+    module = load_script_module(abs_path)
+
+    assert sys.argv == [str(abs_path)]
+    assert module.__name__ == "__main__"
+    assert module.__file__ == str(abs_path)
+    assert str(abs_path.parent) in sys.path

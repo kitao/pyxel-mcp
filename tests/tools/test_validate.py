@@ -44,8 +44,11 @@ def test_ragged_image_set_detected():
     result = validate_run({"script": str(SCRIPTS / "anti_ragged_image_set.py")})
     cats = [i["category"] for i in result["issues"]]
     assert "anti_pattern.ragged_image_set" in cats
-    msg = next(i["message"] for i in result["issues"]
-               if i["category"] == "anti_pattern.ragged_image_set")
+    msg = next(
+        i["message"]
+        for i in result["issues"]
+        if i["category"] == "anti_pattern.ragged_image_set"
+    )
     # Message should name the offending widths so the agent can fix
     assert "6" in msg and "8" in msg
 
@@ -94,7 +97,7 @@ def test_image_set_with_variable_rows_not_flagged(tmp_path):
 
 
 def test_issues_sorted_by_line_then_severity(tmp_path):
-    """Per spec §8.1, issues sorted by line ascending, then severity error > warning > info."""
+    """Issues sort by line ascending, then severity error > warning > info."""
     src = tmp_path / "mixed_issues.py"
     src.write_text(
         "import pyxel\n"
@@ -266,7 +269,9 @@ def test_iter_modify_nested_for_no_duplicate(tmp_path):
     )
     try:
         result = validate_run({"script": str(src)})
-        iter_issues = [i for i in result["issues"] if i["category"] == "anti_pattern.iter_modify"]
+        iter_issues = [
+            i for i in result["issues"] if i["category"] == "anti_pattern.iter_modify"
+        ]
         # Inner mutation matches both inner and outer for; with _walk_excluding_scopes
         # we expect each mutation reported once per for that *directly* contains it.
         # Outer `for x` directly contains inner `for y`, which directly contains the
@@ -385,6 +390,137 @@ def test_cls_present_not_flagged(tmp_path):
         src.unlink()
 
 
+def test_helper_draw_methods_are_not_flagged(tmp_path):
+    """Only the callback passed to pyxel.run is checked for a missing cls()."""
+    src = tmp_path / "_helper_draw_tmp.py"
+    src.write_text(
+        "import pyxel\n"
+        "class Star:\n"
+        "    def draw(self):\n"
+        "        pyxel.rect(1, 1, 3, 3, 10)\n"
+        "class App:\n"
+        "    def __init__(self):\n"
+        "        pyxel.init(64,64)\n"
+        "        self.star = Star()\n"
+        "        pyxel.run(self.update, self.draw)\n"
+        "    def update(self): pass\n"
+        "    def draw(self):\n"
+        "        pyxel.cls(0)\n"
+        "        self.star.draw()\n"
+        "App()\n"
+    )
+    result = validate_run({"script": str(src)})
+    assert "anti_pattern.cls_missing" not in [i["category"] for i in result["issues"]]
+
+
+def test_delegated_draw_without_any_clear_is_flagged(tmp_path):
+    """App.draw hands the frame to a scene that never clears it."""
+    src = tmp_path / "_scene_delegation_tmp.py"
+    src.write_text(
+        "import pyxel\n"
+        "class Scene:\n"
+        "    def draw(self):\n"
+        "        pyxel.rect(0, 0, 8, 8, 7)\n"
+        "class App:\n"
+        "    def __init__(self):\n"
+        "        pyxel.init(64,64)\n"
+        "        self.scene = Scene()\n"
+        "        pyxel.run(self.update, self.draw)\n"
+        "    def update(self): pass\n"
+        "    def draw(self):\n"
+        "        self.scene.draw()\n"
+        "App()\n"
+    )
+    result = validate_run({"script": str(src)})
+    issues = [
+        i for i in result["issues"] if i["category"] == "anti_pattern.cls_missing"
+    ]
+    assert [i["line"] for i in issues] == [4]
+
+
+def test_delegated_draw_that_clears_itself_is_clean(tmp_path):
+    src = tmp_path / "_scene_clears_tmp.py"
+    src.write_text(
+        "import pyxel\n"
+        "class Scene:\n"
+        "    def draw(self):\n"
+        "        pyxel.cls(0)\n"
+        "        pyxel.rect(0, 0, 8, 8, 7)\n"
+        "class App:\n"
+        "    def __init__(self):\n"
+        "        pyxel.init(64,64)\n"
+        "        self.scene = Scene()\n"
+        "        pyxel.run(self.update, self.draw)\n"
+        "    def update(self): pass\n"
+        "    def draw(self):\n"
+        "        self.scene.draw()\n"
+        "        pyxel.text(0, 0, 'hud', 7)\n"
+        "App()\n"
+    )
+    result = validate_run({"script": str(src)})
+    assert "anti_pattern.cls_missing" not in [i["category"] for i in result["issues"]]
+
+
+def test_nested_class_callback_resolves_to_the_inner_class(tmp_path):
+    src = tmp_path / "_nested_class_tmp.py"
+    src.write_text(
+        "import pyxel\n"
+        "class Outer:\n"
+        "    def draw(self):\n"
+        "        pyxel.cls(0)\n"
+        "    class Inner:\n"
+        "        def __init__(self):\n"
+        "            pyxel.init(64,64)\n"
+        "            pyxel.run(self.update, self.draw)\n"
+        "        def update(self): pass\n"
+        "        def draw(self):\n"
+        "            pyxel.rect(0, 0, 8, 8, 7)\n"
+        "Outer.Inner()\n"
+    )
+    result = validate_run({"script": str(src)})
+    issues = [
+        i for i in result["issues"] if i["category"] == "anti_pattern.cls_missing"
+    ]
+    assert [i["line"] for i in issues] == [11]
+
+
+def test_without_pyxel_run_every_draw_is_checked(tmp_path):
+    src = tmp_path / "_no_run_tmp.py"
+    src.write_text(
+        "import pyxel\n"
+        "def draw():\n"
+        "    pyxel.pset(0, 0, 7)\n"
+        "pyxel.init(64,64)\n"
+        "while True:\n"
+        "    draw()\n"
+        "    pyxel.flip()\n"
+    )
+    result = validate_run({"script": str(src)})
+    issues = [
+        i for i in result["issues"] if i["category"] == "anti_pattern.cls_missing"
+    ]
+    assert [i["line"] for i in issues] == [3]
+
+
+def test_named_draw_callback_is_checked(tmp_path):
+    """A module-level draw passed to pyxel.run is still checked."""
+    src = tmp_path / "_named_draw_tmp.py"
+    src.write_text(
+        "import pyxel\n"
+        "def update(): pass\n"
+        "def render():\n"
+        "    pyxel.pset(0, 0, 7)\n"
+        "    pyxel.cls(0)\n"
+        "pyxel.init(64,64)\n"
+        "pyxel.run(update, render)\n"
+    )
+    result = validate_run({"script": str(src)})
+    issues = [
+        i for i in result["issues"] if i["category"] == "anti_pattern.cls_missing"
+    ]
+    assert [i["line"] for i in issues] == [4]
+
+
 def test_degree_radian_mix_detected():
     result = validate_run({"script": str(SCRIPTS / "anti_degree_radian_mix.py")})
     cats = [i["category"] for i in result["issues"]]
@@ -419,7 +555,7 @@ def test_issues_sorted_with_severity_tiebreak():
     # Construct a script where syntax error and a warning land at the same line.
     # We cannot have both simultaneously (syntax error prevents AST analysis),
     # so instead verify the sort key with a synthetic issue list.
-    from pyxel_mcp.observe._harnesses.tools.validate import _make_issue, _SEVERITY_ORDER
+    from pyxel_mcp.observe._harnesses.tools.validate import _SEVERITY_ORDER, _make_issue
 
     issues = [
         _make_issue("warning", 5, 0, "anti_pattern.missing_colkey", "warn"),

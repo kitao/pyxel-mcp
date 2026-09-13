@@ -1,5 +1,7 @@
 """video snapshot — GIF/MP4 encoding."""
+
 from __future__ import annotations
+
 import shutil
 import subprocess
 import tempfile
@@ -79,10 +81,18 @@ class VideoAccumulator:
             for i, img in enumerate(self.frames):
                 img.save(Path(self._tempdir) / f"{i:05d}.png")
             cmd = [
-                "ffmpeg", "-y", "-framerate", str(self.fps),
-                "-i", str(Path(self._tempdir) / "%05d.png"),
-                "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                "-movflags", "+faststart",
+                "ffmpeg",
+                "-y",
+                "-framerate",
+                str(self.fps),
+                "-i",
+                str(Path(self._tempdir) / "%05d.png"),
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
                 str(out),
             ]
             subprocess.run(cmd, check=True, capture_output=True)
