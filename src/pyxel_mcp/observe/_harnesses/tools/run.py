@@ -12,7 +12,9 @@ from pathlib import Path
 from typing import Any
 
 from PIL import Image
+from pydantic import ValidationError as ModelValidationError
 
+from pyxel_mcp.contracts import RunRequest
 from pyxel_mcp.observe._harnesses._common.artifact_path import absolute_path_error
 from pyxel_mcp.observe._harnesses._common.error_capture import (
     ErrorPhase,
@@ -85,9 +87,6 @@ def _is_ok(exit_status: str, errors: list) -> bool:
     return len(errors) == 0 and exit_status == "ok"
 
 
-_VALID_SNAPSHOT_KINDS = {"screen_image", "screen_grid", "state", "video"}
-
-
 def _substitute_output_pattern(pattern: str, frame: int) -> str:
     """Replace {frame} with 5-digit zero-padded integer; reject other tokens.
 
@@ -118,64 +117,15 @@ def _expand_multi_frame_snapshots(
     warnings: list[str] = []
 
     for i, snap in enumerate(snaps):
-        has_frame = "frame" in snap
-        has_frames = "frames" in snap
-        has_output = "output" in snap
-        has_pattern = "output_pattern" in snap
-
-        # Mutual exclusivity: frame + frames
-        if has_frame and has_frames:
-            raise _ValidationFailed(
-                make_validation_error(
-                    f"`snapshots[{i}]` must not have both `frame` and `frames`"
-                )
-            )
-
-        # Mutual exclusivity: output + output_pattern
-        if has_output and has_pattern:
-            raise _ValidationFailed(
-                make_validation_error(
-                    f"`snapshots[{i}]` must not have both `output` and `output_pattern`"
-                )
-            )
-
-        kind = snap.get("kind")
-
-        if not has_frames:
-            # Single-frame snapshot (or video): pass through, but reject
-            # output_pattern in single-frame mode.
-            if has_pattern and kind != "video":
-                raise _ValidationFailed(
-                    make_validation_error(
-                        f"`snapshots[{i}]` single-frame mode requires `output`, not `output_pattern`"
-                    )
-                )
+        if "frames" not in snap:
             expanded.append(snap)
             continue
-
-        # Multi-frame snapshot. (video+frames was already rejected in the
-        # first-pass shape validation; non-video kinds reach here.)
-
-        # screen_image multi-frame requires output_pattern (not output)
+        kind = snap["kind"]
         if kind == "screen_image":
-            if not has_pattern:
-                raise _ValidationFailed(
-                    make_validation_error(
-                        f"`snapshots[{i}]` multi-frame screen_image requires `output_pattern`"
-                    )
-                )
-            path_error = absolute_path_error(
-                snap.get("output_pattern"), f"snapshots[{i}].output_pattern"
-            )
-            if path_error:
-                raise _ValidationFailed(make_validation_error(path_error))
-            # Validate pattern structure once before expanding frames
             try:
                 _substitute_output_pattern(snap["output_pattern"], 0)
-            except ValueError as e:
-                raise _ValidationFailed(
-                    make_validation_error(f"`snapshots[{i}].output_pattern` error: {e}")
-                )
+            except ValueError as exc:
+                raise _ValidationFailed(make_validation_error(str(exc))) from exc
 
         # Resolve frames list
         try:
@@ -208,179 +158,69 @@ def _expand_multi_frame_snapshots(
 
 
 def _validate(payload: dict[str, Any]) -> tuple[Any, ...]:
-    """Validate payload and return
-    (script_path, frames, random_seed, snapshots, scheduler, warnings,
-    stall_window_frames, until_condition).
-
-    Raises _ValidationFailed with a ToolError dict on any invalid input.
-    """
-    script = payload.get("script")
-    if not isinstance(script, str):
-        raise _ValidationFailed(make_validation_error("missing or non-str `script`"))
-
-    frames = payload.get("frames")
-    if not isinstance(frames, int) or frames < 1:
-        raise _ValidationFailed(make_validation_error("`frames` must be int >= 1"))
+    """Apply the shared input contract, then resolve runtime-dependent values."""
+    try:
+        request = RunRequest.model_validate(payload)
+    except ModelValidationError as exc:
+        raise _ValidationFailed(make_validation_error(str(exc))) from exc
 
     try:
-        path = resolve_script_path(script)
-    except FileNotFoundError as e:
-        raise _ValidationFailed(make_validation_error(str(e), path=script))
-
-    random_seed = payload.get("random_seed")
-    if random_seed is not None and (
-        not isinstance(random_seed, int) or random_seed < 0
-    ):
+        path = resolve_script_path(request.script)
+    except FileNotFoundError as exc:
         raise _ValidationFailed(
-            make_validation_error("`random_seed` must be non-negative int")
-        )
+            make_validation_error(str(exc), path=request.script)
+        ) from exc
 
-    timeout = payload.get("timeout", 10)
-    if not isinstance(timeout, int) or timeout < 1:
-        raise _ValidationFailed(make_validation_error("`timeout` must be int >= 1"))
-    # timeout is informational at this layer; server enforces wall-clock kill.
-
-    stall_window = payload.get("stall_window_frames")
-    if stall_window is not None and (
-        not isinstance(stall_window, int) or stall_window < 1
-    ):
-        raise _ValidationFailed(
-            make_validation_error("`stall_window_frames` must be int >= 1 or null")
-        )
-
-    until = payload.get("until")
     until_condition = None
-    if until is not None:
-        if not isinstance(until, str) or not until.strip():
-            raise _ValidationFailed(
-                make_validation_error("`until` must be a non-empty str or null")
-            )
+    if request.until is not None:
         try:
-            until_condition = UntilCondition(until)
-        except SyntaxError as e:
-            raise _ValidationFailed(
-                make_validation_error(f"`until` is not a valid Python expression: {e}")
-            )
+            if not request.until.strip():
+                raise ValueError("`until` must be a non-empty expression")
+            until_condition = UntilCondition(request.until)
+        except (SyntaxError, ValueError) as exc:
+            raise _ValidationFailed(make_validation_error(str(exc))) from exc
 
-    raw_snapshots = payload.get("snapshots", [])
-    if not isinstance(raw_snapshots, list):
-        raise _ValidationFailed(make_validation_error("`snapshots` must be a list"))
-
-    # First pass: shape validation (kind, video range/extension)
+    raw_snapshots = [snap.model_dump(exclude_none=True) for snap in request.snapshots]
     for i, snap in enumerate(raw_snapshots):
-        if not isinstance(snap, dict):
-            raise _ValidationFailed(
-                make_validation_error(f"`snapshots[{i}]` must be a dict")
+        output_field = "output_pattern" if "frames" in snap else "output"
+        if snap["kind"] in ("screen_image", "video"):
+            error = absolute_path_error(
+                snap.get(output_field), f"snapshots[{i}].{output_field}"
             )
-        kind = snap.get("kind")
-        if kind not in _VALID_SNAPSHOT_KINDS:
+            if error:
+                raise _ValidationFailed(make_validation_error(error))
+        if snap["kind"] == "video":
+            if Path(snap["output"]).suffix.lower() not in (".gif", ".mp4"):
+                raise _ValidationFailed(
+                    make_validation_error("video output extension must be .gif or .mp4")
+                )
+            if snap["end_frame"] > request.frames:
+                raise _ValidationFailed(
+                    make_validation_error(
+                        f"video end_frame must be <= frames ({request.frames})"
+                    )
+                )
+        elif isinstance(snap.get("frame"), int) and snap["frame"] >= request.frames:
             raise _ValidationFailed(
                 make_validation_error(
-                    f"`snapshots[{i}].kind` must be one of {sorted(_VALID_SNAPSHOT_KINDS)}, got: {kind!r}"
+                    f"snapshot frame must be < frames ({request.frames})"
                 )
             )
-        if kind == "video":
-            # video uses start_frame/end_frame, not the multi-frame `frames` field
-            if "frames" in snap:
-                raise _ValidationFailed(
-                    make_validation_error(
-                        f"`snapshots[{i}]` video kind does not support `frames`; use `start_frame`/`end_frame`"
-                    )
-                )
-            path_error = absolute_path_error(
-                snap.get("output"), f"snapshots[{i}].output"
-            )
-            if path_error:
-                raise _ValidationFailed(make_validation_error(path_error))
-            # Validate extension early without keeping the instance.
-            out = snap.get("output", "")
-            ext = Path(str(out)).suffix.lower()
-            if ext not in (".gif", ".mp4"):
-                raise _ValidationFailed(
-                    make_validation_error(
-                        f"`snapshots[{i}]` video output extension must be .gif or .mp4, got: {ext or '(none)'}"
-                    )
-                )
-            # Validate video frame range.
-            start = snap.get("start_frame")
-            end = snap.get("end_frame")
-            if not isinstance(start, int) or start < 0:
-                raise _ValidationFailed(
-                    make_validation_error(
-                        f"`snapshots[{i}].start_frame` must be int >= 0"
-                    )
-                )
-            if not isinstance(end, int) or end > frames:
-                raise _ValidationFailed(
-                    make_validation_error(
-                        f"`snapshots[{i}].end_frame` must be int <= frames ({frames})"
-                    )
-                )
-            if start >= end:
-                raise _ValidationFailed(
-                    make_validation_error(
-                        f"`snapshots[{i}]` start_frame ({start}) must be < end_frame ({end})"
-                    )
-                )
 
-    # Pre-expansion: resolve `frames` lists into single-frame snapshots
-    snapshots, pending_warnings = _expand_multi_frame_snapshots(raw_snapshots, frames)
-
-    # Second pass: frame-bound validation on expanded single-frame snapshots
-    for i, snap in enumerate(snapshots):
-        kind = snap.get("kind")
-        if kind != "video":
-            frame = snap.get("frame")
-            out_of_range = not isinstance(frame, int) or frame < 0 or frame >= frames
-            if frame is not None and frame != "end" and out_of_range:
-                raise _ValidationFailed(
-                    make_validation_error(
-                        f"`snapshots[{i}].frame` must be an int with 0 <= frame < "
-                        f'frames ({frames}) or the string "end", got: {frame!r}'
-                    )
-                )
-        if kind == "screen_image":
-            output = snap.get("output")
-            if not isinstance(output, str) or not output:
-                raise _ValidationFailed(
-                    make_validation_error(
-                        f"`snapshots[{i}].output` must be a non-empty str for screen_image snapshots"
-                    )
-                )
-            path_error = absolute_path_error(output, f"snapshots[{i}].output")
-            if path_error:
-                raise _ValidationFailed(make_validation_error(path_error))
-            if Path(output).suffix != ".png":
-                raise _ValidationFailed(
-                    make_validation_error(f"`snapshots[{i}].output` must end with .png")
-                )
-            scale = snap.get("scale", 1)
-            if not isinstance(scale, int) or scale < 1:
-                raise _ValidationFailed(
-                    make_validation_error(f"`snapshots[{i}].scale` must be int >= 1")
-                )
-            inline = snap.get("inline", False)
-            if not isinstance(inline, bool):
-                raise _ValidationFailed(
-                    make_validation_error(f"`snapshots[{i}].inline` must be a bool")
-                )
-
-    inputs = payload.get("inputs", [])
-    if not isinstance(inputs, list):
-        raise _ValidationFailed(make_validation_error("`inputs` must be a list"))
+    snapshots, warnings = _expand_multi_frame_snapshots(raw_snapshots, request.frames)
     try:
-        scheduler = InputScheduler(inputs)
-    except ValidationError as e:
-        raise _ValidationFailed(make_validation_error(str(e)))
+        scheduler = InputScheduler(request.inputs)
+    except ValidationError as exc:
+        raise _ValidationFailed(make_validation_error(str(exc))) from exc
 
     return (
         path,
-        frames,
-        random_seed,
+        request.frames,
+        request.random_seed,
         snapshots,
         scheduler,
-        pending_warnings,
-        stall_window,
+        warnings,
+        request.stall_window_frames,
         until_condition,
     )
 
@@ -528,8 +368,11 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                 elif kind == "screen_grid":
                     captured = _sg_kind.capture(resolved)
                 else:
-                    captured = _state_kind.capture_static(
-                        resolved, app_instance=state.app_instance, module=module
+                    captured = _state_kind.capture(
+                        resolved,
+                        app_instance=state.app_instance,
+                        module=module,
+                        stored_only=True,
                     )
                 candidates.append((resolved, captured, None))
             except Exception as exc:

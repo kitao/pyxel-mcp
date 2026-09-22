@@ -25,6 +25,27 @@ def test_validate_via_subprocess():
     assert result["ok"] is True
 
 
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"frames": True},
+        {"snapshots": [{"kind": "state"}]},
+        {"snapshots": [{"kind": "state", "frame": 0, "unknown": 1}]},
+        {"inputs": [{"frame": 0, "mouse_pos": [1]}]},
+    ],
+)
+def test_invalid_requests_are_rejected_before_script_execution(tmp_path, fields):
+    marker = tmp_path / "executed"
+    script = tmp_path / "game.py"
+    script.write_text(f"from pathlib import Path\nPath({str(marker)!r}).touch()\n")
+
+    result = _run("run", {"script": str(script), "frames": 1, **fields})
+
+    assert result["exit_status"] == "invalid"
+    assert result["errors"][0]["phase"] == "validation"
+    assert not marker.exists()
+
+
 def test_frames_run_before_the_script_can_reach_post_run_code(tmp_path):
     script = tmp_path / "post_run.py"
     script.write_text(

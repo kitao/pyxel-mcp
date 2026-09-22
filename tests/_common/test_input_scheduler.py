@@ -68,7 +68,7 @@ def test_buttons_explicit_empty_releases():
 
 def test_axes_normalization_range():
     """Axes must be in [-1.0, 1.0]; out of range -> validation error."""
-    with pytest.raises(ValidationError, match="axes value"):
+    with pytest.raises(ValidationError, match="axes"):
         InputScheduler([{"frame": 0, "axes": {"GAMEPAD1_AXIS_LEFTX": 2.0}}])
 
 

@@ -59,6 +59,7 @@ class ScreenImageSnapshotRequest(_TimedSnapshot):
     scale: PositiveInt = 1
     inline: bool = Field(
         default=False,
+        strict=True,
         description=(
             "Also return the captured PNG as image content. A single inline frame "
             "may omit `output`; the PNG then lands under the system temp directory "
@@ -111,6 +112,19 @@ SnapshotRequest = Annotated[
     | VideoSnapshotRequest,
     Field(discriminator="kind"),
 ]
+
+
+class RunRequest(_InputModel):
+    """Subprocess payload using the public scalar, input, and snapshot contracts."""
+
+    script: NonEmptyStr
+    frames: PositiveInt
+    inputs: list[InputEvent] = Field(default_factory=list)
+    snapshots: list[SnapshotRequest] = Field(default_factory=list)
+    random_seed: NonNegativeInt | None = None
+    timeout: PositiveInt = 10
+    stall_window_frames: PositiveInt | None = None
+    until: NonEmptyStr | None = None
 
 
 class AudioTarget(_InputModel):

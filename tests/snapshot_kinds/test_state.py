@@ -4,7 +4,6 @@ import pytest
 
 from pyxel_mcp.observe._harnesses._common.snapshot_kinds.state import (
     capture,
-    capture_static,
 )
 
 
@@ -109,7 +108,9 @@ def test_static_capture_does_not_invoke_custom_metaclasses(nested):
         app = Dynamic()
         attrs = ["score"]
     calls.clear()
-    result = capture_static({"frame": 0, "attrs": attrs}, app_instance=app, module=None)
+    result = capture(
+        {"frame": 0, "attrs": attrs}, app_instance=app, module=None, stored_only=True
+    )
     assert result["values"] == {}
     assert result["warnings"]
     assert calls == []
@@ -133,7 +134,9 @@ def test_static_capture_does_not_invoke_attribute_dictionary_key_hooks(attrs):
     app = _AppMock()
     setattr(app, Name("score"), 3)
     calls.clear()
-    result = capture_static({"frame": 0, "attrs": attrs}, app_instance=app, module=None)
+    result = capture(
+        {"frame": 0, "attrs": attrs}, app_instance=app, module=None, stored_only=True
+    )
     assert result["values"] == {}
     assert result["warnings"]
     assert calls == []
@@ -148,5 +151,21 @@ def test_static_capture_keeps_slots_and_numpy_float64_scalars():
     app = Slotted()
     app.score = 3
     app.probability = np.float64(0.5)
-    result = capture_static({"frame": 0}, app_instance=app, module=None)
+    result = capture({"frame": 0}, app_instance=app, module=None, stored_only=True)
     assert result["values"] == {"score": 3, "probability": 0.5}
+
+
+def test_retained_state_keeps_nested_instance_and_class_attributes():
+    app = _AppMock()
+    app.settings = type("Settings", (), {"speed": 2})
+    result = capture(
+        {"frame": 0, "attrs": ["player.x", "hazards[0].y", "settings.speed"]},
+        app_instance=app,
+        module=None,
+        stored_only=True,
+    )
+    assert result["values"] == {
+        "player.x": 10,
+        "hazards[0].y": 100,
+        "settings.speed": 2,
+    }

@@ -2,26 +2,32 @@
 
 from __future__ import annotations
 
-from typing import TypedDict
+from pydantic import TypeAdapter
+from pydantic import ValidationError as ModelValidationError
+
+from pyxel_mcp.contracts import InputEvent
 
 
 class ValidationError(ValueError):
     """Raised by InputScheduler when input is malformed."""
 
 
-class InputEvent(TypedDict, total=False):
-    frame: int
-    buttons: list[str]
-    axes: dict[str, float]
-    mouse_pos: list[int]
+_EVENTS = TypeAdapter(list[InputEvent])
 
 
 class InputScheduler:
     """Tracks held button / axis / mouse state across scheduled events."""
 
-    def __init__(self, events: list[InputEvent]):
-        self._validate(events)
-        self.events = sorted(events, key=lambda e: e["frame"])
+    def __init__(self, events: list[InputEvent | dict]):
+        try:
+            parsed = _EVENTS.validate_python(events)
+        except ModelValidationError as exc:
+            raise ValidationError(str(exc)) from exc
+        self._validate(parsed)
+        self.events = [
+            event.model_dump(exclude_none=True)
+            for event in sorted(parsed, key=lambda event: event.frame)
+        ]
         self._held_buttons: set[str] = set()
         # Buttons held during the previous apply_to_pyxel() call. Pyxel fires
         # btnp when set_btn(True) lands on a fresh post-flip slate, so only new
@@ -35,32 +41,14 @@ class InputScheduler:
 
     def _validate(self, events: list[InputEvent]) -> None:
         seen_frames: set[int] = set()
-        for ev in events:
-            if "frame" not in ev or not isinstance(ev["frame"], int):
-                raise ValidationError(f"event missing or non-int frame: {ev}")
-            if ev["frame"] in seen_frames:
-                raise ValidationError(f"duplicate frame: {ev['frame']}")
-            seen_frames.add(ev["frame"])
-
-            if "buttons" in ev and ev["buttons"] is not None:
-                if not isinstance(ev["buttons"], list):
-                    raise ValidationError(
-                        f"buttons must be list, got {type(ev['buttons'])}"
-                    )
-                for name in ev["buttons"]:
-                    self._verify_pyxel_constant(name, "button")
-
-            if "axes" in ev and ev["axes"] is not None:
-                if not isinstance(ev["axes"], dict):
-                    raise ValidationError(f"axes must be dict, got {type(ev['axes'])}")
-                for name, value in ev["axes"].items():
-                    self._verify_pyxel_constant(name, "axis")
-                    if not isinstance(value, (int, float)) or not (
-                        -1.0 <= float(value) <= 1.0
-                    ):
-                        raise ValidationError(
-                            f"axes value out of [-1.0, 1.0]: {name}={value}"
-                        )
+        for event in events:
+            if event.frame in seen_frames:
+                raise ValidationError(f"duplicate frame: {event.frame}")
+            seen_frames.add(event.frame)
+            for name in event.buttons or []:
+                self._verify_pyxel_constant(name, "button")
+            for name in event.axes or {}:
+                self._verify_pyxel_constant(name, "axis")
 
     def _verify_pyxel_constant(self, name: str, kind: str) -> None:
         import pyxel

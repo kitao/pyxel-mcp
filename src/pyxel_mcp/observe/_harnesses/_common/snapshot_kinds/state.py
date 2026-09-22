@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import contextlib
-import inspect
 import math
 import re
 import types
@@ -22,98 +21,64 @@ def _has_plain_type(value: object, allowed: tuple[type, ...]) -> bool:
     return any(type(value) is candidate for candidate in allowed)
 
 
-def _class_storage(cls: type) -> list[Any]:
+def _class_attributes(cls: type) -> dict[str, Any]:
+    """Read ordinary class storage without invoking metaclass hooks."""
     if type(cls) is not type:
         raise _DeferredRead
-    storage = []
-    for base in type.__getattribute__(cls, "__mro__"):
-        if type(base) is not type:
-            raise _DeferredRead
+    attributes = {}
+    for base in reversed(type.__getattribute__(cls, "__mro__")):
         namespace = type.__getattribute__(base, "__dict__")
         if any(type(key) is not str for key in namespace):
             raise _DeferredRead
-        storage.append(namespace)
-    return storage
+        attributes.update(namespace)
+    return attributes
 
 
-def _getattr_static(target: object, name: str, default: Any = None) -> Any:
-    """Guard inspect's dictionary lookups against metaclass and key hooks."""
-    cls = type(target)
-    storage = _class_storage(cls)
-    if any(base is type for base in type.__getattribute__(cls, "__mro__")):
-        _class_storage(target)
-    else:
-        for namespace in storage:
-            if "__dict__" not in namespace:
-                continue
-            descriptor = namespace["__dict__"]
-            if not _has_plain_type(
-                descriptor, (types.GetSetDescriptorType, types.MemberDescriptorType)
-            ):
-                raise _DeferredRead
-            instance_vars = descriptor.__get__(target, cls)
-            if type(instance_vars) is not dict or any(
-                type(key) is not str for key in instance_vars
-            ):
-                raise _DeferredRead
-            break
-    return inspect.getattr_static(target, name, default)
-
-
-def _static_attribute(target: object, name: str) -> object:
-    getter = _getattr_static(type(target), "__getattribute__")
+def _storage(target: object) -> tuple[dict | None, dict]:
+    if type(target) is type:
+        return _class_attributes(target), _class_attributes(type)
+    declared = _class_attributes(type(target))
+    getter = declared.get("__getattribute__")
     if not any(
         getter is standard
-        for standard in (
-            object.__getattribute__,
-            type.__getattribute__,
-            types.ModuleType.__getattribute__,
-        )
+        for standard in (object.__getattribute__, types.ModuleType.__getattribute__)
     ):
         raise _DeferredRead
-    missing = object()
-    value = _getattr_static(target, name, missing)
-    if value is missing:
-        if _getattr_static(target, "__getattr__") is not None:
+    descriptor = declared.get("__dict__")
+    if descriptor is None:
+        return None, declared
+    if not _has_plain_type(
+        descriptor, (types.GetSetDescriptorType, types.MemberDescriptorType)
+    ):
+        raise _DeferredRead
+    stored = descriptor.__get__(target, type(target))
+    if type(stored) is not dict or any(type(key) is not str for key in stored):
+        raise _DeferredRead
+    return stored, declared
+
+
+def _stored_attribute(target: object, name: str) -> object:
+    stored, declared = _storage(target)
+    if name == "__dict__" and stored is not None and type(target) is not type:
+        return stored
+    if name in declared:
+        descriptor = declared[name]
+        if type(descriptor) is types.MemberDescriptorType:
+            return descriptor.__get__(target, type(target))
+        protocol = _class_attributes(type(descriptor))
+        if "__get__" in protocol and (
+            "__set__" in protocol or "__delete__" in protocol
+        ):
+            raise _DeferredRead
+    if stored is not None and name in stored:
+        return stored[name]
+    if name not in declared:
+        if "__getattr__" in declared:
             raise _DeferredRead
         raise AttributeError(name)
-    if type(value) is types.MemberDescriptorType:
-        return value.__get__(target, type(target))
-    # The standard instance/module dictionary is safe to inspect. Other
-    # getset descriptors, including extension attributes, remain deferred.
-    if (
-        name == "__dict__"
-        and type(value) is types.GetSetDescriptorType
-        and value.__name__ == "__dict__"
-    ):
-        value = value.__get__(target, type(target))
-        if type(value) is not dict:
-            raise _DeferredRead
-        return value
-    if _getattr_static(type(value), "__get__") is not None:
+    if "__get__" in protocol:
         raise _DeferredRead
-    return value
-
-
-def _static_path(target: object, path: str) -> object:
-    cur = target
-    for part in path.split("."):
-        match = _INDEX_RE.match(part)
-        if match:
-            name, index, rest = match.groups()
-            if rest:
-                raise AttributeError(path)
-            cur = _static_attribute(cur, name)
-            if not _has_plain_type(cur, (list, tuple, dict)):
-                raise _DeferredRead
-            if type(cur) is dict and not all(
-                _has_plain_type(k, _PLAIN_SCALARS) for k in cur
-            ):
-                raise _DeferredRead
-            cur = cur[int(index)]
-        else:
-            cur = _static_attribute(cur, part)
-    return cur
+    return descriptor
 
 
 def _plain_python_data(value: object, seen: set[int]) -> bool:
@@ -139,79 +104,6 @@ def _serialize_static(value: object) -> Any:
     if type(value) is np.float64:
         return _serialize_value(value)
     raise _DeferredRead
-
-
-def capture_static(
-    snapshot: dict[str, Any],
-    *,
-    app_instance: object | None,
-    module: object | None,
-) -> dict[str, Any]:
-    """Keep completed-frame data without evaluating getters or custom reprs.
-
-    Only used when a later partial frame quits. Normal end snapshots use the
-    ordinary capture function once at the actual end of observation.
-    """
-    target = app_instance if app_instance is not None else module
-    warnings = (
-        []
-        if app_instance is not None
-        else ["no App class detected; reading module globals"]
-    )
-    values = {}
-    attrs = snapshot.get("attrs")
-    if attrs is None:
-        try:
-            try:
-                namespace = _static_attribute(target, "__dict__")
-                names = [
-                    name
-                    for name in namespace
-                    if type(name) is str and not name.startswith("_")
-                ]
-            except AttributeError:
-                # Slots have no instance dictionary. Inspect class storage
-                # without calling the script's __dir__ implementation.
-                names = {
-                    name
-                    for cls in type.__getattribute__(type(target), "__mro__")
-                    for name in type.__getattribute__(cls, "__dict__")
-                    if type(name) is str and not name.startswith("_")
-                }
-        except _DeferredRead:
-            names = []
-            warnings.append(
-                "top-level attrs omitted after quit: reading them requires "
-                "dynamic attribute access"
-            )
-        for name in names:
-            try:
-                value = _static_attribute(target, name)
-                import numpy as np
-
-                if _has_plain_type(value, _PLAIN_SCALARS) or type(value) is np.float64:
-                    values[name] = _serialize_static(value)
-            except (_DeferredRead, AttributeError):
-                warnings.append(
-                    f"attr '{name}' omitted after quit: it requires dynamic access"
-                )
-    else:
-        for path in attrs:
-            try:
-                values[path] = _serialize_static(_static_path(target, path))
-            except _DeferredRead:
-                warnings.append(
-                    f"attr '{path}' omitted after quit: its completed-frame value "
-                    "requires a getter, custom indexing, or custom representation"
-                )
-            except (AttributeError, IndexError, KeyError, TypeError):
-                warnings.append(f"attr '{path}' not found")
-    return {
-        "frame": snapshot["frame"],
-        "kind": "state",
-        "values": values,
-        "warnings": warnings,
-    }
 
 
 def _is_scalar(v: object) -> bool:
@@ -257,27 +149,37 @@ def _truncate_repr(v: object) -> str:
     return s if len(s) <= _REPR_LIMIT else s[:_REPR_LIMIT] + "<truncated>"
 
 
-def _resolve_path(target: object, path: str) -> tuple[object, bool]:
+def _resolve_path(
+    target: object, path: str, *, stored_only: bool = False
+) -> tuple[object, bool]:
     """Walk a dotted/indexed path. Returns (value, found)."""
     cur: Any = target
+    read = _stored_attribute if stored_only else getattr
     parts = path.split(".")
     for part in parts:
         m = _INDEX_RE.match(part)
         if m:
             name, idx_str, rest = m.group(1), m.group(2), m.group(3)
             try:
-                cur = getattr(cur, name)
+                cur = read(cur, name)
+                if stored_only:
+                    if not _has_plain_type(cur, (list, tuple, dict)):
+                        raise _DeferredRead
+                    if type(cur) is dict and not all(
+                        _has_plain_type(key, _PLAIN_SCALARS) for key in cur
+                    ):
+                        raise _DeferredRead
                 cur = cur[int(idx_str)]
             except (AttributeError, IndexError, KeyError, TypeError):
                 return None, False
             if rest:
                 # Recurse on rest (could be ".attr" or more indexes)
                 if rest.startswith("."):
-                    return _resolve_path(cur, rest[1:])
+                    return _resolve_path(cur, rest[1:], stored_only=stored_only)
                 return None, False  # malformed
         else:
             try:
-                cur = getattr(cur, part)
+                cur = read(cur, part)
             except AttributeError:
                 return None, False
     return cur, True
@@ -306,21 +208,53 @@ def capture(
     *,
     app_instance: object | None,
     module: object | None,
+    stored_only: bool = False,
 ) -> dict[str, Any]:
+    """Read state, optionally retaining only data that needs no user-code evaluation."""
     warnings: list[str] = []
     target = app_instance if app_instance is not None else module
     if app_instance is None:
         warnings.append("no App class detected; reading module globals")
 
-    attrs = snapshot.get("attrs", None)
-    if attrs is None:
+    attrs = snapshot.get("attrs")
+    auto = attrs is None
+    values = {}
+    if auto and not stored_only:
         values = _top_level_scalars(target)
-    elif attrs == []:
-        values = {}
     else:
-        values = {}
+        if auto:
+            try:
+                stored, declared = _storage(target)
+                attrs = [
+                    name
+                    for name in (stored if stored is not None else declared)
+                    if not name.startswith("_")
+                ]
+            except _DeferredRead:
+                attrs = []
+                warnings.append(
+                    "top-level attrs omitted after quit: reading them requires dynamic attribute access"
+                )
         for path in attrs:
-            v, found = _resolve_path(target, path)
+            try:
+                v, found = _resolve_path(target, path, stored_only=stored_only)
+                if found:
+                    if auto:
+                        import numpy as np
+
+                        if (
+                            not _has_plain_type(v, _PLAIN_SCALARS)
+                            and type(v) is not np.float64
+                        ):
+                            continue
+                    values[path] = (
+                        _serialize_static(v) if stored_only else _serialize_value(v)
+                    )
+            except _DeferredRead:
+                warnings.append(
+                    f"attr '{path}' omitted after quit: its completed-frame value requires dynamic evaluation"
+                )
+                continue
             if not found:
                 msg = f"attr '{path}' not found"
                 # Specific hints for the two mistakes a fresh agent
@@ -342,7 +276,6 @@ def capture(
                     )
                 warnings.append(msg)
                 continue
-            values[path] = _serialize_value(v)
 
     return {
         "frame": snapshot["frame"],
