@@ -53,7 +53,7 @@ class InputScheduler:
     def _verify_pyxel_constant(self, name: str, kind: str) -> None:
         import pyxel
 
-        if not hasattr(pyxel, name):
+        if type(getattr(pyxel, name, None)) is not int:
             raise ValidationError(f"unknown {kind} name: {name}")
 
     def advance_to_frame(self, frame: int) -> None:

@@ -32,6 +32,8 @@ def test_validate_via_subprocess():
         {"snapshots": [{"kind": "state"}]},
         {"snapshots": [{"kind": "state", "frame": 0, "unknown": 1}]},
         {"inputs": [{"frame": 0, "mouse_pos": [1]}]},
+        {"inputs": [{"frame": 0, "buttons": ["init"]}]},
+        {"inputs": [{"frame": 0, "axes": {"init": 0.5}}]},
     ],
 )
 def test_invalid_requests_are_rejected_before_script_execution(tmp_path, fields):
