@@ -31,9 +31,13 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     `screen_grid` snapshots, so merge the grid's values yourself when
     runtime coverage matters. `ok` is True iff `len(errors) == 0`.
     """
+
+    def observe(_state):
+        result = analyze_palette()
+        return result
+
     try:
-        with run_to_preloop(payload, empty_factory=_empty):
-            result = analyze_palette()
+        result = run_to_preloop(payload, empty_factory=_empty, observe=observe)
     except PreloopFailed as f:
         return f.result
     result["ok"] = len(result.get("errors", [])) == 0

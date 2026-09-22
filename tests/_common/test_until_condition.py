@@ -64,3 +64,32 @@ def test_runtime_error_raises_until_error():
 def test_forbidden_builtin_is_treated_as_missing_name():
     # open() is not whitelisted: NameError -> "not yet satisfied"
     assert UntilCondition("open('/etc/hosts')").evaluate(make_target()) is False
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        "max(x for x in items if x >= threshold) == 2",
+        "len([x for x in items if x >= threshold]) == 1",
+        "(lambda: score >= threshold)()",
+    ],
+)
+def test_nested_expressions_resolve_current_target_attributes(expr):
+    cond = UntilCondition(expr)
+    target = make_target(items=[1, 2], threshold=2, score=2)
+
+    assert cond.evaluate(target) is True
+    assert cond.pending_warning is None
+    target.items = [1, 3, 4]
+    target.score = 1
+    assert cond.evaluate(target) is False
+
+
+def test_nested_expression_missing_name_still_warns_and_can_appear_later():
+    cond = UntilCondition("max(x for x in items if x >= threshold) == 2")
+    target = make_target(items=[1, 2])
+
+    assert cond.evaluate(target) is False
+    assert "threshold" in cond.pending_warning
+    target.threshold = 2
+    assert cond.evaluate(target) is True

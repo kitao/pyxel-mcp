@@ -35,7 +35,12 @@ def load_script_module(script_path: Path) -> types.ModuleType:
 
     mod = types.ModuleType("__main__")
     mod.__file__ = str(script_path)
-    source = script_path.read_text(encoding="utf-8")
+    # compile(bytes) honors Python's source encoding cookie and UTF-8 BOM.
+    source = script_path.read_bytes()
     code = compile(source, str(script_path), "exec")
+    # Imports, dataclass annotation resolution, and pickle all look up a
+    # class's module through sys.modules. Keep the script registered through
+    # its update/draw callbacks, just as when Python executes a script.
+    sys.modules["__main__"] = mod
     exec(code, mod.__dict__)  # noqa: S102 - trusted local script, by design
     return mod

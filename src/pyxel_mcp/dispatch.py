@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 from typing import Any, Literal
 
 from pyxel_mcp.contracts import RunResult
@@ -36,29 +37,6 @@ def _run_error(
         "until_met": None,
         "errors": [make_error(phase, message)],
     }
-
-
-def _load_json(stdout: str) -> tuple[Any, str]:
-    """Read the last JSON line and preserve preceding diagnostics."""
-    text = stdout.strip()
-    if not text:
-        return {}, ""
-    try:
-        return json.loads(text), ""
-    except json.JSONDecodeError:
-        pass
-
-    lines = stdout.splitlines()
-    for index in range(len(lines) - 1, -1, -1):
-        candidate = lines[index].strip()
-        if not candidate:
-            continue
-        try:
-            result = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-        return result, "\n".join(lines[:index]).strip()
-    raise json.JSONDecodeError("no JSON payload found", stdout, 0)
 
 
 def _join_log(current: str, diagnostic: str) -> str:
@@ -95,6 +73,12 @@ def dispatch(
     cmd = [sys.executable, "-m", "pyxel_mcp.observe._harnesses.main", subcommand]
     try:
         with tempfile.TemporaryDirectory(prefix="pyxel-mcp-dispatch-") as temp_root:
+            # User code and native libraries may write anything to stdout,
+            # including JSON from atexit handlers after the tool has finished.
+            # Keep the result on a separate channel rather than guessing which
+            # line of the script's output belongs to the harness.
+            result_path = Path(temp_root) / "result.json"
+            cmd.extend(["--result-file", str(result_path)])
             env = os.environ.copy()
             env.update({"TMPDIR": temp_root, "TMP": temp_root, "TEMP": temp_root})
             proc = subprocess.run(
@@ -102,9 +86,14 @@ def dispatch(
                 input=json.dumps(payload),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout,
                 env=env,
                 check=False,
+            )
+            result_text = (
+                result_path.read_text(encoding="utf-8") if result_path.is_file() else ""
             )
     except subprocess.TimeoutExpired:
         message = f"subprocess timed out after {timeout}s"
@@ -116,6 +105,11 @@ def dispatch(
                 elapsed_seconds=float(timeout),
             )
         return _error(ErrorPhase.GAME_LOOP, message)
+    except OSError as exc:
+        message = f"could not execute subprocess: {exc}"
+        if subcommand == "run":
+            return _run_error(ErrorPhase.SCRIPT_IMPORT, message)
+        return _error(ErrorPhase.SCRIPT_IMPORT, message)
 
     if proc.returncode != 0:
         message = f"subprocess exited {proc.returncode}: {proc.stderr}"
@@ -124,9 +118,9 @@ def dispatch(
         return _error(ErrorPhase.SCRIPT_IMPORT, message)
 
     try:
-        result, stdout_diagnostic = _load_json(proc.stdout)
+        result = json.loads(result_text) if result_text.strip() else {}
     except json.JSONDecodeError as exc:
-        message = f"subprocess returned invalid JSON: {exc}: {proc.stdout[-500:]}"
+        message = f"subprocess returned invalid JSON: {exc}: {result_text[-500:]}"
         if subcommand == "run":
             return _run_error(ErrorPhase.SCRIPT_IMPORT, message, log=proc.stdout)
         return _error(ErrorPhase.SCRIPT_IMPORT, message)
@@ -149,5 +143,5 @@ def dispatch(
         result["ok"] = not result["errors"]
     if subcommand == "run":
         result["log"] = _join_log(result.get("log", ""), proc.stderr)
-        result["log"] = _join_log(result["log"], stdout_diagnostic)
+        result["log"] = _join_log(result["log"], proc.stdout)
     return result

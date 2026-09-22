@@ -1,6 +1,11 @@
 """Tests for snapshot_kinds.state."""
 
-from pyxel_mcp.observe._harnesses._common.snapshot_kinds.state import capture
+import pytest
+
+from pyxel_mcp.observe._harnesses._common.snapshot_kinds.state import (
+    capture,
+    capture_static,
+)
 
 
 class _AppMock:
@@ -78,3 +83,70 @@ def test_bare_function_warns_and_uses_module():
     result = capture({"frame": 0, "kind": "state"}, app_instance=None, module=mod)
     assert result["values"]["counter"] == 7
     assert any("no app class" in w.lower() for w in result["warnings"])
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_static_capture_does_not_invoke_custom_metaclasses(nested):
+    calls = []
+
+    class Meta(type):
+        def __getattribute__(cls, name):
+            calls.append(name)
+            return super().__getattribute__(name)
+
+        def __eq__(cls, other):
+            calls.append("comparison")
+            return super().__eq__(other)
+
+    class Dynamic(metaclass=Meta):
+        score = 3
+
+    if nested:
+        app = _AppMock()
+        app.value = Dynamic()
+        attrs = ["value"]
+    else:
+        app = Dynamic()
+        attrs = ["score"]
+    calls.clear()
+    result = capture_static({"frame": 0, "attrs": attrs}, app_instance=app, module=None)
+    assert result["values"] == {}
+    assert result["warnings"]
+    assert calls == []
+
+
+@pytest.mark.parametrize("attrs", [None, ["score"]])
+def test_static_capture_does_not_invoke_attribute_dictionary_key_hooks(attrs):
+    calls = []
+
+    class Name(str):
+        def __eq__(self, other):
+            calls.append("comparison")
+            return super().__eq__(other)
+
+        __hash__ = str.__hash__
+
+        def startswith(self, *args):
+            calls.append("startswith")
+            return super().startswith(*args)
+
+    app = _AppMock()
+    setattr(app, Name("score"), 3)
+    calls.clear()
+    result = capture_static({"frame": 0, "attrs": attrs}, app_instance=app, module=None)
+    assert result["values"] == {}
+    assert result["warnings"]
+    assert calls == []
+
+
+def test_static_capture_keeps_slots_and_numpy_float64_scalars():
+    import numpy as np
+
+    class Slotted:
+        __slots__ = ("probability", "score")
+
+    app = Slotted()
+    app.score = 3
+    app.probability = np.float64(0.5)
+    result = capture_static({"frame": 0}, app_instance=app, module=None)
+    assert result["values"] == {"score": 3, "probability": 0.5}

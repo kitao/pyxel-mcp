@@ -32,7 +32,28 @@ def test_gif_output(tmp_path):
     assert out.exists()
     assert result["format"] == "gif"
     assert result["frames_encoded"] == 5
-    assert result["duration_seconds"] == pytest.approx(5 / 30)
+    assert result["duration_seconds"] == pytest.approx(5 / 30, abs=0.005)
+
+
+@pytest.mark.parametrize("fps", [30, 60, 120])
+def test_gif_duration_matches_the_encoded_frames(tmp_path, fps):
+    out = tmp_path / "timing.gif"
+    accum = VideoAccumulator(
+        {"start_frame": 0, "end_frame": 60, "fps": fps, "output": str(out)}
+    )
+    for i, frame in enumerate(_dummy_frames(60)):
+        accum.add_frame(i, frame)
+    result = accum.encode()
+    with Image.open(out) as image:
+        durations = []
+        for i in range(image.n_frames):
+            image.seek(i)
+            durations.append(image.info["duration"])
+    assert all(duration >= 10 for duration in durations)
+    assert result["duration_seconds"] == sum(durations) / 1000
+    assert result["duration_seconds"] == pytest.approx(60 / min(fps, 100), abs=0.005)
+    if fps > 100:
+        assert any("100 fps" in warning for warning in result["warnings"])
 
 
 def test_invalid_extension_raises(tmp_path):
@@ -95,6 +116,20 @@ def test_mp4_output(tmp_path):
     assert result["format"] == "mp4"
 
 
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not on PATH")
+def test_mp4_accepts_odd_screen_dimensions(tmp_path):
+    out = tmp_path / "odd.mp4"
+    accum = VideoAccumulator(
+        {"start_frame": 0, "end_frame": 3, "fps": 30, "output": str(out)}
+    )
+    for i, frame in enumerate(_dummy_frames(3, size=(9, 13))):
+        accum.add_frame(i, frame)
+    result = accum.encode()
+    assert out.stat().st_size > 0
+    assert result["frames_encoded"] == 3
+    assert any("padded" in warning for warning in result["warnings"])
+
+
 def test_mp4_falls_back_to_gif_when_ffmpeg_missing(tmp_path, monkeypatch):
     """If ffmpeg isn't available, output is rewritten to .gif and warned."""
     import pyxel_mcp.observe._harnesses._common.snapshot_kinds.video as vid_mod
@@ -137,3 +172,30 @@ def test_truncation_when_fewer_frames_added(tmp_path):
         accum.add_frame(i, img)
     result = accum.encode()
     assert result["frames_encoded"] == 3
+
+
+@pytest.mark.parametrize("extension", ["gif", "mp4"])
+def test_run_until_before_video_range_skips_artifact(tmp_path, extension):
+    from pyxel_mcp import server
+    from tests.conftest import SCRIPTS
+
+    out = tmp_path / f"unreached.{extension}"
+    result = server.run(
+        script=str(SCRIPTS / "stateful_app.py"),
+        frames=20,
+        until="counter >= 2",
+        snapshots=[
+            {
+                "kind": "video",
+                "start_frame": 10,
+                "end_frame": 20,
+                "output": str(out),
+            }
+        ],
+    ).structured_content
+    assert result["ok"] is True
+    assert result["exit_status"] == "ok"
+    assert result["until_met"] is True
+    assert result["snapshots"] == []
+    assert "before any frames in its capture range" in result["log"]
+    assert not out.exists()

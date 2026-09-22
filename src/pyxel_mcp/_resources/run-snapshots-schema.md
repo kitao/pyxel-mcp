@@ -111,7 +111,8 @@ Useful for verifying exact pixel-level state without image files.
 }
 ```
 
-- `grid`: list of rows, each row a list of palette indices 0–15.
+- `grid`: list of rows, each row a list of palette indices 0–255. Extended
+  palettes can use indices above the default 0–15 range.
 - Input field `bbox` (list `[x, y, w, h]`) is preserved for ergonomic call
   sites; output emits `region` (dict `{x, y, w, h}`), matching the shape used
   by `read_image`, `read_tilemap`, and `diff_frames` so consumers can
@@ -168,10 +169,16 @@ game logic (scores, positions, flags) without image comparison.
 - Aggregate functions such as `len(...)` are NOT supported.
 
 **Value serialization rules:**
-- Primitive types (int, float, str, bool, None): passed through as-is.
-- Lists and dicts of primitives: serialized as JSON.
+- Primitive types (int, finite float, str, bool, None): passed through as-is.
+- Non-finite floats are represented by the strings `"nan"`, `"inf"`, and `"-inf"`
+  so the result remains valid JSON.
+- Lists of primitives and string-keyed dicts of primitives: serialized as JSON.
+  Dicts with non-string keys use `repr()` to avoid losing entries when keys
+  such as `1` and `"1"` would become the same JSON key.
 - Custom objects: `repr()` result, truncated to 200 characters with `<truncated>` appended.
-- NumPy arrays: converted to nested Python lists.
+- NumPy boolean, integer, float, and Unicode arrays: converted to nested Python
+  lists, with non-finite floats represented as above. Other array dtypes
+  (including complex and object) use the same truncated `repr()` fallback.
 
 ---
 
@@ -213,9 +220,12 @@ accept `frames` (range-string or list). Use `start_frame`/`end_frame` instead.
 ```
 
 **Encoding details:**
-- `.gif`: PIL `Image.save()` with `append_images`, `loop=0`,
-  `duration=int(1000/fps)`.
-- `.mp4`: ffmpeg invoked via subprocess.
+- `.gif`: frame durations are rounded to GIF's 10 ms units using cumulative
+  timestamps, preserving the requested total duration within 5 ms. Playback
+  above 100 fps is limited to 100 fps with a warning. `duration_seconds`
+  reports the encoded duration.
+- `.mp4`: ffmpeg invoked via subprocess. Odd screen dimensions are padded on
+  the right or bottom with black pixels to support the video format, with a warning.
 - **ffmpeg fallback**: if ffmpeg is unavailable, the harness rewrites `path` to `.gif`,
   sets `format: "gif"`, and appends a warning to `warnings`.
 
@@ -323,10 +333,20 @@ The result list contains state@0, state@1, state@2, then screen_image@5.
 ## The `"end"` frame token
 
 `state`, `screen_image`, and `screen_grid` accept `"frame": "end"`.
-The snapshot fires at the last completed frame, whatever stopped the run: the
-`frames` cap, an `until` condition match, or stall detection. Crashed runs
-skip `"end"` snapshots because their final frame did not complete. The result
-reports the concrete frame number, not the string `"end"`.
+The snapshot represents the last completed frame, whether the run stopped at
+the `frames` cap, an `until` match, stall detection, or `pyxel.quit()`.
+Pixels and directly stored state values are retained after each completed
+update/draw pair, keeping only the most recent frame. This excludes changes
+from a later frame interrupted by `pyxel.quit()`.
+
+At the frame cap, an `until` match, or a detected stall, state attributes are
+evaluated once at the end, so requesting a property or `cached_property` does
+not evaluate it during earlier frames. After a quit interrupts a later frame,
+only the retained values are returned: attributes requiring a property getter,
+custom indexing, or custom representation are omitted with a warning. They
+cannot be recovered from the preceding frame without running user code early.
+If no frame completed, no `"end"` snapshot is returned. Game-loop crashes skip
+`"end"` snapshots. The result reports the concrete frame number, not `"end"`.
 
 `"end"` is valid only in the single `frame` field — not inside `frames` lists
 or ranges, and not for `video`.
@@ -352,3 +372,31 @@ The run result reports `until_met` and the reached `frame_count`:
 | `true` | The condition held; the run stopped at that frame. |
 | `false` | The condition was evaluated at least once and never held before the run ended (cap, crash, or stall). |
 | `null` | It was never evaluated: no `until`, an invalid payload, a crash before the first frame completed, or a timeout. |
+
+## Script lifecycle
+
+`run` drives callbacks synchronously inside the script's first `pyxel.run()`
+call. Enclosing `with` blocks and function-local resources stay active during
+observation. When observation finishes, script execution stops at that call;
+statements following it and later sequential `pyxel.run()` calls are not
+executed. Enclosing `finally` and context-manager cleanup then run. A recursive
+`pyxel.run()` call is an explicit error.
+
+Stopping uses internal `BaseException` signals. Scripts or context-manager
+cleanup that suppress these signals are unsupported and may execute post-run code.
+
+`pyxel.quit()` is an orderly stop with `exit_status: "ok"`, `ok: true`, and a
+notice in `log`. `frame_count` counts completed update/draw pairs only. A quit
+before the first completed frame returns zero frames and no snapshots, and
+`until_met` stays `null` if the condition was never evaluated. Snapshots and
+video from completed frames are retained.
+
+An exception during enclosing cleanup changes the result to `ok: false`,
+`exit_status: "crashed"`, and an error with `phase: "script_exit"`. Observations
+completed before that cleanup error remain available, including already
+captured `"end"` snapshots.
+
+The `read_palette`, `read_image`, `read_tilemap`, and `read_audio` tools inspect
+assets at the same `pyxel.run()` checkpoint without executing update/draw.
+Quitting before that checkpoint is a `script_import` error for these readers,
+because no pre-loop observation was possible.

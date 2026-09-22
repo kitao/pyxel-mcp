@@ -37,9 +37,9 @@ def test_registry_metadata_matches_project_version():
     assert registry["packages"][0]["transport"]["type"] == "stdio"
 
 
-def test_release_version_is_1_3_0():
+def test_release_version_is_1_3_1():
     pyproject = (ROOT / "pyproject.toml").read_text()
-    assert 'version = "1.3.0"' in pyproject
+    assert 'version = "1.3.1"' in pyproject
 
 
 def test_depends_on_mcp_sdk_2():

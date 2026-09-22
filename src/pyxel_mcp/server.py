@@ -314,7 +314,10 @@ def read_tilemap(
 
 
 @mcp.tool(
-    description="Render one Pyxel sound or music slot to WAV and return measurable audio data.",
+    description=(
+        "Render one Pyxel sound or music slot to WAV and return measurable audio data. "
+        "Notes describe tracker fields, not an MML or PCM transcription."
+    ),
     annotations=_annotations("Render audio to WAV", pure=False),
     structured_output=True,
 )

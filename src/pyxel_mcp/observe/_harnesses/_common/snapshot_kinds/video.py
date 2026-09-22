@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -50,7 +51,11 @@ class VideoAccumulator:
         try:
             return self._encode()
         finally:
-            shutil.rmtree(self._tempdir, ignore_errors=True)
+            self.close()
+
+    def close(self) -> None:
+        """Release temporary files, including when no frames were captured."""
+        shutil.rmtree(self._tempdir, ignore_errors=True)
 
     def _encode(self) -> dict[str, Any]:
         warnings: list[str] = []
@@ -66,13 +71,24 @@ class VideoAccumulator:
 
         if target_format == "gif":
             if self.frames:
+                # GIF stores time in centiseconds. Round cumulative timestamps
+                # so 30 fps alternates 30/40 ms instead of losing 10% of its
+                # duration by truncating every frame to 30 ms.
+                gif_fps = min(self.fps, 100)
+                if gif_fps != self.fps:
+                    warnings.append("GIF playback is limited to 100 fps")
+                timestamps = [
+                    round(index * 100 / gif_fps)
+                    for index in range(len(self.frames) + 1)
+                ]
+                durations = [(end - start) * 10 for start, end in pairwise(timestamps)]
                 first = self.frames[0]
                 first.save(
                     out,
                     save_all=True,
                     append_images=self.frames[1:],
                     loop=0,
-                    duration=int(1000 / self.fps),
+                    duration=durations,
                     optimize=False,
                 )
             else:
@@ -87,6 +103,8 @@ class VideoAccumulator:
                 str(self.fps),
                 "-i",
                 str(Path(self._tempdir) / "%05d.png"),
+                "-vf",
+                "pad=ceil(iw/2)*2:ceil(ih/2)*2",
                 "-c:v",
                 "libx264",
                 "-pix_fmt",
@@ -96,6 +114,10 @@ class VideoAccumulator:
                 str(out),
             ]
             subprocess.run(cmd, check=True, capture_output=True)
+            if self.frames and (self.frames[0].width % 2 or self.frames[0].height % 2):
+                warnings.append(
+                    "MP4 dimensions padded with black pixels to even width and height"
+                )
 
         frames_encoded = len(self.frames)
         return {
@@ -103,6 +125,10 @@ class VideoAccumulator:
             "path": str(out.resolve()),
             "format": target_format,
             "frames_encoded": frames_encoded,
-            "duration_seconds": frames_encoded / self.fps,
+            "duration_seconds": (
+                sum(durations) / 1000
+                if target_format == "gif" and self.frames
+                else frames_encoded / self.fps
+            ),
             "warnings": warnings,
         }

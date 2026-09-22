@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 from pathlib import Path
 from typing import Any
 
@@ -10,32 +11,27 @@ import numpy as np
 _TILES_GRID_LIMIT = 4096
 
 
-def _resolve_imgsrc(tm) -> int:
-    """Return the source-bank index of a tilemap.
+def _resolve_imgsrc(tm) -> tuple[int | None, Any]:
+    """Return the bank index (if any) and actual source Image.
 
-    Pyxel exposes the source bank as `tm.imgsrc` (int). If user code did
-    `tm.image = pyxel.images[N]` (legacy shortcut), `imgsrc` becomes an
-    Image object, not an int — the naive `int(getattr(tm, "imgsrc", 0))`
-    raises TypeError. Identity-scan over `pyxel.images` to recover the
-    index in that case; default to 0 for any other surprise.
+    Image-valued sources may be standalone images. Pyxel also creates a fresh
+    Python wrapper on each bank access, so compare native buffers when looking
+    for a bank alias instead of comparing the wrappers' Python identities.
     """
     import pyxel
 
-    val = getattr(tm, "imgsrc", 0)
+    val = tm.imgsrc
     if isinstance(val, int):
-        return val
-    # imgsrc may be an Image instance (after `tm.image = pyxel.images[N]`).
+        return val, pyxel.images[val]
+    address = ctypes.addressof(val.data_ptr())
     for i in range(len(pyxel.images)):
-        if pyxel.images[i] is val:
-            return i
-    return 0
+        if ctypes.addressof(pyxel.images[i].data_ptr()) == address:
+            return i, val
+    return None, val
 
 
-def _zero_zero_is_visible(imgsrc: int) -> bool:
+def _zero_zero_is_visible(bank) -> bool:
     """Check if the (0,0) 8x8 tile in the source bank has any non-zero pixels."""
-    import pyxel
-
-    bank = pyxel.images[imgsrc]
     bw, bh = bank.width, bank.height
     arr = np.frombuffer(
         bank.data_ptr(),
@@ -47,7 +43,7 @@ def _zero_zero_is_visible(imgsrc: int) -> bool:
 
 def _render_tilemap_png(
     tilemap: int,
-    imgsrc: int,
+    bank,
     tm_w: int,
     tm_h: int,
     render_path: Path,
@@ -65,7 +61,6 @@ def _render_tilemap_png(
     import pyxel
     from PIL import Image as PILImage
 
-    bank = pyxel.images[imgsrc]
     bw, bh = bank.width, bank.height
     bank_arr = np.frombuffer(
         bank.data_ptr(),
@@ -95,12 +90,13 @@ def _render_tilemap_png(
         for tx in range(tm_w):
             u = int(tm_arr[ty, tx, 0])
             v = int(tm_arr[ty, tx, 1])
-            # Clamp source slice to bank bounds; out-of-range tiles render as 0.
+            # Preserve the in-bounds part of edge tiles in custom-sized Images.
             sy, sx = v * 8, u * 8
-            if sy + 8 > bh or sx + 8 > bw or sy < 0 or sx < 0:
+            if sy >= bh or sx >= bw:
                 continue
-            indices[ty * 8 : ty * 8 + 8, tx * 8 : tx * 8 + 8] = bank_arr[
-                sy : sy + 8, sx : sx + 8
+            tile_h, tile_w = min(8, bh - sy), min(8, bw - sx)
+            indices[ty * 8 : ty * 8 + tile_h, tx * 8 : tx * 8 + tile_w] = bank_arr[
+                sy : sy + tile_h, sx : sx + tile_w
             ]
 
     rgb = lut[indices]  # (img_h, img_w, 3)
@@ -120,7 +116,7 @@ def analyze_tilemap(
     tm = pyxel.tilemaps[tilemap]
     tm_w: int = tm.width
     tm_h: int = tm.height
-    imgsrc = _resolve_imgsrc(tm)
+    imgsrc, source_image = _resolve_imgsrc(tm)
 
     # Snapshot the tilemap as a (h, w, 2) uint16 array — Pyxel exposes the
     # tilemap memory as ushort pairs (u, v), little-endian on supported
@@ -166,7 +162,7 @@ def analyze_tilemap(
             continue
         usage[f"{u},{v}"] = int(c)
 
-    zero_tile_nonempty = _zero_zero_is_visible(imgsrc)
+    zero_tile_nonempty = _zero_zero_is_visible(source_image)
 
     # tiles: full grid only when small enough — return as nested int lists.
     total_cells = tm_w * tm_h
@@ -187,7 +183,7 @@ def analyze_tilemap(
         else:
             render_w = min(tm_w, 64)
             render_h = min(tm_h, 64)
-        _render_tilemap_png(tilemap, imgsrc, render_w, render_h, rp)
+        _render_tilemap_png(tilemap, source_image, render_w, render_h, rp)
         rendered = str(rp)
 
     return {

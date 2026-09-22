@@ -2,6 +2,7 @@
 
 Usage: python -m pyxel_mcp.observe._harnesses.main <subcommand>
        reads JSON parameters from stdin, writes JSON result to stdout.
+       --result-file <path> keeps the result separate from script diagnostics.
 """
 
 from __future__ import annotations
@@ -9,6 +10,7 @@ from __future__ import annotations
 import json
 import sys
 from collections.abc import Callable
+from pathlib import Path
 
 from pyxel_mcp.observe._harnesses._common.error_capture import (
     ErrorPhase,
@@ -48,10 +50,22 @@ def _build_tools() -> dict[str, Callable[[dict], dict]]:
 def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
+    result_path = None
+    if len(argv) == 3 and argv[1] == "--result-file":
+        result_path = Path(argv[2]).resolve()
+        argv = argv[:1]
+
+    def emit(result: dict) -> None:
+        text = json.dumps(result)
+        if result_path is None:
+            print(text)
+        else:
+            result_path.write_text(text, encoding="utf-8")
+
     if len(argv) != 1:
         msg = f"expected exactly one subcommand argument, got {len(argv)}: {argv}"
         result = {"errors": [make_validation_error(msg)]}
-        print(json.dumps(result))
+        emit(result)
         return 0
 
     subcommand = argv[0]
@@ -61,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = json.loads(raw_stdin) if raw_stdin.strip() else {}
     except json.JSONDecodeError as e:
         result = {"errors": [make_validation_error(f"invalid JSON on stdin: {e}")]}
-        print(json.dumps(result))
+        emit(result)
         return 0
 
     tools = _build_tools()
@@ -70,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
         result = {
             "errors": [make_validation_error(f"unknown subcommand: {subcommand}")]
         }
-        print(json.dumps(result))
+        emit(result)
         return 0
 
     handler = tools[subcommand]
@@ -87,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             result = {"errors": [error]}
 
-    print(json.dumps(result))
+    emit(result)
     return 0
 
 

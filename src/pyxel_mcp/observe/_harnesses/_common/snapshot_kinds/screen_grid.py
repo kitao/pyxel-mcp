@@ -8,7 +8,7 @@ import numpy as np
 
 
 def capture(snapshot: dict[str, Any]) -> dict[str, Any]:
-    """Return the screen as a 2D array of palette indices (0-15).
+    """Return the screen as a 2D array of palette indices (0-255).
 
     Reads pyxel.screen.data_ptr() into a numpy array and slices the bbox.
     Input field ``bbox: [x, y, w, h]`` is the ergonomic list form callers
@@ -28,10 +28,10 @@ def capture(snapshot: dict[str, Any]) -> dict[str, Any]:
         x, y, w, h = 0, 0, sw, sh
     else:
         x, y, w, h = bbox
-        cx = max(0, x)
-        cy = max(0, y)
-        cw = min(w, sw - cx)
-        ch = min(h, sh - cy)
+        cx = min(sw, max(0, x))
+        cy = min(sh, max(0, y))
+        cw = max(0, min(sw, x + w) - cx)
+        ch = max(0, min(sh, y + h) - cy)
         if (cx, cy, cw, ch) != (x, y, w, h):
             warnings.append(f"bbox clamped from {bbox} to [{cx}, {cy}, {cw}, {ch}]")
         x, y, w, h = cx, cy, cw, ch

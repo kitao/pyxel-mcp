@@ -24,13 +24,14 @@ class UntilError(Exception):
     name or attribute."""
 
 
-class _AttrNamespace:
-    """eval() locals mapping that resolves bare names to target attributes."""
+class _AttrNamespace(dict):
+    """Resolve target attributes in both outer and nested expression scopes."""
 
     def __init__(self, target: object):
+        super().__init__(__builtins__=_SAFE_BUILTINS)
         self._target = target
 
-    def __getitem__(self, name: str) -> Any:
+    def __missing__(self, name: str) -> Any:
         try:
             return getattr(self._target, name)
         except AttributeError:
@@ -53,13 +54,11 @@ class UntilCondition:
 
     def evaluate(self, target: object) -> bool:
         try:
-            return bool(
-                eval(
-                    self._code,
-                    {"__builtins__": _SAFE_BUILTINS},
-                    _AttrNamespace(target),
-                )
-            )
+            # Comprehensions, generators and lambdas look up free names in
+            # globals, not eval's locals. Share one lazy namespace so those
+            # expressions observe the same attributes as a simple comparison.
+            namespace = _AttrNamespace(target)
+            return bool(eval(self._code, namespace, namespace))
         except (NameError, AttributeError) as e:
             if not self._warned:
                 self._warned = True

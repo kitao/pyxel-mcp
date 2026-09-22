@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,13 @@ from pyxel_mcp.observe._harnesses._common.script_loader import (
     resolve_script_path,
 )
 from tests.conftest import SCRIPTS
+
+
+@pytest.fixture(autouse=True)
+def restore_script_context(monkeypatch):
+    monkeypatch.setitem(sys.modules, "__main__", sys.modules["__main__"])
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.setattr(sys, "argv", list(sys.argv))
 
 
 def test_resolve_absolute_path_passes_through():

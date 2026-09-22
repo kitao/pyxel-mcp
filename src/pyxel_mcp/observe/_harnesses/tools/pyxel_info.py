@@ -14,8 +14,12 @@ from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_e
 def _stubs_path() -> str:
     import pyxel
 
-    pyi = Path(pyxel.__file__).parent / "pyxel.pyi"
-    return str(pyi) if pyi.is_file() else ""
+    package_dir = Path(pyxel.__file__).parent
+    for filename in ("__init__.pyi", "pyxel.pyi"):
+        pyi = package_dir / filename
+        if pyi.is_file():
+            return str(pyi)
+    return ""
 
 
 def _examples() -> list[dict[str, Any]]:

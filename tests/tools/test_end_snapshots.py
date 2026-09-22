@@ -62,3 +62,34 @@ def test_other_frame_strings_still_rejected():
     )
     assert result["ok"] is False
     assert result["exit_status"] == "invalid"
+
+
+def test_end_property_error_on_an_earlier_frame_does_not_fail_the_run(tmp_path):
+    script = tmp_path / "late_property.py"
+    script.write_text(
+        "import pyxel\n"
+        "class App:\n"
+        "    def __init__(self):\n"
+        "        self.counter = 0\n"
+        "        pyxel.init(8, 8)\n"
+        "        pyxel.run(self.update, lambda: pyxel.cls(1))\n"
+        "    def update(self):\n"
+        "        self.counter += 1\n"
+        "    @property\n"
+        "    def value(self):\n"
+        "        if self.counter < 3:\n"
+        "            raise ValueError('not ready')\n"
+        "        return self.counter\n"
+        "App()\n"
+    )
+
+    result = run_tool(
+        {
+            "script": str(script),
+            "frames": 3,
+            "snapshots": [{"kind": "state", "frame": "end", "attrs": ["value"]}],
+        }
+    )
+
+    assert result["ok"] is True, result["errors"]
+    assert result["snapshots"][0]["values"] == {"value": 3}

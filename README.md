@@ -5,12 +5,12 @@
 [![PyPI](https://img.shields.io/pypi/v/pyxel-mcp)](https://pypi.org/project/pyxel-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/pyxel-mcp)](https://pypi.org/project/pyxel-mcp/)
 [![Tests](https://img.shields.io/github/actions/workflow/status/kitao/pyxel-mcp/test.yml?branch=main&label=tests)](https://github.com/kitao/pyxel-mcp/actions/workflows/test.yml)
-[![License](https://img.shields.io/pypi/l/pyxel-mcp)](LICENSE)
+[![License](https://img.shields.io/pypi/l/pyxel-mcp)](https://github.com/kitao/pyxel-mcp/blob/main/LICENSE)
 [![MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.kitao%2Fpyxel--mcp-blue)](https://registry.modelcontextprotocol.io)
 
 <p align="center">
-  <img src="docs/platformer.gif" width="256" alt="Pyxel's bundled platformer example driven headlessly with right held and three scheduled jumps">
-  <img src="docs/platformer-frame.png" width="384" alt="Frame 80 of the same run at scale 3, returned inline as image content">
+  <img src="https://raw.githubusercontent.com/kitao/pyxel-mcp/main/docs/platformer.gif" width="256" alt="Pyxel's bundled platformer example driven headlessly with right held and three scheduled jumps">
+  <img src="https://raw.githubusercontent.com/kitao/pyxel-mcp/main/docs/platformer-frame.png" width="384" alt="Frame 80 of the same run at scale 3, returned inline as image content">
 </p>
 <p align="center"><sub>Both images come from one <code>run</code> call against Pyxel's bundled <code>10_platformer.py</code>: 150 frames, right held from frame 0, jumps scheduled at frames 25, 70, and 110, a <code>video</code> snapshot, and an inline <code>screen_image</code> snapshot.</sub></p>
 
@@ -18,7 +18,7 @@
 
 An agent can write a Pyxel game in seconds, but it cannot open a window, press the arrow keys, or look at the screen. Editor-bound engines solve this with MCP servers that live inside the editor. Pyxel has no editor process to attach to, so pyxel-mcp drives the game itself:
 
-- **Headless and deterministic.** Every call runs the script in a fresh subprocess with SDL dummy drivers, an optional RNG seed, and a frame budget. The same call gives the same frames on a laptop or in CI.
+- **Headless execution.** Every call runs the script in a fresh subprocess with SDL dummy drivers and a frame budget. Set `random_seed` to seed Python's `random` module and Pyxel's random generator. Other randomness, timing, and external state can still affect the frames.
 - **Input as data.** Buttons, axes, and mouse position are scheduled per frame, so a playtest is a JSON document the agent can rerun and extend.
 - **Stop on the event, not the clock.** `until="score >= 1"` ends the run at the first frame where a game attribute holds, and `"frame": "end"` snapshots capture that moment.
 - **Facts, not scores.** Tools report pixels, values, and measurements. Deciding whether the game is good stays with the agent and the person asking for it.
@@ -67,7 +67,7 @@ Restart the client after changing its configuration. The server writes this diag
 [pyxel-mcp] starting - 8 tools
 ```
 
-Python 3.11+ is required, and Pyxel >= 2.9.6 is installed as a dependency. Script tools execute local Python in subprocesses to isolate Pyxel state, but they do not sandbox untrusted code. See [SECURITY.md](SECURITY.md).
+Python 3.11+ is required, and Pyxel >= 2.9.6 is installed as a dependency. Script tools execute local Python in subprocesses to isolate Pyxel state, but they do not sandbox untrusted code. See [SECURITY.md](https://github.com/kitao/pyxel-mcp/blob/main/SECURITY.md).
 
 ## How an agent uses it
 
@@ -85,7 +85,7 @@ The loop is deliberately small. The separate [pyxel-skill](https://github.com/ki
 
 ## Tools
 
-Every `script` argument is a file path, not Python source. Relative asset paths inside the script resolve from the script's directory, exactly as under `python game.py`.
+Every `script` argument is a file path, not Python source. Relative asset paths inside the script resolve from the script's directory, as when running `python game.py` from that directory.
 
 | Tool | Returns |
 |---|---|
@@ -99,6 +99,14 @@ Every `script` argument is a file path, not Python source. Relative asset paths 
 | `diff_frames` | Pixel differences between two PNG files. |
 
 All tools declare input and output schemas. Every result includes `ok` and `errors`.
+
+Script tools observe the first `pyxel.run()` call while its enclosing resources
+remain active. `run` drives the callbacks there; the asset readers inspect the
+pre-loop state. `pyxel.quit()` ends a run normally and preserves completed
+frames. Statements after `pyxel.run()` are not executed. Enclosing cleanup runs
+after observation, and cleanup failures are reported with `phase: "script_exit"`.
+Stopping uses internal `BaseException` signals. Scripts or context-manager
+cleanup that suppress these signals are unsupported and may execute post-run code.
 
 Captured PNGs can travel inside the result: set `inline: true` on a `screen_image` snapshot, or `inline=true` on `read_image` and `read_tilemap`, and the PNG is returned as MCP image content next to the structured data. A single inline frame may omit its output path; the file is then written under the system temp directory and its path is still reported, so `diff_frames` and later comparisons keep working. At most 12 images are embedded per call.
 
@@ -152,7 +160,7 @@ uvx --refresh-package pyxel-mcp pyxel-mcp install
 
 - [Pyxel](https://github.com/kitao/pyxel) — the retro game engine this server observes.
 - [pyxel-skill](https://github.com/kitao/pyxel-skill) — the Agent Skill that turns these tools into a build-and-verify workflow.
-- [CHANGELOG.md](CHANGELOG.md) — what changed in each release.
+- [CHANGELOG.md](https://github.com/kitao/pyxel-mcp/blob/main/CHANGELOG.md) — what changed in each release.
 
 ## MCP Registry
 
@@ -160,4 +168,4 @@ uvx --refresh-package pyxel-mcp pyxel-mcp install
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](https://github.com/kitao/pyxel-mcp/blob/main/LICENSE).

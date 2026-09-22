@@ -50,33 +50,36 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         if path_error:
             return _empty(make_validation_error(path_error))
 
-    try:
-        with run_to_preloop(payload, empty_factory=_empty):
-            import pyxel
+    def observe(_state):
+        import pyxel
 
-            if image < 0 or image >= len(pyxel.images):
-                return _empty(
-                    make_validation_error(
-                        f"image index {image} out of range [0, {len(pyxel.images)})"
-                    )
+        if image < 0 or image >= len(pyxel.images):
+            return _empty(
+                make_validation_error(
+                    f"image index {image} out of range [0, {len(pyxel.images)})"
                 )
-            bank = pyxel.images[image]
-            if x >= bank.width or y >= bank.height:
-                return _empty(
-                    make_validation_error(
-                        f"image origin ({x}, {y}) outside bank size "
-                        f"({bank.width}, {bank.height})"
-                    )
-                )
-
-            result = analyze_image(
-                image=image,
-                x=x,
-                y=y,
-                w=w,
-                h=h,
-                render_path=render_path,
             )
+        bank = pyxel.images[image]
+        if x >= bank.width or y >= bank.height:
+            return _empty(
+                make_validation_error(
+                    f"image origin ({x}, {y}) outside bank size "
+                    f"({bank.width}, {bank.height})"
+                )
+            )
+
+        result = analyze_image(
+            image=image,
+            x=x,
+            y=y,
+            w=w,
+            h=h,
+            render_path=render_path,
+        )
+        return result
+
+    try:
+        result = run_to_preloop(payload, empty_factory=_empty, observe=observe)
     except PreloopFailed as f:
         return f.result
     result["ok"] = len(result.get("errors", [])) == 0

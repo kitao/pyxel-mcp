@@ -48,23 +48,42 @@ def test_zero_tile_facts_are_reported_separately():
     assert result["zero_tile_nonempty"] is True
 
 
-def test_imgsrc_resolved_when_tilemap_image_assigned():
-    """`tm.image = pyxel.images[N]` is a legacy shortcut Pyxel still accepts;
-    after it, `tm.imgsrc` becomes an Image instance, not an int. The analyzer
-    must fall back to identity-scanning pyxel.images and recover the index
-    rather than crashing on `int(Image)`.
-    """
+def test_imgsrc_resolved_when_tilemap_image_assigned(tmp_path):
+    """Image wrappers for the same bank still resolve to that bank's pixels."""
+    from PIL import Image
+
     tm = pyxel.tilemaps[0]
-    # Set imgsrc to an Image instance (not a normal int) — _resolve_imgsrc
-    # should identity-scan and return 1.
     tm.imgsrc = pyxel.images[1]
+    pyxel.images[1].cls(7)
     try:
-        # Should not raise; should treat bank 1 as the source.
-        result = analyze_tilemap(tilemap=0)
-        # region / usage shape unchanged from the int case.
-        assert "zero_tile_used" in result
-        assert "zero_tile_nonempty" in result
+        out = tmp_path / "bank-source.png"
+        result = analyze_tilemap(tilemap=0, render_path=str(out))
+        assert result["imgsrc"] == 1
+        assert result["zero_tile_nonempty"] is True
         assert result["errors"] == []
+        with Image.open(out) as image:
+            assert image.getpixel((0, 0)) == tuple(pyxel.colors[7].to_bytes(3, "big"))
+    finally:
+        tm.imgsrc = 0
+        pyxel.images[1].cls(0)
+
+
+def test_standalone_image_source_and_partial_edge_tile(tmp_path):
+    from PIL import Image
+
+    source = pyxel.Image(10, 10)
+    source.cls(7)
+    tm = pyxel.tilemaps[0]
+    tm.imgsrc = source
+    tm.pset(0, 0, (1, 1))
+    try:
+        out = tmp_path / "custom-source.png"
+        result = analyze_tilemap(tilemap=0, render_path=str(out))
+        assert result["imgsrc"] is None
+        assert result["zero_tile_nonempty"] is True
+        with Image.open(out) as image:
+            assert image.getpixel((1, 1)) == tuple(pyxel.colors[7].to_bytes(3, "big"))
+            assert image.getpixel((2, 2)) == tuple(pyxel.colors[0].to_bytes(3, "big"))
     finally:
         tm.imgsrc = 0
 

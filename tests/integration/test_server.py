@@ -86,6 +86,7 @@ def test_dispatch_nonzero_exit_keeps_run_shape(monkeypatch):
 
 def test_dispatch_invalid_json_keeps_run_shape(monkeypatch):
     def _invalid(*args, **kwargs):
+        Path(args[0][-1]).write_text("not json")
         return subprocess.CompletedProcess(
             args=["pyxel-mcp"],
             returncode=0,
@@ -114,6 +115,7 @@ def test_dispatch_partial_run_fallback_is_normalized(monkeypatch):
                 }
             ]
         }
+        Path(args[0][-1]).write_text(json.dumps(payload))
         return subprocess.CompletedProcess(
             args=["pyxel-mcp"], returncode=0, stdout=json.dumps(payload), stderr=""
         )
@@ -153,6 +155,7 @@ def test_screen_snapshot_write_failure_stays_a_run_result(tmp_path):
 
 def test_dispatch_rejects_non_object_json(monkeypatch):
     def _non_object(*args, **kwargs):
+        Path(args[0][-1]).write_text("[1]")
         return subprocess.CompletedProcess(
             args=["pyxel-mcp"], returncode=0, stdout="[1]", stderr=""
         )

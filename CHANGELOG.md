@@ -1,5 +1,30 @@
 # Change Log
 
+## 1.3.1
+
+- Drive callbacks inside the script's `pyxel.run()` call so surrounding resources
+  stay open during observation, and inspect read-tool assets at that same checkpoint.
+- Treat `pyxel.quit()` as an orderly stop, retaining completed frames and capturing
+  `end` snapshots from the last completed frame; report cleanup errors separately.
+- Preserve normal Python `__main__`, dataclass, pickle, and source-encoding behavior
+  when loading scripts, and accept positional `pyxel.init` arguments.
+- Reset released gamepad axes and resolve App attributes inside nested `until`
+  expressions such as generators, comprehensions, and lambdas.
+- Keep harness results separate from script diagnostics, including JSON printed
+  at interpreter exit, and preserve non-UTF-8 native output in the log.
+- Keep state snapshots valid JSON for non-finite floats and unusual NumPy arrays,
+  and avoid silently merging non-string dictionary keys.
+- Use a tilemap's actual source Image, report empty out-of-screen grid regions,
+  and discover the installed Pyxel type stub correctly.
+- Match audio metadata to Pyxel's repeating tone, volume, and effect sequences;
+  retain measured MML/PCM amplitude and bound infinite sound renders to 10 seconds.
+- Preserve GIF timing, pad odd-sized MP4 frames, and skip video ranges not reached
+  before the run stops instead of returning a placeholder or crashing.
+- Validate Python source encodings and contextual syntax errors, and inspect
+  tilemap source coordinates at tile boundaries.
+- Repair README links and images on PyPI, clarify seeded reproducibility, and run
+  CI checks before tag-driven package publication.
+
 ## 1.3.0
 
 - Resolve relative asset paths from the script directory in script tools

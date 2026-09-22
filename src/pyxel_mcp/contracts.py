@@ -187,8 +187,15 @@ SnapshotResult = Annotated[
 
 class RunResult(ObservationResult):
     snapshots: list[SnapshotResult]
-    exit_status: Literal["ok", "crashed", "timeout", "stalled", "invalid"]
-    frame_count: int
+    exit_status: Literal["ok", "crashed", "timeout", "stalled", "invalid"] = Field(
+        description=(
+            "ok includes reaching the frame budget, matching until, or an explicit "
+            "pyxel.quit(). Cleanup failures are reported as crashed."
+        )
+    )
+    frame_count: int = Field(
+        description="Number of completed update/draw pairs; excludes a partial quit frame."
+    )
     elapsed_seconds: float
     log: str
     seeded: bool

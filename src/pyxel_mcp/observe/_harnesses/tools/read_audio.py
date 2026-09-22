@@ -2,7 +2,7 @@
 
 Renders a Pyxel sound or music slot to WAV. Delegates synthesis to Pyxel's
 built-in .save() method, then reads the WAV back to compute metadata.
-Music targets render a fixed 10-second window.
+Music targets and infinitely looping sounds render a fixed 10-second window.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ _NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 _TONE_NAMES = {0: "t", 1: "s", 2: "p", 3: "n"}
 
 # Effect int → single-char string
-_EFFECT_NAMES = {0: "n", 1: "s", 2: "v", 3: "f"}
+_EFFECT_NAMES = {0: "n", 1: "s", 2: "v", 3: "f", 4: "h", 5: "q"}
 
 
 def _empty(error: dict) -> dict:
@@ -82,7 +82,7 @@ def _read_wav_metadata(path: str) -> tuple[int, int, float, float]:
 
 
 def _build_notes(sound) -> list[dict]:
-    """Build notes list from a Pyxel Sound object."""
+    """Read tracker fields; these do not transcribe MML or PCM audio."""
     notes_list = list(sound.notes)
     tones_list = list(sound.tones)
     effects_list = list(sound.effects)
@@ -90,22 +90,10 @@ def _build_notes(sound) -> list[dict]:
 
     result = []
     for frame, note_num in enumerate(notes_list):
-        # Resolve per-frame tone/volume/effect (Pyxel repeats last value if shorter)
-        tone_val = (
-            tones_list[frame]
-            if frame < len(tones_list)
-            else (tones_list[-1] if tones_list else 0)
-        )
-        vol_val = (
-            volumes_list[frame]
-            if frame < len(volumes_list)
-            else (volumes_list[-1] if volumes_list else 0)
-        )
-        eff_val = (
-            effects_list[frame]
-            if frame < len(effects_list)
-            else (effects_list[-1] if effects_list else 0)
-        )
+        # Pyxel cycles each shorter sequence independently from its beginning.
+        tone_val = tones_list[frame % len(tones_list)] if tones_list else 0
+        vol_val = volumes_list[frame % len(volumes_list)] if volumes_list else 0
+        eff_val = effects_list[frame % len(effects_list)] if effects_list else 0
 
         result.append(
             {
@@ -195,95 +183,108 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         return _empty(make_validation_error(path_error))
 
     # --- Run script to pre-loop checkpoint ---
-    try:
-        with run_to_preloop(payload, empty_factory=_empty):
-            import pyxel
+    def observe(_state):
+        import pyxel
 
-            # --- Validate slot index range ---
-            if kind == "sound":
-                if slot >= len(pyxel.sounds):
-                    return _empty(
-                        make_validation_error(
-                            f"sound slot {slot} out of range [0, {len(pyxel.sounds)})"
-                        )
+        # --- Validate slot index range ---
+        if kind == "sound":
+            if slot >= len(pyxel.sounds):
+                return _empty(
+                    make_validation_error(
+                        f"sound slot {slot} out of range [0, {len(pyxel.sounds)})"
                     )
-                audio_obj = pyxel.sounds[slot]
-            else:  # music
-                if slot >= len(pyxel.musics):
-                    return _empty(
-                        make_validation_error(
-                            f"music slot {slot} out of range [0, {len(pyxel.musics)})"
-                        )
-                    )
-                audio_obj = pyxel.musics[slot]
-
-            # --- Detect empty slot ---
-            warnings: list[str] = []
-            is_empty_slot = False
-
-            if kind == "sound":
-                notes_raw = list(audio_obj.notes)
-                if not notes_raw or all(n < 0 for n in notes_raw):
-                    is_empty_slot = True
-                    warnings.append(f"sound slot {slot} is empty / not populated")
-            else:
-                # Music: check if all constituent channel lists are empty
-                seqs = (
-                    audio_obj.seqs
-                    if hasattr(audio_obj, "seqs")
-                    else getattr(audio_obj, "snds_list", [])
                 )
-                has_content = any(len(list(ch)) > 0 for ch in seqs)
-                if not has_content:
-                    is_empty_slot = True
-                    warnings.append(f"music slot {slot} is empty / not populated")
-
-            # --- Determine duration and write WAV ---
-            if kind == "sound":
-                if hasattr(audio_obj, "total_sec"):
-                    duration_hint = audio_obj.total_sec()
-                    if duration_hint <= 0:
-                        duration_hint = 1.0  # fallback for empty slot
-                else:
-                    # Approximate: len(notes) * speed / sample_rate
-                    n_notes = max(len(list(audio_obj.notes)), 1)
-                    duration_hint = n_notes * audio_obj.speed / 22050
-            else:
-                duration_hint = 10.0  # music renders a fixed 10-second window
-                if not is_empty_slot:
-                    warnings.append(
-                        "music target renders a fixed 10-second window; "
-                        "audio beyond 10 seconds is truncated"
+            audio_obj = pyxel.sounds[slot]
+        else:  # music
+            if slot >= len(pyxel.musics):
+                return _empty(
+                    make_validation_error(
+                        f"music slot {slot} out of range [0, {len(pyxel.musics)})"
                     )
+                )
+            audio_obj = pyxel.musics[slot]
 
-            out_path = str(Path(output_path).resolve())
-            audio_obj.save(out_path, duration_hint)
+        # --- Detect empty slot ---
+        warnings: list[str] = []
+        is_empty_slot = False
 
-            # --- Read WAV metadata ---
-            sample_rate, channels, duration_seconds, peak_amplitude = (
-                _read_wav_metadata(out_path)
+        if kind == "music":
+            # Music: check if all constituent channel lists are empty
+            seqs = (
+                audio_obj.seqs
+                if hasattr(audio_obj, "seqs")
+                else getattr(audio_obj, "snds_list", [])
             )
+            has_content = any(len(list(ch)) > 0 for ch in seqs)
+            if not has_content:
+                is_empty_slot = True
+                warnings.append(f"music slot {slot} is empty / not populated")
 
-            # --- Build notes list (sound only) ---
-            if kind == "sound" and not is_empty_slot:
-                notes = _build_notes(audio_obj)
+        # --- Determine duration and write WAV ---
+        if kind == "sound":
+            if hasattr(audio_obj, "total_sec"):
+                duration_hint = audio_obj.total_sec()
+                if duration_hint is None:
+                    duration_hint = 10.0
+                    warnings.append(
+                        "sound target loops indefinitely; rendered a fixed "
+                        "10-second window"
+                    )
+                elif duration_hint <= 0:
+                    is_empty_slot = True
+                    duration_hint = 1.0  # fallback for empty slot
             else:
-                notes = []
+                # Pyxel's tracker speed is measured at 120 ticks per second.
+                n_notes = max(len(list(audio_obj.notes)), 1)
+                duration_hint = n_notes * audio_obj.speed / 120
+        else:
+            duration_hint = 10.0  # music renders a fixed 10-second window
+            if not is_empty_slot:
+                warnings.append(
+                    "music target renders a fixed 10-second window; "
+                    "audio beyond 10 seconds is truncated"
+                )
 
-            # Empty-slot override
-            if is_empty_slot:
-                peak_amplitude = 0.0
+        out_path = str(Path(output_path).resolve())
+        audio_obj.save(out_path, duration_hint)
 
-            return {
-                "ok": True,
-                "path": out_path,
-                "duration_seconds": duration_seconds,
-                "sample_rate": sample_rate,
-                "channels": channels,
-                "peak_amplitude": peak_amplitude,
-                "notes": notes,
-                "warnings": warnings,
-                "errors": [],
-            }
+        # --- Read WAV metadata ---
+        sample_rate, channels, duration_seconds, peak_amplitude = _read_wav_metadata(
+            out_path
+        )
+
+        # --- Build notes list (sound only) ---
+        if kind == "sound" and not is_empty_slot:
+            notes = _build_notes(audio_obj)
+        else:
+            notes = []
+
+        # MML and PCM sounds can have no tracker notes and still contain
+        # audio. Only call a sound empty when its duration is zero, or its
+        # tracker contains only rests and the rendered WAV is also silent.
+        if kind == "sound":
+            notes_raw = list(audio_obj.notes)
+            if is_empty_slot or (
+                notes_raw
+                and all(note < 0 for note in notes_raw)
+                and peak_amplitude == 0
+            ):
+                warnings.append(f"sound slot {slot} is empty / not populated")
+
+        return {
+            "ok": True,
+            "path": out_path,
+            "duration_seconds": duration_seconds,
+            "sample_rate": sample_rate,
+            "channels": channels,
+            "peak_amplitude": peak_amplitude,
+            "notes": notes,
+            "warnings": warnings,
+            "errors": [],
+        }
+
+    try:
+        result = run_to_preloop(payload, empty_factory=_empty, observe=observe)
     except PreloopFailed as f:
         return f.result
+    return result

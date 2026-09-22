@@ -11,6 +11,7 @@ def test_phases_match_spec():
     expected = {
         "validation",
         "script_import",
+        "script_exit",
         "asset_load",
         "game_loop",
         "artifact",

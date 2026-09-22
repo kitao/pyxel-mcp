@@ -29,6 +29,7 @@ class InputScheduler:
         # set_btn(False).
         self._prev_held_buttons: set[str] = set()
         self._held_axes: dict[str, float] = {}
+        self._prev_held_axes: set[str] = set()
         self._mouse_pos: tuple[int, int] = (0, 0)
         self._next_event_idx = 0
 
@@ -122,10 +123,16 @@ class InputScheduler:
 
         self._prev_held_buttons = set(curr)
 
+        # An explicit axes map replaces the held map. Pyxel retains axis
+        # values across flip(), so omitted axes must be returned to neutral.
+        for name in self._prev_held_axes - self._held_axes.keys():
+            pyxel.set_btnv(getattr(pyxel, name), 0)
+
         # Axes: scale [-1.0, 1.0] → int range -32768..32767 (Pyxel set_btnv convention).
         for name, value in self._held_axes.items():
             scaled = round(value * 32767)
             pyxel.set_btnv(getattr(pyxel, name), scaled)
+        self._prev_held_axes = set(self._held_axes)
 
         # Mouse position: prefer Pyxel 2.9+ set_mouse_pos; fall back to attribute patch.
         x, y = self._mouse_pos

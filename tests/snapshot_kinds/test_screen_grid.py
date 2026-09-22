@@ -45,3 +45,17 @@ def test_bbox_clamping_with_warning():
     sw, sh = pyxel.width, pyxel.height
     assert result["region"] == {"x": 4, "y": 4, "w": sw - 4, "h": sh - 4}
     assert any("clamp" in w.lower() for w in result.get("warnings", []))
+
+
+def test_bbox_entirely_outside_screen_is_an_empty_region():
+    import pyxel
+
+    with headless_pyxel():
+        pyxel.init(8, 8)
+        sw, sh = pyxel.width, pyxel.height
+        result = capture(
+            {"frame": 0, "kind": "screen_grid", "bbox": [sw + 12, sh + 12, 5, 5]}
+        )
+    assert result["region"] == {"x": sw, "y": sh, "w": 0, "h": 0}
+    assert result["grid"] == []
+    assert result["warnings"]

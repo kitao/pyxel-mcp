@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import tokenize
 from typing import Any
 
 from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_error
@@ -87,6 +88,9 @@ def _detect_syntax(source: str) -> tuple[list[dict[str, Any]], ast.AST | None]:
     """
     try:
         tree = ast.parse(source)
+        # Parsing alone accepts contextually invalid Python such as a return
+        # outside a function. Compile the AST without executing the script.
+        compile(tree, "<script>", "exec")
         return [], tree
     except SyntaxError as e:
         return [_make_issue("error", e.lineno or 0, e.offset, "syntax", str(e))], None
@@ -158,7 +162,8 @@ def _detect_tilemap_zero_zero(tree: ast.AST) -> list[dict[str, Any]]:
 
     Constrained to pyxel.tilemaps[...].set(...) calls to avoid false positives
     from unrelated .set() calls (e.g., pyxel.images[0].set()).
-    Heuristic: flag if the data list contains a string with '0000' or '0102'.
+    Tile coordinates are four hex digits per cell; whitespace is ignored by
+    Pyxel. Match whole cells rather than substrings spanning adjacent cells.
     """
     issues: list[dict[str, Any]] = []
     for node in ast.walk(tree):
@@ -189,7 +194,8 @@ def _detect_tilemap_zero_zero(tree: ast.AST) -> list[dict[str, Any]]:
                     is_text = isinstance(elt, ast.Constant) and isinstance(
                         elt.value, str
                     )
-                    if is_text and ("0000" in elt.value or "0102" in elt.value):
+                    data = "".join(elt.value.split()) if is_text else ""
+                    if any(data[i : i + 4] == "0000" for i in range(0, len(data), 4)):
                         issues.append(
                             _make_issue(
                                 "warning",
@@ -671,8 +677,10 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         }
 
     try:
-        source = path.read_text()
-    except (UnicodeDecodeError, OSError) as e:
+        # Match Python's encoding-cookie and UTF-8 BOM handling.
+        with tokenize.open(path) as source_file:
+            source = source_file.read()
+    except (UnicodeDecodeError, OSError, SyntaxError) as e:
         return {
             "ok": False,
             "issues": [],

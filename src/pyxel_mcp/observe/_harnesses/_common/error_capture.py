@@ -11,6 +11,7 @@ from typing import Any
 class ErrorPhase(str, enum.Enum):
     VALIDATION = "validation"
     SCRIPT_IMPORT = "script_import"
+    SCRIPT_EXIT = "script_exit"
     ASSET_LOAD = "asset_load"
     GAME_LOOP = "game_loop"
     ARTIFACT = "artifact"

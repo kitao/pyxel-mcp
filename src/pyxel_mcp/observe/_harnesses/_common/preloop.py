@@ -1,14 +1,8 @@
-"""Pre-loop checkpoint shared by the script-loading read_* tools.
-
-Validates `script`, enters headless Pyxel, loads the module, and requires the
-`pyxel.run` call, so read_palette, read_image, read_tilemap, and read_audio
-report the same error phases.
-"""
+"""Pre-loop checkpoint shared by the script-loading read_* tools."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import Callable
 from typing import Any
 
 from pyxel_mcp.observe._harnesses._common.error_capture import (
@@ -17,6 +11,9 @@ from pyxel_mcp.observe._harnesses._common.error_capture import (
     make_validation_error,
 )
 from pyxel_mcp.observe._harnesses._common.pyxel_patcher import (
+    ObservationFinished,
+    PreLoopState,
+    QuitRequested,
     RunNotCalledError,
     headless_pyxel,
 )
@@ -27,32 +24,26 @@ from pyxel_mcp.observe._harnesses._common.script_loader import (
 
 
 class PreloopFailed(Exception):
-    """Raised by `run_to_preloop` when the preamble (validation, script load,
-    or `pyxel.run` requirement) fails. Carries an empty-shaped result dict
-    that the caller can `return` directly.
-    """
+    """A script validation, loading, or cleanup failure with a tool result."""
 
     def __init__(self, result: dict):
         self.result = result
 
 
-@contextmanager
 def run_to_preloop(
     payload: dict[str, Any],
     *,
     empty_factory: Callable[[dict], dict],
-) -> Iterator[Any]:
-    """Validate `script`, enter headless_pyxel, load the script, and yield the
-    pyxel state object so the body can perform its analysis at the pre-loop
-    checkpoint.
+    observe: Callable[[PreLoopState], dict[str, Any]],
+) -> dict[str, Any]:
+    """Run an observer synchronously when the script calls `pyxel.run`.
 
-    On any failure (missing/invalid `script`, file not found, script crash on
-    import, missing `pyxel.run` call), raises `PreloopFailed` carrying an
-    empty-shaped result dict built via `empty_factory(error_dict)`. Callers
-    typically `try: ... except PreloopFailed as f: return f.result`.
+    Reading and artifact creation finish before unwinding the script's stack,
+    so resources owned by enclosing `with`/`finally` blocks remain available.
+    The patcher's sentinel then stops normal statements after `pyxel.run`.
 
-    `empty_factory` receives a single ToolError dict and must return the
-    tool's empty/error shape (with `errors=[error]` and `ok=False`).
+    Script validation, import, and cleanup failures raise `PreloopFailed` with
+    an empty-shaped tool result. Observer failures produce artifact errors.
     """
     script = payload.get("script")
     if not isinstance(script, str):
@@ -65,19 +56,64 @@ def run_to_preloop(
     except FileNotFoundError as e:
         raise PreloopFailed(empty_factory(make_validation_error(str(e), path=script)))
 
-    with headless_pyxel() as state:
+    result: dict[str, Any] | None = None
+
+    def on_run(state: PreLoopState) -> None:
+        nonlocal result
         try:
-            load_script_module(path)
-            state.require_run_called()
-        except RunNotCalledError as e:
-            raise PreloopFailed(
-                empty_factory(make_error(ErrorPhase.SCRIPT_IMPORT, str(e)))
-            )
-        except Exception as e:
-            raise PreloopFailed(
-                empty_factory(
-                    make_error(ErrorPhase.SCRIPT_IMPORT, str(e), capture_traceback=True)
+            result = observe(state)
+        except Exception as error:
+            # Return to the patcher so its BaseException sentinel stops the
+            # script even if the caller catches ordinary Exception around run.
+            result = empty_factory(
+                make_error(
+                    ErrorPhase.ARTIFACT,
+                    f"observation failed: {error}",
+                    path=payload.get("render_path") or payload.get("output_path"),
+                    capture_traceback=True,
                 )
             )
 
-        yield state
+    with headless_pyxel(on_run=on_run) as state:
+        try:
+            load_script_module(path)
+            state.require_run_called()
+        except ObservationFinished:
+            pass
+        except QuitRequested:
+            if result is None:
+                raise PreloopFailed(
+                    empty_factory(
+                        make_error(
+                            ErrorPhase.SCRIPT_IMPORT,
+                            "script quit before the pyxel.run checkpoint",
+                            path=str(path),
+                        )
+                    )
+                ) from None
+        except RunNotCalledError as e:
+            raise PreloopFailed(
+                empty_factory(make_error(ErrorPhase.SCRIPT_IMPORT, str(e)))
+            ) from e
+        except Exception as e:
+            phase = (
+                ErrorPhase.SCRIPT_EXIT
+                if result is not None
+                else ErrorPhase.SCRIPT_IMPORT
+            )
+            message = f"script cleanup failed: {e}" if result is not None else str(e)
+            raise PreloopFailed(
+                empty_factory(
+                    make_error(phase, message, path=str(path), capture_traceback=True)
+                )
+            ) from e
+
+    if result is None:
+        raise PreloopFailed(
+            empty_factory(
+                make_error(
+                    ErrorPhase.SCRIPT_IMPORT, "pre-loop observation did not complete"
+                )
+            )
+        )
+    return result

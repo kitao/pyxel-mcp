@@ -8,6 +8,9 @@ pyxel-mcp exposes eight tools for observing trusted local Pyxel scripts. It repo
 - Every result has `ok` and `errors`. A successful call may still contain useful `log` or `warnings` fields.
 - Artifact paths must be absolute. Relative assets used by a script resolve from the script's directory.
 - Each call starts from a clean Pyxel process. Reproduce prior input from frame 0 when continuing a scenario.
+- Script tools observe the first `pyxel.run()` call while its enclosing resources remain active. Post-run statements are not executed; enclosing cleanup runs after observation.
+- Stopping uses internal `BaseException` signals. Scripts or context-manager cleanup that suppress these signals are unsupported and may execute post-run code.
+- In `run`, `pyxel.quit()` ends normally and preserves completed frames. `frame_count` and `"end"` snapshots exclude an interrupted update/draw pair. Cleanup failures have error phase `script_exit` and retain prior observations.
 
 ## Tools
 

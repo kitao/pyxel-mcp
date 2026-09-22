@@ -41,18 +41,21 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         if path_error:
             return _empty(make_validation_error(path_error))
 
-    try:
-        with run_to_preloop(payload, empty_factory=_empty):
-            import pyxel
+    def observe(_state):
+        import pyxel
 
-            if tilemap < 0 or tilemap >= len(pyxel.tilemaps):
-                return _empty(
-                    make_validation_error(
-                        f"tilemap index {tilemap} out of range [0, {len(pyxel.tilemaps)})"
-                    )
+        if tilemap < 0 or tilemap >= len(pyxel.tilemaps):
+            return _empty(
+                make_validation_error(
+                    f"tilemap index {tilemap} out of range [0, {len(pyxel.tilemaps)})"
                 )
+            )
 
-            result = analyze_tilemap(tilemap=tilemap, render_path=render_path)
+        result = analyze_tilemap(tilemap=tilemap, render_path=render_path)
+        return result
+
+    try:
+        result = run_to_preloop(payload, empty_factory=_empty, observe=observe)
     except PreloopFailed as f:
         return f.result
     result["ok"] = len(result.get("errors", [])) == 0

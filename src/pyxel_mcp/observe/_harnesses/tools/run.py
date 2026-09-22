@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import re
+import sys
 import time
 import traceback as _tb
 from io import StringIO
@@ -23,6 +24,9 @@ from pyxel_mcp.observe._harnesses._common.input_scheduler import (
     ValidationError,
 )
 from pyxel_mcp.observe._harnesses._common.pyxel_patcher import (
+    ObservationFinished,
+    PreLoopState,
+    QuitRequested,
     RunNotCalledError,
     headless_pyxel,
 )
@@ -77,7 +81,7 @@ def _empty_result(*, exit_status: str = "ok", errors: list | None = None) -> dic
 
 
 def _is_ok(exit_status: str, errors: list) -> bool:
-    """run is ok iff no errors AND execution reached the requested frame budget."""
+    """Successful completion includes the frame cap, until, and explicit quit."""
     return len(errors) == 0 and exit_status == "ok"
 
 
@@ -434,7 +438,8 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     """Execute a Pyxel script for a fixed number of frames and return a RunResult.
 
     Validates the payload, loads the script inside a headless Pyxel context,
-    then drives the update/draw loop for the requested number of frames.
+    and drives update/draw inside the intercepted pyxel.run() call, preserving
+    the script's active stack and resources throughout observation.
     Errors are caught per-phase and reported in the `errors` list rather than
     raised, so callers always receive a well-formed result dict.
 
@@ -503,104 +508,210 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     state_buffer: list[dict] = []
     grid_buffer: list[tuple] = []
 
-    # Capture stdout+stderr from the user script into log_buf.
-    # The real stdout is reserved for the JSON result written by main.py,
-    # so the redirect must be closed before run() returns.
     log_buf = StringIO()
-    with (
-        headless_pyxel(random_seed=random_seed) as state,
-        contextlib.redirect_stdout(log_buf),
-        contextlib.redirect_stderr(log_buf),
-    ):
-        # Write any validation warnings collected during pre-expansion
-        for w in pending_warnings:
-            log_buf.write(f"[pyxel-mcp] warning: {w}\n")
+    # Each entry is (resolved request, captured data, deferred capture error).
+    # Only one completed frame is retained, regardless of the frame budget.
+    end_candidates: list[tuple[dict, Any, dict | None]] = []
 
-        # Stall detection cannot run without a signal — warn the agent
-        # that the param is informational-only in this configuration.
-        if stall_window is not None and not stall_active:
-            log_buf.write(
-                "[pyxel-mcp] warning: stall_window_frames is set but no "
-                "`state` or `screen_grid` snapshot is scheduled; "
-                "stall detection has no signal to compare and is disabled.\n"
-            )
-
-        # Seed stdlib random before importing the script so module-level
-        # code and App.__init__ are deterministic too. headless_pyxel seeds
-        # Pyxel before import and again after init in case init resets it.
-        if random_seed is not None:
-            import random as _random
-
-            _random.seed(random_seed)
-            seeded = True
-
-        # Phase 1: import script (pyxel.run is intercepted by headless_pyxel)
-        imported_module = None
-        try:
-            imported_module = load_script_module(path)
-        except FileNotFoundError as e:
-            # Asset path is in the exception message; we don't know it here.
-            errors.append(
-                make_error(
-                    ErrorPhase.ASSET_LOAD,
-                    str(e),
+    def remember_end_frame(
+        frame: int, state: PreLoopState, module: Any, image: Image.Image | None
+    ) -> list[tuple[dict, Any, dict | None]]:
+        candidates = []
+        for snap in end_snaps:
+            resolved = {**snap, "frame": frame}
+            kind = resolved["kind"]
+            try:
+                if kind == "screen_image":
+                    if image is None:
+                        image = _capture_screen_as_pil()
+                    captured = image
+                elif kind == "screen_grid":
+                    captured = _sg_kind.capture(resolved)
+                else:
+                    captured = _state_kind.capture_static(
+                        resolved, app_instance=state.app_instance, module=module
+                    )
+                candidates.append((resolved, captured, None))
+            except Exception as exc:
+                # A property may be unavailable until a later frame. Only an
+                # error on the selected final completed frame is reported.
+                error = make_error(
+                    ErrorPhase.ARTIFACT,
+                    f"{kind} end snapshot failed: {exc}",
+                    path=resolved.get("output"),
+                    frame=frame,
                     capture_traceback=True,
                 )
-            )
-            exit_status = "crashed"
-        except Exception as e:
-            tb_text = _tb.format_exc()
-            if _is_asset_load_error(tb_text):
-                errors.append(
-                    make_error(
-                        ErrorPhase.ASSET_LOAD,
-                        str(e),
-                        capture_traceback=True,
-                    )
-                )
-            else:
-                errors.append(
-                    make_error(
-                        ErrorPhase.SCRIPT_IMPORT,
-                        str(e),
-                        capture_traceback=True,
-                    )
-                )
-            exit_status = "crashed"
+                candidates.append((resolved, None, error))
+        return candidates
 
-        if not errors:
+    def drive_frames(state: PreLoopState) -> None:
+        nonlocal frame_count, exit_status, until_met, end_candidates
+        import pyxel
+
+        imported_module = sys.modules["__main__"]
+
+        # until expressions resolve names on the App instance when one
+        # exists, else on the module (same fallback as state snapshots).
+        until_target = (
+            state.app_instance if state.app_instance is not None else imported_module
+        )
+
+        # Phase 3: drive the update/draw loop
+        for f in range(frames):
             try:
-                state.require_run_called()
-            except RunNotCalledError as e:
+                pyxel.frame_count = f
+                scheduler.advance_to_frame(f)
+                scheduler.apply_to_pyxel()
+                state.update_callback()
+                if state.quit_requested:
+                    raise QuitRequested
+                state.draw_callback()
+                if state.quit_requested:
+                    raise QuitRequested
+                frame_count = f + 1
+            except Exception as e:
                 errors.append(
                     make_error(
-                        ErrorPhase.SCRIPT_IMPORT,
+                        ErrorPhase.GAME_LOOP,
                         str(e),
-                        capture_traceback=False,
+                        frame=f,
+                        capture_traceback=True,
                     )
                 )
                 exit_status = "crashed"
+                frame_count = f
+                break
 
-        if not errors:
-            import pyxel
-
-            # until expressions resolve names on the App instance when one
-            # exists, else on the module (same fallback as state snapshots).
-            until_target = (
-                state.app_instance
-                if state.app_instance is not None
-                else imported_module
-            )
-
-            # Phase 3: drive the update/draw loop
-            for f in range(frames):
+            # Single-frame snapshot dispatch
+            captured_state_this_frame: dict | None = None
+            captured_grid_this_frame: list | None = None
+            artifact_failed = False
+            for snap in single_frame_snaps:
+                if snap.get("frame") != f:
+                    continue
+                kind = snap["kind"]
                 try:
-                    pyxel.frame_count = f
-                    scheduler.advance_to_frame(f)
-                    scheduler.apply_to_pyxel()
-                    state.update_callback()
-                    state.draw_callback()
-                    frame_count = f + 1
+                    if kind == "screen_image":
+                        snapshot_results.append(_si_kind.capture(snap))
+                    elif kind == "screen_grid":
+                        res = _sg_kind.capture(snap)
+                        snapshot_results.append(res)
+                        captured_grid_this_frame = res.get("grid")
+                    elif kind == "state":
+                        res = _state_kind.capture(
+                            snap,
+                            app_instance=state.app_instance,
+                            module=imported_module,
+                        )
+                        snapshot_results.append(res)
+                        captured_state_this_frame = res.get("values")
+                except (Exception, QuitRequested) as e:
+                    message = (
+                        "pyxel.quit() interrupted the observation"
+                        if isinstance(e, QuitRequested)
+                        else str(e)
+                    )
+                    errors.append(
+                        make_error(
+                            ErrorPhase.ARTIFACT,
+                            f"{kind} snapshot failed: {message}",
+                            path=snap.get("output"),
+                            frame=f,
+                            capture_traceback=True,
+                        )
+                    )
+                    exit_status = "crashed"
+                    artifact_failed = True
+                    break
+
+            if artifact_failed:
+                break
+
+            # Video frame accumulation
+            img = None
+            if video_accumulators:
+                try:
+                    img = _capture_screen_as_pil()
+                    for accum in video_accumulators:
+                        accum.add_frame(f, img)
+                except Exception as e:
+                    errors.append(
+                        make_error(
+                            ErrorPhase.ARTIFACT,
+                            f"video frame capture failed: {e}",
+                            frame=f,
+                            capture_traceback=True,
+                        )
+                    )
+                    exit_status = "crashed"
+                    break
+
+            # Keep only the most recent completed frame for deferred snapshots.
+            # A later update/draw may change state or pixels and then quit.
+            end_candidates = remember_end_frame(f, state, imported_module, img)
+
+            # Until condition: evaluated after the frame completes, so
+            # the stop frame's draw and snapshots are already done.
+            if until_condition is not None:
+                try:
+                    met = until_condition.evaluate(until_target)
+                except (UntilError, QuitRequested) as e:
+                    message = (
+                        "pyxel.quit() interrupted until evaluation"
+                        if isinstance(e, QuitRequested)
+                        else str(e)
+                    )
+                    errors.append(
+                        make_error(
+                            ErrorPhase.UNTIL,
+                            message,
+                            frame=f,
+                        )
+                    )
+                    exit_status = "crashed"
+                    break
+                if until_condition.pending_warning:
+                    log_buf.write(
+                        f"[pyxel-mcp] warning: {until_condition.pending_warning}\n"
+                    )
+                    until_condition.pending_warning = None
+                until_met = met
+                if met:
+                    break
+
+            # Stall detection: maintain rolling buffer of the most
+            # recent N captured state-values and grid-signatures. If at
+            # least one buffer is full and every entry is identical,
+            # the run has not advanced for N consecutive frames despite
+            # scheduled inputs — break early and surface "stalled".
+            if stall_active:
+                if captured_state_this_frame is not None:
+                    state_buffer.append(captured_state_this_frame)
+                    if len(state_buffer) > stall_window:
+                        state_buffer.pop(0)
+                if captured_grid_this_frame is not None:
+                    grid_buffer.append(_grid_signature(captured_grid_this_frame))
+                    if len(grid_buffer) > stall_window:
+                        grid_buffer.pop(0)
+
+                if (
+                    len(state_buffer) == stall_window
+                    and all(v == state_buffer[0] for v in state_buffer[1:])
+                ) or (
+                    len(grid_buffer) == stall_window
+                    and all(g == grid_buffer[0] for g in grid_buffer[1:])
+                ):
+                    exit_status = "stalled"
+                    break
+
+            # Observe the completed draw before flip(): presentation
+            # may rotate or clear the back buffer. Flip only when a
+            # following frame needs fresh input-edge state. Leaving the
+            # final frame unflipped also keeps `frame: "end"` exact.
+            if f + 1 < frames:
+                try:
+                    pyxel.flip()
                 except Exception as e:
                     errors.append(
                         make_error(
@@ -611,171 +722,127 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                         )
                     )
                     exit_status = "crashed"
-                    frame_count = f
                     break
 
-                # Single-frame snapshot dispatch
-                captured_state_this_frame: dict | None = None
-                captured_grid_this_frame: list | None = None
-                artifact_failed = False
-                for snap in single_frame_snaps:
-                    if snap.get("frame") != f:
-                        continue
-                    kind = snap["kind"]
-                    try:
-                        if kind == "screen_image":
-                            snapshot_results.append(_si_kind.capture(snap))
-                        elif kind == "screen_grid":
-                            res = _sg_kind.capture(snap)
-                            snapshot_results.append(res)
-                            captured_grid_this_frame = res.get("grid")
-                        elif kind == "state":
-                            res = _state_kind.capture(
-                                snap,
-                                app_instance=state.app_instance,
-                                module=imported_module,
-                            )
-                            snapshot_results.append(res)
-                            captured_state_this_frame = res.get("values")
-                    except Exception as e:
-                        errors.append(
-                            make_error(
-                                ErrorPhase.ARTIFACT,
-                                f"{kind} snapshot failed: {e}",
-                                path=snap.get("output"),
-                                frame=f,
-                                capture_traceback=True,
-                            )
-                        )
-                        exit_status = "crashed"
-                        artifact_failed = True
-                        break
+    def observe_run(state: PreLoopState) -> None:
+        nonlocal exit_status
+        stopped_by_quit = False
+        try:
+            drive_frames(state)
+        except QuitRequested:
+            stopped_by_quit = True
+            log_buf.write(
+                "[pyxel-mcp] script called pyxel.quit(); stopped after "
+                f"{frame_count} completed frame(s).\n"
+            )
 
-                if artifact_failed:
+        # Save end snapshots before the script's enclosing finally/with blocks
+        # unwind. Cached data excludes any partially executed quit frame.
+        if exit_status in ("ok", "stalled"):
+            for resolved, captured, error in end_candidates:
+                ordinary_state = resolved["kind"] == "state" and not stopped_by_quit
+                if error is not None and not ordinary_state:
+                    errors.append(error)
+                    exit_status = "crashed"
                     break
-
-                # Video frame accumulation
-                if video_accumulators:
-                    try:
-                        img = _capture_screen_as_pil()
-                        for accum in video_accumulators:
-                            accum.add_frame(f, img)
-                    except Exception as e:
-                        errors.append(
-                            make_error(
-                                ErrorPhase.ARTIFACT,
-                                f"video frame capture failed: {e}",
-                                frame=f,
-                                capture_traceback=True,
-                            )
-                        )
-                        exit_status = "crashed"
-                        break
-
-                # Until condition: evaluated after the frame completes, so
-                # the stop frame's draw and snapshots are already done.
-                if until_condition is not None:
-                    try:
-                        met = until_condition.evaluate(until_target)
-                    except UntilError as e:
-                        errors.append(
-                            make_error(
-                                ErrorPhase.UNTIL,
-                                str(e),
-                                frame=f,
-                            )
-                        )
-                        exit_status = "crashed"
-                        break
-                    if until_condition.pending_warning:
-                        log_buf.write(
-                            f"[pyxel-mcp] warning: {until_condition.pending_warning}\n"
-                        )
-                        until_condition.pending_warning = None
-                    until_met = met
-                    if met:
-                        break
-
-                # Stall detection: maintain rolling buffer of the most
-                # recent N captured state-values and grid-signatures. If at
-                # least one buffer is full and every entry is identical,
-                # the run has not advanced for N consecutive frames despite
-                # scheduled inputs — break early and surface "stalled".
-                if stall_active:
-                    if captured_state_this_frame is not None:
-                        state_buffer.append(captured_state_this_frame)
-                        if len(state_buffer) > stall_window:
-                            state_buffer.pop(0)
-                    if captured_grid_this_frame is not None:
-                        grid_buffer.append(_grid_signature(captured_grid_this_frame))
-                        if len(grid_buffer) > stall_window:
-                            grid_buffer.pop(0)
-
-                    if (
-                        len(state_buffer) == stall_window
-                        and all(v == state_buffer[0] for v in state_buffer[1:])
-                    ) or (
-                        len(grid_buffer) == stall_window
-                        and all(g == grid_buffer[0] for g in grid_buffer[1:])
-                    ):
-                        exit_status = "stalled"
-                        break
-
-                # Observe the completed draw before flip(): presentation
-                # may rotate or clear the back buffer. Flip only when a
-                # following frame needs fresh input-edge state. Leaving the
-                # final frame unflipped also keeps `frame: "end"` exact.
-                if f + 1 < frames:
-                    try:
-                        pyxel.flip()
-                    except Exception as e:
-                        errors.append(
-                            make_error(
-                                ErrorPhase.GAME_LOOP,
-                                str(e),
-                                frame=f,
-                                capture_traceback=True,
-                            )
-                        )
-                        exit_status = "crashed"
-                        break
-
-        # Fire `"frame": "end"` snapshots at the last completed frame.
-        # Crashed runs are excluded because their remaining observations
-        # cannot be trusted even when update/draw happened to complete.
-        if end_snaps and frame_count > 0 and exit_status in ("ok", "stalled"):
-            last = frame_count - 1
-            for snap in end_snaps:
-                resolved = {**snap, "frame": last}
-                kind = resolved["kind"]
                 try:
-                    if kind == "screen_image":
-                        snapshot_results.append(_si_kind.capture(resolved))
-                    elif kind == "screen_grid":
-                        snapshot_results.append(_sg_kind.capture(resolved))
-                    elif kind == "state":
+                    if ordinary_state:
                         snapshot_results.append(
                             _state_kind.capture(
                                 resolved,
                                 app_instance=state.app_instance,
-                                module=imported_module,
+                                module=sys.modules["__main__"],
                             )
                         )
-                except Exception as e:
+                    elif resolved["kind"] == "screen_image":
+                        snapshot_results.append(
+                            _si_kind.capture(resolved, image=captured)
+                        )
+                    else:
+                        snapshot_results.append(captured)
+                except (Exception, QuitRequested) as exc:
+                    message = (
+                        "pyxel.quit() interrupted the observation"
+                        if isinstance(exc, QuitRequested)
+                        else str(exc)
+                    )
                     errors.append(
                         make_error(
                             ErrorPhase.ARTIFACT,
-                            f"{kind} end snapshot failed: {e}",
+                            f"{resolved['kind']} end snapshot failed: {message}",
                             path=resolved.get("output"),
-                            frame=last,
+                            frame=resolved["frame"],
                             capture_traceback=True,
                         )
                     )
                     exit_status = "crashed"
                     break
 
+    # Run the driver on the script's pyxel.run() stack. The patcher stops script
+    # execution after observation, so post-run statements cannot alter the run.
+    with (
+        headless_pyxel(random_seed=random_seed, on_run=observe_run) as state,
+        contextlib.redirect_stdout(log_buf),
+        contextlib.redirect_stderr(log_buf),
+    ):
+        for warning in pending_warnings:
+            log_buf.write(f"[pyxel-mcp] warning: {warning}\n")
+        if stall_window is not None and not stall_active:
+            log_buf.write(
+                "[pyxel-mcp] warning: stall_window_frames is set but no "
+                "`state` or `screen_grid` snapshot is scheduled; "
+                "stall detection has no signal to compare and is disabled.\n"
+            )
+        if random_seed is not None:
+            import random as _random
+
+            _random.seed(random_seed)
+            seeded = True
+
+        try:
+            load_script_module(path)
+        except ObservationFinished:
+            pass
+        except QuitRequested:
+            # Explicit quit before pyxel.run(), or during enclosing cleanup.
+            log_buf.write(
+                "[pyxel-mcp] script called pyxel.quit(); stopped after "
+                f"{frame_count} completed frame(s).\n"
+            )
+        except Exception as exc:
+            if state.run_called:
+                phase = ErrorPhase.SCRIPT_EXIT
+                message = f"script cleanup failed: {exc}"
+            elif isinstance(exc, FileNotFoundError) or _is_asset_load_error(
+                _tb.format_exc()
+            ):
+                phase = ErrorPhase.ASSET_LOAD
+                message = str(exc)
+            else:
+                phase = ErrorPhase.SCRIPT_IMPORT
+                message = str(exc)
+            errors.append(
+                make_error(phase, message, path=str(path), capture_traceback=True)
+            )
+            exit_status = "crashed"
+
+        if not errors and not state.quit_requested:
+            try:
+                state.require_run_called()
+            except RunNotCalledError as exc:
+                errors.append(make_error(ErrorPhase.SCRIPT_IMPORT, str(exc)))
+                exit_status = "crashed"
+
         # Post-loop: encode all video accumulators (partial videos are useful for debugging)
         for accum in video_accumulators:
+            if not accum.frames:
+                accum.close()
+                log_buf.write(
+                    "[pyxel-mcp] warning: video skipped because the run ended "
+                    "before any frames in its capture range were recorded: "
+                    f"{accum.requested_output}\n"
+                )
+                continue
             try:
                 snapshot_results.append(accum.encode())
             except Exception as e:

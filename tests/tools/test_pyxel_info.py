@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 from pyxel_mcp.observe._harnesses.tools.pyxel_info import run as pyxel_info_run
 
@@ -48,3 +49,10 @@ def test_examples_have_paths():
     assert isinstance(result["examples"], list)
     for ex in result["examples"]:
         assert "name" in ex and "path" in ex
+
+
+def test_installed_type_stub_is_discovered():
+    result = pyxel_info_run({})
+    stub = Path(result["stubs_path"])
+    assert stub.is_file()
+    assert "class Sound:" in stub.read_text()

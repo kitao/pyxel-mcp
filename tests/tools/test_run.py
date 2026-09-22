@@ -343,8 +343,9 @@ def test_end_snapshot_keeps_the_last_drawn_frame_before_flip(monkeypatch, tmp_pa
 
     events = []
 
-    def capture(snapshot):
+    def capture(snapshot, *, image=None):
         events.append("capture")
+        assert image is not None
         return {
             "frame": snapshot["frame"],
             "kind": "screen_image",

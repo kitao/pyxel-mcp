@@ -1,3 +1,5 @@
+import pytest
+
 from pyxel_mcp.observe._harnesses.tools.validate import run as validate_run
 from tests.conftest import SCRIPTS
 
@@ -36,6 +38,23 @@ def test_tilemap_zero_zero_detected():
     result = validate_run({"script": str(SCRIPTS / "anti_tilemap_zero_zero.py")})
     cats = [i["category"] for i in result["issues"]]
     assert "anti_pattern.tilemap_zero_zero" in cats
+
+
+def test_tilemap_zero_detection_respects_cell_boundaries_and_whitespace(tmp_path):
+    script = tmp_path / "tiles.py"
+    script.write_text(
+        "import pyxel\n"
+        "pyxel.tilemaps[0].set(0, 0, ['0102'])\n"
+        "pyxel.tilemaps[0].set(0, 0, ['10000100'])\n"
+        "pyxel.tilemaps[0].set(0, 0, ['00 00'])\n"
+    )
+    result = validate_run({"script": str(script)})
+    issues = [
+        issue
+        for issue in result["issues"]
+        if issue["category"] == "anti_pattern.tilemap_zero_zero"
+    ]
+    assert [issue["line"] for issue in issues] == [4]
 
 
 def test_ragged_image_set_detected():
@@ -564,3 +583,31 @@ def test_issues_sorted_with_severity_tiebreak():
     ]
     issues.sort(key=lambda i: (i["line"], _SEVERITY_ORDER.get(i["severity"], 99)))
     assert [i["severity"] for i in issues] == ["error", "warning", "info"]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [b'# coding: latin-1\ntitle = "caf\xe9"\n', b'\xef\xbb\xbftitle = "hello"\n'],
+)
+def test_python_source_encodings_are_accepted(tmp_path, source):
+    script = tmp_path / "encoded.py"
+    script.write_bytes(source)
+
+    result = validate_run({"script": str(script)})
+
+    assert result["ok"] is True
+    assert result["errors"] == []
+    assert result["issues"] == []
+
+
+@pytest.mark.parametrize("source", ["return 1", "break", "continue", "await f()"])
+def test_contextually_invalid_python_is_a_syntax_error(tmp_path, source):
+    script = tmp_path / "invalid_context.py"
+    script.write_text(source)
+
+    result = validate_run({"script": str(script)})
+
+    assert result["ok"] is False
+    assert result["errors"] == []
+    assert result["issues"][0]["category"] == "syntax"
+    assert result["issues"][0]["line"] == 1
