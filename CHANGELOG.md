@@ -1,5 +1,10 @@
 # Change Log
 
+## 1.3.2
+
+- Point Pyxel links in the README and package metadata to the official website
+  at https://kitao.dev/pyxel/.
+
 ## 1.3.1
 
 - Drive callbacks inside the script's `pyxel.run()` call so surrounding resources

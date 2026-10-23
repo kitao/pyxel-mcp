@@ -1,6 +1,6 @@
 # pyxel-mcp
 
-**Let AI agents play, watch, and measure [Pyxel](https://github.com/kitao/pyxel) games.** pyxel-mcp is an MCP server that runs a Pyxel script headlessly, feeds it scheduled input, stops when a condition holds, and hands back the facts: screenshots, pixel grids, game state, assets, audio, and frame diffs.
+**Let AI agents play, watch, and measure [Pyxel](https://kitao.dev/pyxel/) games.** pyxel-mcp is an MCP server that runs a Pyxel script headlessly, feeds it scheduled input, stops when a condition holds, and hands back the facts: screenshots, pixel grids, game state, assets, audio, and frame diffs.
 
 [![PyPI](https://img.shields.io/pypi/v/pyxel-mcp)](https://pypi.org/project/pyxel-mcp/)
 [![Python](https://img.shields.io/pypi/pyversions/pyxel-mcp)](https://pypi.org/project/pyxel-mcp/)
@@ -158,7 +158,7 @@ uvx --refresh-package pyxel-mcp pyxel-mcp install
 
 ## Related
 
-- [Pyxel](https://github.com/kitao/pyxel) — the retro game engine this server observes.
+- [Pyxel](https://kitao.dev/pyxel/) — the retro game engine this server observes.
 - [pyxel-skill](https://github.com/kitao/pyxel-skill) — the Agent Skill that turns these tools into a build-and-verify workflow.
 - [CHANGELOG.md](https://github.com/kitao/pyxel-mcp/blob/main/CHANGELOG.md) — what changed in each release.
 
