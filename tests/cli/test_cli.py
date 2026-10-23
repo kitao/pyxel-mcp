@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import textwrap
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -37,9 +38,11 @@ def test_registry_metadata_matches_project_version():
     assert registry["packages"][0]["transport"]["type"] == "stdio"
 
 
-def test_release_version_is_1_3_1():
-    pyproject = (ROOT / "pyproject.toml").read_text()
-    assert 'version = "1.3.1"' in pyproject
+def test_latest_changelog_version_matches_project():
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]
+    changelog = (ROOT / "CHANGELOG.md").read_text()
+    latest_version = re.search(r"^## ([^\n]+)$", changelog, re.MULTILINE).group(1)
+    assert latest_version == project["version"]
 
 
 def test_depends_on_mcp_sdk_2():
