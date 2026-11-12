@@ -11,6 +11,7 @@ def test_returns_required_fields():
         "pyxel_version",
         "python_version",
         "stubs_path",
+        "cube_stubs_path",
         "examples",
         "resources",
         "errors",
@@ -39,6 +40,7 @@ def test_resources_has_expected_uris():
     assert result["resources"] == {
         "default_palette": "pyxel://palette/default",
         "examples": "pyxel://examples/{name}",
+        "cube_examples": "pyxel://examples/cube/{name}",
         "run_snapshots_schema": "pyxel://run-snapshots-schema",
         "validation_patterns": "pyxel://validation-patterns",
     }
@@ -56,3 +58,27 @@ def test_installed_type_stub_is_discovered():
     stub = Path(result["stubs_path"])
     assert stub.is_file()
     assert "class Sound:" in stub.read_text()
+
+
+def test_installed_cube_type_stub_is_discovered():
+    result = pyxel_info_run({})
+    stub = Path(result["cube_stubs_path"])
+    assert stub.is_file()
+    assert "class Vec3:" in stub.read_text()
+    assert "class Node:" in stub.read_text()
+
+
+def test_cube_examples_have_qualified_names_and_installed_paths():
+    examples = {example["name"]: example for example in pyxel_info_run({})["examples"]}
+    for name in (
+        "c01_hello_cube",
+        "c02_basic_shapes",
+        "c03_custom_shapes",
+        "c04_mesh_and_motion",
+        "c05_3d_collision",
+        "c06_3d_physics",
+    ):
+        path = Path(examples[f"cube/{name}"]["path"])
+        assert path.is_file()
+        assert path.parent.name == "cube"
+        assert path.stem == name

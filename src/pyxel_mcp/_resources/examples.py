@@ -1,4 +1,4 @@
-"""Installed Pyxel examples exposed through one resource template."""
+"""Installed Pyxel and Pyxel Cube examples exposed through resource templates."""
 
 from pathlib import Path
 
@@ -15,16 +15,17 @@ def _examples_dir() -> Path | None:
     return candidate.resolve() if candidate.is_dir() else None
 
 
-def _load_example(name: str) -> str:
+def _load_example(name: str, *, subdir: str = "") -> str:
     d = _examples_dir()
     if not d:
         raise ResourceError("Pyxel examples are unavailable")
     if not name or Path(name).name != name:
         raise ResourceError(f"Example '{name}' not found")
-    path = (d / f"{name}.py").resolve()
-    if path.parent != d or not path.is_file():
+    parent = (d / subdir).resolve()
+    path = (parent / f"{name}.py").resolve()
+    if not parent.is_relative_to(d) or path.parent != parent or not path.is_file():
         raise ResourceError(f"Example '{name}' not found")
-    return path.read_text()
+    return path.read_text(encoding="utf-8")
 
 
 def register(mcp):
@@ -36,3 +37,12 @@ def register(mcp):
     )
     def example(name: str) -> str:
         return _load_example(name)
+
+    @mcp.resource(
+        "pyxel://examples/cube/{name}",
+        name="Installed Pyxel Cube Example",
+        description="Python source for a Pyxel Cube example bundled with the installed Pyxel package.",
+        mime_type="text/x-python",
+    )
+    def cube_example(name: str) -> str:
+        return _load_example(name, subdir="cube")

@@ -16,7 +16,7 @@ pyxel-mcp exposes eight tools for observing trusted local Pyxel scripts. It repo
 
 - `validate`: parse a script and report recognizable Pyxel code patterns without executing it.
 - `run`: advance frames, schedule inputs, stop on an optional App-attribute condition, and capture `state`, `screen_image`, `screen_grid`, or `video` snapshots.
-- `pyxel_info`: report installed versions, paths, examples, and resource URIs.
+- `pyxel_info`: report installed versions, Pyxel and Cube type stub paths, examples, and resource URIs.
 - `read_palette`: return palette colors and image-bank palette indices in use.
 - `read_image`: return image-bank pixels for a region and optionally render a PNG.
 - `read_tilemap`: return tile coordinates, source bank, usage counts, bounds, and optional rendered output.
@@ -25,11 +25,22 @@ pyxel-mcp exposes eight tools for observing trusted local Pyxel scripts. It repo
 
 Use `random_seed` when randomness affects a run. Use `until` with snapshots at `"end"` when the target is an event rather than a known frame. Set `inline: true` on a `screen_image` snapshot, or `inline=true` on `read_image` and `read_tilemap`, to receive the PNG as image content in the same result. A single inline frame may omit its output path; the PNG then lands under the system temp directory and its path is still reported. At most 12 images are embedded per call. Use `scale` 2 to 4 so pixel art stays legible. Look at captured pixels whenever appearance matters.
 
+Pyxel 3.0.1 or newer is required. Pyxel Cube (`pyxel.cube`) programs use the same
+`run` inputs and screen snapshots. `pyxel_info` returns `stubs_path` for the base
+API and `cube_stubs_path` for Cube. For numeric Cube state, request component
+paths such as `scene.camera.transform.pos.x`; whole Cube objects are represented
+as text. Asset readers inspect image banks, tilemaps, and audio, not scene graphs
+or meshes. Pyxel 3 removed the old MML syntax and pre-2.0 resource loading.
+
 ## Resources
 
 - `pyxel://run-snapshots-schema`: complete snapshot grammar.
 - `pyxel://validation-patterns`: categories reported by `validate`.
 - `pyxel://palette/default`: default palette table.
-- `pyxel://examples/{name}`: source for a named example bundled with the installed Pyxel package.
+- `pyxel://examples/{name}`: source for a top-level example bundled with the installed Pyxel package.
+- `pyxel://examples/cube/{name}`: source for a bundled Pyxel Cube example.
 
-`pyxel_info` discovers available example names. Full game-building guidance belongs in the separate pyxel-skill project.
+`pyxel_info` discovers available examples. Append a returned `name` (for example,
+`cube/c01_hello_cube`) to `pyxel://examples/` to read its source. Use the returned
+`path` as the `script` argument to run it with its bundled assets. Full
+game-building guidance belongs in the separate pyxel-skill project.

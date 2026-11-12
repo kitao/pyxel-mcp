@@ -3,6 +3,7 @@ import subprocess
 import sys
 
 import pytest
+from PIL import Image
 
 from tests.conftest import SCRIPTS
 
@@ -78,6 +79,56 @@ def test_pyxel_info_via_subprocess():
     result = _run("pyxel_info", {})
     assert "pyxel_version" in result
     assert result["resources"]["run_snapshots_schema"] == "pyxel://run-snapshots-schema"
+
+
+@pytest.mark.parametrize(
+    ("name", "attrs", "values", "inputs", "until"),
+    [
+        (
+            "cube/c01_hello_cube",
+            ["scene.camera.transform.pos.y"],
+            {"scene.camera.transform.pos.y": 78.0},
+            [],
+            None,
+        ),
+        (
+            "cube/c04_mesh_and_motion",
+            ["gazelle.motion_index"],
+            {"gazelle.motion_index": 1},
+            [{"frame": 2, "buttons": ["KEY_2"]}],
+            "gazelle.motion_index == 1",
+        ),
+    ],
+)
+def test_cube_examples_render_and_expose_state_in_a_fresh_process(
+    tmp_path, name, attrs, values, inputs, until
+):
+    examples = {
+        example["name"]: example for example in _run("pyxel_info", {})["examples"]
+    }
+    image_path = tmp_path / "cube.png"
+    result = _run(
+        "run",
+        {
+            "script": examples[name]["path"],
+            "frames": 10 if until else 3,
+            "inputs": inputs,
+            "until": until,
+            "snapshots": [
+                {"kind": "state", "frame": "end", "attrs": attrs},
+                {"kind": "screen_image", "frame": "end", "output": str(image_path)},
+            ],
+        },
+    )
+
+    assert result["ok"] is True, result["errors"]
+    assert result["frame_count"] == 3
+    if until:
+        assert result["until_met"] is True
+    assert result["snapshots"][0]["values"] == values
+    with Image.open(image_path) as image:
+        colors = image.getcolors(maxcolors=image.width * image.height)
+        assert colors is not None and len(colors) > 1
 
 
 def test_relative_asset_paths_resolve_from_the_script_directory():

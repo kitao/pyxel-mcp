@@ -1,6 +1,6 @@
 [project]
 name = "pyxel-mcp"
-version = "1.3.2"
+version = "1.4.0"
 description = "MCP server for Pyxel, a retro game engine for Python. Provides headless tools to observe Pyxel programs."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -29,7 +29,7 @@ classifiers = [
     "Topic :: Games/Entertainment",
     "Topic :: Software Development :: Libraries",
 ]
-dependencies = ["mcp>=2.0.0,<3.0.0", "pyxel>=2.9.6", "numpy", "Pillow"]
+dependencies = ["mcp>=2.0.0,<3.0.0", "pyxel>=3.0.1", "numpy", "Pillow"]
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-asyncio", "ruff"]

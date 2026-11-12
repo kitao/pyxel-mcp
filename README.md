@@ -67,7 +67,7 @@ Restart the client after changing its configuration. The server writes this diag
 [pyxel-mcp] starting - 8 tools
 ```
 
-Python 3.11+ is required, and Pyxel >= 2.9.6 is installed as a dependency. Script tools execute local Python in subprocesses to isolate Pyxel state, but they do not sandbox untrusted code. See [SECURITY.md](https://github.com/kitao/pyxel-mcp/blob/main/SECURITY.md).
+Python 3.11+ is required, and Pyxel >= 3.0.1 is installed as a dependency. Script tools execute local Python in subprocesses to isolate Pyxel state, but they do not sandbox untrusted code. See [SECURITY.md](https://github.com/kitao/pyxel-mcp/blob/main/SECURITY.md).
 
 ## How an agent uses it
 
@@ -91,7 +91,7 @@ Every `script` argument is a file path, not Python source. Relative asset paths 
 |---|---|
 | `validate` | Syntax errors and recognizable Pyxel code patterns, without executing. |
 | `run` | Headless frames, scheduled input, logs, and `state`, `screen_image`, `screen_grid`, or `video` snapshots. |
-| `pyxel_info` | Installed versions, paths, bundled examples, and resource URIs. |
+| `pyxel_info` | Installed versions, Pyxel and Cube type stub paths, bundled examples, and resource URIs. |
 | `read_palette` | Palette colors and image-bank indices in use. |
 | `read_image` | Image-bank pixels and an optional PNG render. |
 | `read_tilemap` | Tile coordinates, source bank, usage counts, bounds, and an optional render. |
@@ -109,6 +109,26 @@ Stopping uses internal `BaseException` signals. Scripts or context-manager
 cleanup that suppress these signals are unsupported and may execute post-run code.
 
 Captured PNGs can travel inside the result: set `inline: true` on a `screen_image` snapshot, or `inline=true` on `read_image` and `read_tilemap`, and the PNG is returned as MCP image content next to the structured data. A single inline frame may omit its output path; the file is then written under the system temp directory and its path is still reported, so `diff_frames` and later comparisons keep working. At most 12 images are embedded per call.
+
+### Pyxel Cube
+
+Pyxel 3 adds software-rendered 3D through `pyxel.cube`. Use the same `run` tool,
+scheduled inputs, and screen snapshots to observe Cube programs. `pyxel_info`
+includes Cube examples such as `cube/c01_hello_cube`; pass an example's `path`
+to `run` so its bundled assets resolve correctly. Read its source through
+`pyxel://examples/cube/c01_hello_cube`.
+
+`stubs_path` and `cube_stubs_path` point to the API type stubs installed with
+Pyxel. The [Pyxel API reference](https://kitao.dev/pyxel/api-reference/) and
+[Cube API reference](https://kitao.dev/pyxel/api-reference/cube/) provide full
+descriptions. State snapshots can inspect explicit numeric paths such as
+`scene.camera.transform.pos.x`; whole Cube objects are returned as text
+representations. The asset readers continue to inspect image banks, tilemaps,
+and audio; they do not export a Cube scene or mesh.
+
+When updating older projects, Pyxel 3 no longer accepts the old MML syntax or
+pre-2.0 resource files. See the
+[current MML commands](https://kitao.dev/pyxel/mml-studio/mml-commands).
 
 ## Example
 
@@ -139,14 +159,18 @@ The result reports `until_met`, the reached `frame_count`, the requested state v
 - `pyxel://run-snapshots-schema` — complete `run.snapshots` grammar, including `"end"`, ranges, and `inline`.
 - `pyxel://validation-patterns` — categories reported by `validate`.
 - `pyxel://palette/default` — default palette table.
-- `pyxel://examples/{name}` — source for an example bundled with the installed Pyxel package; discover names with `pyxel_info`.
+- `pyxel://examples/{name}` — source for a top-level example bundled with the installed Pyxel package.
+- `pyxel://examples/cube/{name}` — source for a bundled Pyxel Cube example.
+
+Discover examples with `pyxel_info`. Append its returned `name` to
+`pyxel://examples/` to read the source, or pass its `path` to `run`.
 
 ## Update
 
 `uvx` caches packages. Force a refresh with:
 
 ```bash
-uvx --refresh-package pyxel-mcp pyxel-mcp install
+uvx --refresh-package pyxel-mcp --refresh-package pyxel pyxel-mcp install
 ```
 
 ## Troubleshooting

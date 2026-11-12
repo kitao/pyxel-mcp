@@ -224,6 +224,7 @@ async def test_mcp_metadata_is_complete_and_precise():
             "pyxel_version",
             "python_version",
             "stubs_path",
+            "cube_stubs_path",
             "examples",
             "resources",
         },

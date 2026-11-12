@@ -132,4 +132,5 @@ async def test_resources_are_local_and_examples_use_a_template():
     }
     assert {template.uri_template for template in templates} == {
         "pyxel://examples/{name}",
+        "pyxel://examples/cube/{name}",
     }

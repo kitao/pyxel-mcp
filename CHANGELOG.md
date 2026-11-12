@@ -1,5 +1,14 @@
 # Change Log
 
+## 1.4.0
+
+- Require Pyxel 3.0.1 or newer and document Pyxel Cube observation and Pyxel 3
+  migration notes.
+- Discover bundled Cube examples and expose their source through
+  `pyxel://examples/cube/{name}`.
+- Report the installed Cube API type stub in `pyxel_info.cube_stubs_path`.
+- Refresh the Pyxel dependency as well as the server in the documented update command.
+
 ## 1.3.2
 
 - Point Pyxel links in the README and package metadata to the official website

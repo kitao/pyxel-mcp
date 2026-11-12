@@ -245,6 +245,7 @@ class PyxelInfoResult(ObservationResult):
     pyxel_version: str | None = None
     python_version: str | None = None
     stubs_path: str | None = None
+    cube_stubs_path: str | None = None
     examples: list[ExampleInfo] = Field(default_factory=list)
     resources: dict[str, str] = Field(default_factory=dict)
 

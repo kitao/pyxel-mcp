@@ -232,7 +232,7 @@ def validate(script: NonEmptyStr) -> Annotated[CallToolResult, ValidateResult]:
 
 
 @mcp.tool(
-    description="Report installed versions, paths, examples, and Pyxel resource URIs.",
+    description="Report installed versions, Pyxel and Cube type stub paths, examples, and resource URIs.",
     annotations=_annotations("Pyxel environment info", pure=True),
     structured_output=True,
 )

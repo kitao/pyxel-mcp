@@ -11,10 +11,10 @@ from typing import Any
 from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_error
 
 
-def _stubs_path() -> str:
+def _stubs_path(subdir: str = "") -> str:
     import pyxel
 
-    package_dir = Path(pyxel.__file__).parent
+    package_dir = Path(pyxel.__file__).parent / subdir
     for filename in ("__init__.pyi", "pyxel.pyi"):
         pyi = package_dir / filename
         if pyi.is_file():
@@ -30,9 +30,10 @@ def _examples() -> list[dict[str, Any]]:
     if not examples_dir.is_dir():
         return []
     out = []
-    # top-level *.py only; subdirectory examples (if any future Pyxel ships them) are unsupported
-    for path in sorted(examples_dir.glob("*.py")):
-        out.append({"name": path.stem, "path": str(path), "description": None})
+    for pattern in ("*.py", "cube/*.py"):
+        for path in sorted(examples_dir.glob(pattern)):
+            name = path.relative_to(examples_dir).with_suffix("").as_posix()
+            out.append({"name": name, "path": str(path), "description": None})
     return out
 
 
@@ -57,9 +58,11 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     errors: list[dict[str, Any]] = []
     try:
         stubs = _stubs_path()
+        cube_stubs = _stubs_path("cube")
         examples = _examples()
     except ImportError as e:
         stubs = ""
+        cube_stubs = ""
         examples = []
         errors.append(make_validation_error(f"pyxel module import failed: {e}"))
 
@@ -74,10 +77,12 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
         "pyxel_version": pyxel_version,
         "python_version": sys.version.split()[0],
         "stubs_path": stubs,
+        "cube_stubs_path": cube_stubs,
         "examples": examples,
         "resources": {
             "default_palette": "pyxel://palette/default",
             "examples": "pyxel://examples/{name}",
+            "cube_examples": "pyxel://examples/cube/{name}",
             "run_snapshots_schema": "pyxel://run-snapshots-schema",
             "validation_patterns": "pyxel://validation-patterns",
         },

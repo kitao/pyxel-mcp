@@ -1,8 +1,11 @@
 """Registration coverage for the small, local-only resource surface."""
 
+from pathlib import Path
+
 import pytest
 from mcp.server.mcpserver.exceptions import ResourceError, ResourceNotFoundError
 
+from pyxel_mcp._resources import examples as example_resources
 from pyxel_mcp.server import mcp
 from pyxel_mcp.server import pyxel_info as pyxel_info_tool
 from tests.conftest import structured
@@ -26,6 +29,7 @@ async def test_pyxel_info_matches_registered_resources():
     templates = await mcp.list_resource_templates()
     assert {str(template.uri_template) for template in templates} == {
         "pyxel://examples/{name}",
+        "pyxel://examples/cube/{name}",
     }
 
 
@@ -90,11 +94,46 @@ async def test_example_template_reads_installed_example():
     assert "pyxel" in blobs[0].content
 
 
-async def test_example_template_rejects_unknown_names():
+async def test_cube_example_resources_match_the_discovered_source_files():
+    examples = structured(pyxel_info_tool())["examples"]
+    cube_examples = [
+        example for example in examples if example["name"].startswith("cube/")
+    ]
+    assert cube_examples
+    for example in cube_examples:
+        result = await mcp.read_resource(f"pyxel://examples/{example['name']}")
+        text = next(iter(result)).content
+        assert text == Path(example["path"]).read_text(encoding="utf-8")
+        assert "from pyxel.cube import" in text
+
+
+@pytest.mark.parametrize("prefix", ["", "cube/"])
+async def test_example_template_rejects_unknown_names(prefix):
     with pytest.raises(ResourceError, match="not found"):
-        await mcp.read_resource("pyxel://examples/not-an-installed-example")
+        await mcp.read_resource(f"pyxel://examples/{prefix}not-an-installed-example")
 
 
-async def test_example_template_rejects_path_traversal():
+@pytest.mark.parametrize("prefix", ["", "cube/"])
+async def test_example_template_rejects_path_traversal(prefix):
     with pytest.raises(ResourceNotFoundError):
-        await mcp.read_resource("pyxel://examples/..%2F__init__")
+        await mcp.read_resource(f"pyxel://examples/{prefix}..%2F__init__")
+
+
+@pytest.mark.parametrize("link_directory", [False, True])
+def test_cube_example_loader_rejects_symlinks_outside_examples(
+    tmp_path, monkeypatch, link_directory
+):
+    root = tmp_path / "examples"
+    root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "example.py").write_text("outside the examples directory")
+    if link_directory:
+        (root / "cube").symlink_to(outside, target_is_directory=True)
+    else:
+        (root / "cube").mkdir()
+        (root / "cube/example.py").symlink_to(outside / "example.py")
+    monkeypatch.setattr(example_resources, "_examples_dir", lambda: root)
+
+    with pytest.raises(ResourceError, match="not found"):
+        example_resources._load_example("example", subdir="cube")
