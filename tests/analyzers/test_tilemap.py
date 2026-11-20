@@ -9,7 +9,7 @@ def _ensure_pyxel():
     try:
         _ = pyxel.tilemaps[0].width
     except Exception:
-        pyxel.init(64, 64)
+        pyxel.init(64, 64, headless=True)
 
 
 _ensure_pyxel()

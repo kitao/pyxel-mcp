@@ -49,6 +49,7 @@ async def test_validation_patterns_resource_covers_every_detector_category():
         "anti_pattern.iter_modify",
         "anti_pattern.btn_one_shot",
         "anti_pattern.palette_animation",
+        "anti_pattern.palette_assignment",
         "anti_pattern.cls_missing",
         "anti_pattern.degree_radian_mix",
         "anti_pattern.ragged_image_set",

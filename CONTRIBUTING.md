@@ -25,13 +25,12 @@ uv run ruff check
 uv run ruff format --check
 ```
 
-CI runs pytest on Python 3.11 and 3.14 and the two ruff checks on Python 3.12.
+CI checks the minimum Pyxel version on Python 3.11, the resolved version on Python 3.14, and both Ruff checks on Python 3.12.
 Tag releases run the same checks before building or publishing.
 
 Notes:
 
-- Tests drive Pyxel (installed as a dependency) headlessly through SDL dummy
-  drivers, so no display is needed.
+- Tests drive Pyxel (installed as a dependency) with `headless=True`, so no display is needed.
 - `tests/conftest.py` generates the PNG fixtures under
   `tests/fixtures/images/` on first run; they are intentionally gitignored.
 - Anything that changes how the subprocess harness loads or drives a script
@@ -40,7 +39,7 @@ Notes:
 
 ## Layout
 
-- `src/pyxel_mcp/server.py` registers the eight tools with the MCP SDK.
+- `src/pyxel_mcp/server.py` registers tools with the MCP SDK.
 - `src/pyxel_mcp/contracts.py` holds the public input and output models.
 - `src/pyxel_mcp/dispatch.py` is the subprocess boundary.
 - `src/pyxel_mcp/observe/_harnesses/` runs inside the subprocess: one module

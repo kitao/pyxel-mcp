@@ -8,18 +8,8 @@ from importlib.metadata import version as _pkg_version
 from pathlib import Path
 from typing import Any
 
+from pyxel_mcp.api import stub_path
 from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_error
-
-
-def _stubs_path(subdir: str = "") -> str:
-    import pyxel
-
-    package_dir = Path(pyxel.__file__).parent / subdir
-    for filename in ("__init__.pyi", "pyxel.pyi"):
-        pyi = package_dir / filename
-        if pyi.is_file():
-            return str(pyi)
-    return ""
 
 
 def _examples() -> list[dict[str, Any]]:
@@ -57,10 +47,12 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
     """
     errors: list[dict[str, Any]] = []
     try:
-        stubs = _stubs_path()
-        cube_stubs = _stubs_path("cube")
+        base_path = stub_path("pyxel")
+        cube_path = stub_path("pyxel.cube")
+        stubs = str(base_path) if base_path.is_file() else ""
+        cube_stubs = str(cube_path) if cube_path.is_file() else ""
         examples = _examples()
-    except ImportError as e:
+    except (ImportError, FileNotFoundError) as e:
         stubs = ""
         cube_stubs = ""
         examples = []

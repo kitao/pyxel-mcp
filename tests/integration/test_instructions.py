@@ -22,6 +22,7 @@ def test_instructions_match_the_tool_surface():
         "`run`",
         "`validate`",
         "`pyxel_info`",
+        "`lookup_api`",
         "`read_palette`",
         "`read_image`",
         "`read_tilemap`",

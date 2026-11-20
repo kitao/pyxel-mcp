@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import string
 import tokenize
 from typing import Any
 
@@ -108,15 +109,19 @@ def _detect_missing_colkey(tree: ast.AST) -> list[dict[str, Any]]:
         if func.value.id != "pyxel" or func.attr != "blt":
             continue
         # colkey is the 8th positional arg or a keyword arg
-        if len(node.args) >= 8 or any(kw.arg == "colkey" for kw in node.keywords):
+        if (
+            len(node.args) >= 8
+            or any(isinstance(arg, ast.Starred) for arg in node.args)
+            or any(kw.arg in ("colkey", None) for kw in node.keywords)
+        ):
             continue
         issues.append(
             _make_issue(
-                "warning",
+                "info",
                 node.lineno,
                 node.col_offset,
                 "anti_pattern.missing_colkey",
-                "pyxel.blt called without `colkey=` — sprite background will not be transparent",
+                "This blit draws all source colors. Set colkey if the sprite needs transparency.",
             )
         )
     return issues
@@ -198,11 +203,11 @@ def _detect_tilemap_zero_zero(tree: ast.AST) -> list[dict[str, Any]]:
                     if any(data[i : i + 4] == "0000" for i in range(0, len(data), 4)):
                         issues.append(
                             _make_issue(
-                                "warning",
+                                "info",
                                 node.lineno,
                                 node.col_offset,
                                 "anti_pattern.tilemap_zero_zero",
-                                "tilemap data references source-bank (0,0) — placing visible content there floods the entire tilemap",
+                                "This data uses tile (0, 0), which also appears in uninitialized cells.",
                             )
                         )
                         break
@@ -360,6 +365,32 @@ def _detect_btn_one_shot(tree: ast.AST) -> list[dict[str, Any]]:
     return issues
 
 
+def _detect_palette_assignment(tree: ast.AST) -> list[dict[str, Any]]:
+    """Assigning a list to the module attribute shadows Pyxel's palette."""
+    issues = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)) or node.value is None:
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        for target in targets:
+            if (
+                isinstance(target, ast.Attribute)
+                and target.attr == "colors"
+                and isinstance(target.value, ast.Name)
+                and target.value.id == "pyxel"
+            ):
+                issues.append(
+                    _make_issue(
+                        "warning",
+                        target.lineno,
+                        target.col_offset,
+                        "anti_pattern.palette_assignment",
+                        "Assign to pyxel.colors[:] to replace the engine palette. Assigning pyxel.colors shadows the module attribute.",
+                    )
+                )
+    return issues
+
+
 def _detect_palette_animation(tree: ast.AST) -> list[dict[str, Any]]:
     """pyxel.colors[N] = X (or augmented-assignment) inside a For or While loop body.
 
@@ -394,11 +425,11 @@ def _detect_palette_animation(tree: ast.AST) -> list[dict[str, Any]]:
                 if is_colors:
                     issues.append(
                         _make_issue(
-                            "warning",
+                            "info",
                             child.lineno,
                             child.col_offset,
                             "anti_pattern.palette_animation",
-                            "pyxel.colors[N] = X inside a loop — palette mutation per frame is expensive; prefer pal() for per-draw remapping",
+                            "This loop changes the display palette for every pixel using that color index.",
                         )
                     )
     return issues
@@ -523,16 +554,7 @@ def _walk_or_single(node: ast.AST):
 
 
 def _detect_ragged_image_set(tree: ast.AST) -> list[dict[str, Any]]:
-    """pyxel.images[N].set(x, y, data) where `data` is a list of string
-    constants whose lengths differ — Pyxel raises `Invalid sound note` /
-    `byte index out of bounds` at runtime when reading mismatched rows.
-
-    Catches the trap of a sprite written with mismatched row widths, which can
-    otherwise surface only at runtime.
-
-    Heuristic: all-string elements must share the same length. A list with
-    any non-string-constant element is skipped (can't statically check).
-    """
+    """Check literal pixel row widths after removing Pyxel's ASCII whitespace."""
     issues: list[dict[str, Any]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
@@ -555,9 +577,11 @@ def _detect_ragged_image_set(tree: ast.AST) -> list[dict[str, Any]]:
         if not is_images:
             continue
         # The 3rd positional arg should be a list of string constants
-        if len(node.args) < 3:
-            continue
-        data_arg = node.args[2]
+        data_arg = (
+            node.args[2]
+            if len(node.args) >= 3
+            else next((kw.value for kw in node.keywords if kw.arg == "data"), None)
+        )
         if not isinstance(data_arg, ast.List):
             continue
         # Collect string-constant lengths; bail if any element is not a string
@@ -567,7 +591,7 @@ def _detect_ragged_image_set(tree: ast.AST) -> list[dict[str, Any]]:
             if not (isinstance(elt, ast.Constant) and isinstance(elt.value, str)):
                 lengths = []
                 break
-            lengths.append(len(elt.value))
+            lengths.append(sum(ch not in string.whitespace for ch in elt.value))
         if not lengths:
             continue
         unique = set(lengths)
@@ -579,8 +603,7 @@ def _detect_ragged_image_set(tree: ast.AST) -> list[dict[str, Any]]:
                     node.col_offset,
                     "anti_pattern.ragged_image_set",
                     f"pyxel.images[N].set() data has rows of differing lengths "
-                    f"{sorted(unique)} — Pyxel raises 'byte index out of bounds' "
-                    f"at runtime; pad every row to the same hex-string width",
+                    f"{sorted(unique)}. Pyxel requires the same number of pixels in each row.",
                 )
             )
     return issues
@@ -618,21 +641,21 @@ def _detect_degree_radian_mix(tree: ast.AST) -> list[dict[str, Any]]:
     for call in math_calls:
         issues.append(
             _make_issue(
-                "warning",
+                "info",
                 call.lineno,
                 call.col_offset,
                 "anti_pattern.degree_radian_mix",
-                f"math.{call.func.attr}() takes radians but pyxel trig takes degrees — mixing causes silent numerical errors",
+                f"math.{call.func.attr}() uses radians for angles. Check conversions where values pass between math and Pyxel.",
             )
         )
     for call in pyxel_calls:
         issues.append(
             _make_issue(
-                "warning",
+                "info",
                 call.lineno,
                 call.col_offset,
                 "anti_pattern.degree_radian_mix",
-                f"pyxel.{call.func.attr}() takes degrees but math trig takes radians — mixing causes silent numerical errors",
+                f"pyxel.{call.func.attr}() expects degrees. Check angle units where values pass between Pyxel and math functions.",
             )
         )
     return issues
@@ -646,6 +669,7 @@ _DETECTORS = [
     _detect_assets_in_update,
     _detect_iter_modify,
     _detect_btn_one_shot,
+    _detect_palette_assignment,
     _detect_palette_animation,
     _detect_cls_missing,
     _detect_degree_radian_mix,

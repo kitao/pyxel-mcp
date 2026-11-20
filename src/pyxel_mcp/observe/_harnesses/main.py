@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Callable
+from importlib import import_module
 from pathlib import Path
 
 from pyxel_mcp.observe._harnesses._common.error_capture import (
@@ -18,33 +18,17 @@ from pyxel_mcp.observe._harnesses._common.error_capture import (
     make_validation_error,
 )
 
-
-def _build_tools() -> dict[str, Callable[[dict], dict]]:
-    """Lazy-built dispatch table. Imported on first dispatch call to avoid
-    paying the pyxel-import cost at module-load time (e.g., for argv-only
-    error paths that never need a tool handler).
-    """
-    from pyxel_mcp.observe._harnesses.tools import (
-        diff_frames,
-        pyxel_info,
-        read_audio,
-        read_image,
-        read_palette,
-        read_tilemap,
-        run,
-        validate,
-    )
-
-    return {
-        "run": run.run,
-        "validate": validate.run,
-        "pyxel_info": pyxel_info.run,
-        "read_palette": read_palette.run,
-        "read_image": read_image.run,
-        "read_tilemap": read_tilemap.run,
-        "read_audio": read_audio.run,
-        "diff_frames": diff_frames.run,
-    }
+# Only the selected tool and its dependencies need loading in this process.
+_TOOLS = {
+    "run",
+    "validate",
+    "pyxel_info",
+    "read_palette",
+    "read_image",
+    "read_tilemap",
+    "read_audio",
+    "diff_frames",
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -78,18 +62,16 @@ def main(argv: list[str] | None = None) -> int:
         emit(result)
         return 0
 
-    tools = _build_tools()
-
-    if subcommand not in tools:
+    if subcommand not in _TOOLS:
         result = {
             "errors": [make_validation_error(f"unknown subcommand: {subcommand}")]
         }
         emit(result)
         return 0
 
-    handler = tools[subcommand]
     try:
-        result = handler(payload)
+        tool = import_module(f".tools.{subcommand}", __package__)
+        result = tool.run(payload)
     except Exception as e:
         # Handler-specific validation and script-load paths should catch expected
         # user errors before this process-level fallback.

@@ -1,14 +1,4 @@
-"""Catalog for the `pyxel://validation-patterns` resource and detector
-categories surfaced by the `validate` tool.
-
-The `validate` tool reports each anti-pattern by `category` string only.
-Without rationale + fix, a category name is just a label — agents need to
-know *why* the pattern is flagged and *what the canonical fix looks like*.
-
-Source of truth for these rows is
-`src/pyxel_mcp/observe/_harnesses/tools/validate.py`. If a detector's
-category string changes, update the row here as well.
-"""
+"""Reference table for the static checks reported by validate."""
 
 from __future__ import annotations
 
@@ -17,9 +7,9 @@ from __future__ import annotations
 _ROWS: list[tuple[str, str, str, str]] = [
     (
         "anti_pattern.missing_colkey",
-        "warning",
-        "pyxel.blt without colkey= renders the sprite's index-0 background as opaque pixels.",
-        "Pass colkey=0 (or your transparent index) to blt(); make this the default for all sprite draws.",
+        "info",
+        "This blit draws all source colors.",
+        "Pass a transparent color index when the sprite needs one.",
     ),
     (
         "anti_pattern.update_in_draw",
@@ -29,9 +19,9 @@ _ROWS: list[tuple[str, str, str, str]] = [
     ),
     (
         "anti_pattern.tilemap_zero_zero",
-        "warning",
-        "Tilemap data referencing source tile (0,0) makes every uninitialized cell render that tile, flooding the map.",
-        "Reserve source-bank (0,0) as a fully transparent 8x8 tile; route real content to (1,0) or beyond.",
+        "info",
+        "Uninitialized tilemap cells also reference source tile (0, 0).",
+        "Inspect the source tile if unexpected pixels repeat across the map.",
     ),
     (
         "anti_pattern.assets_in_update",
@@ -52,10 +42,16 @@ _ROWS: list[tuple[str, str, str, str]] = [
         "Use pyxel.btnp(K) for one-shot triggers (sounds, scene transitions, jumps).",
     ),
     (
-        "anti_pattern.palette_animation",
+        "anti_pattern.palette_assignment",
         "warning",
-        "pyxel.colors[N] = X inside a for/while loop body mutates the global palette every frame.",
-        "Use pyxel.pal() for per-draw color remap, or compute the palette once outside the loop.",
+        "Assigning pyxel.colors shadows the module attribute.",
+        "Use pyxel.colors[:] = palette to replace the engine palette.",
+    ),
+    (
+        "anti_pattern.palette_animation",
+        "info",
+        "Changing a display color affects every pixel using that index.",
+        "Use colors for palette animation and pal() for per-draw remapping.",
     ),
     (
         "anti_pattern.cls_missing",
@@ -65,14 +61,14 @@ _ROWS: list[tuple[str, str, str, str]] = [
     ),
     (
         "anti_pattern.degree_radian_mix",
-        "warning",
-        "math.sin/cos take radians; pyxel.sin/cos take degrees. Using both in the same module silently produces wrong angles.",
+        "info",
+        "Pyxel and math trigonometric functions use different angle units.",
         "Pick one convention per module; if you need both, convert explicitly with math.radians/degrees at the boundary.",
     ),
     (
         "anti_pattern.ragged_image_set",
         "warning",
-        "pyxel.images[N].set() with hex-string rows of different widths can fail at runtime with misleading low-level errors.",
+        "Image.set() requires equal pixel counts after ASCII whitespace is removed.",
         "Make every string row in the image data the same length before passing it to images[N].set().",
     ),
 ]

@@ -237,7 +237,10 @@ def capture(
                 )
         for path in attrs:
             try:
-                v, found = _resolve_path(target, path, stored_only=stored_only)
+                root, attr = target, path
+                if path.startswith("__main__."):
+                    root, attr = module, path.removeprefix("__main__.")
+                v, found = _resolve_path(root, attr, stored_only=stored_only)
                 if found:
                     if auto:
                         import numpy as np

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-import textwrap
 import tomllib
 from pathlib import Path
 
@@ -73,7 +72,7 @@ def test_install_output_contains_snippet_text(capsys):
     assert '"command": "uvx"' in out
     assert '"args": ["pyxel-mcp"]' in out
     assert '"mcpServers"' in out
-    assert "8 tools" in out
+    assert "pyxel_info" in out
     assert "read_animation" not in out
 
 
@@ -137,5 +136,4 @@ def test_serve_subcommand_invokes_server(monkeypatch):
 def test_readme_contains_cli_install_snippet_verbatim():
     """README and CLI must not drift; the CLI constant is the single source."""
     readme = (ROOT / "README.md").read_text()
-    indented = textwrap.indent(cli._INSTALL_SNIPPET, "   ")
-    assert indented in readme
+    assert cli._INSTALL_SNIPPET in readme

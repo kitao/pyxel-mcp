@@ -31,4 +31,6 @@ jobs:
           enable-cache: true
           python-version: ${{ matrix.python-version }}
       - run: uv sync --extra dev
-      - run: uv run pytest -q
+      - if: matrix.python-version == '3.11'
+        run: uv pip install "pyxel==3.0.3"
+      - run: .venv/bin/python -m pytest -q

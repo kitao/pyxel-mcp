@@ -8,6 +8,8 @@ from typing import Any
 
 import numpy as np
 
+from pyxel_mcp.observe._harnesses._common.pixels import rgb_image
+
 _TILES_GRID_LIMIT = 4096
 
 
@@ -42,25 +44,11 @@ def _zero_zero_is_visible(bank) -> bool:
 
 
 def _render_tilemap_png(
-    tilemap: int,
+    tiles: np.ndarray,
     bank,
-    tm_w: int,
-    tm_h: int,
     render_path: Path,
 ) -> None:
-    """Render visible tilemap region to a PNG using PIL.
-
-    Vectorised pipeline:
-      1. Snapshot the source bank as a (bh, bw) uint8 numpy array.
-      2. Build a (256, 3) palette LUT once.
-      3. Read tilemap (u, v) coords for the visible region from data_ptr().
-      4. For each cell, slice the corresponding 8x8 tile out of the bank
-         and place it into the indices buffer; convert to RGB at the end
-         via a single LUT lookup.
-    """
-    import pyxel
-    from PIL import Image as PILImage
-
+    """Render the selected tiles, clipping partial tiles from custom images."""
     bw, bh = bank.width, bank.height
     bank_arr = np.frombuffer(
         bank.data_ptr(),
@@ -68,28 +56,12 @@ def _render_tilemap_png(
         count=bw * bh,
     ).reshape((bh, bw))
 
-    # Palette LUT: index → (r, g, b). Pad to 256 to allow direct indexing.
-    lut = np.zeros((256, 3), dtype=np.uint8)
-    for i, c in enumerate(pyxel.colors):
-        lut[i, 0] = (c >> 16) & 0xFF
-        lut[i, 1] = (c >> 8) & 0xFF
-        lut[i, 2] = c & 0xFF
-
-    img_w = tm_w * 8
-    img_h = tm_h * 8
-    indices = np.zeros((img_h, img_w), dtype=np.uint8)
-
-    tm = pyxel.tilemaps[tilemap]
-    tm_arr = np.frombuffer(
-        tm.data_ptr(),
-        dtype=np.uint16,
-        count=tm.width * tm.height * 2,
-    ).reshape((tm.height, tm.width, 2))
-
+    tm_h, tm_w = tiles.shape[:2]
+    indices = np.zeros((tm_h * 8, tm_w * 8), dtype=np.uint8)
     for ty in range(tm_h):
         for tx in range(tm_w):
-            u = int(tm_arr[ty, tx, 0])
-            v = int(tm_arr[ty, tx, 1])
+            u = int(tiles[ty, tx, 0])
+            v = int(tiles[ty, tx, 1])
             # Preserve the in-bounds part of edge tiles in custom-sized Images.
             sy, sx = v * 8, u * 8
             if sy >= bh or sx >= bw:
@@ -99,16 +71,15 @@ def _render_tilemap_png(
                 sy : sy + tile_h, sx : sx + tile_w
             ]
 
-    rgb = lut[indices]  # (img_h, img_w, 3)
-
     render_path.parent.mkdir(parents=True, exist_ok=True)
-    PILImage.fromarray(rgb, "RGB").save(render_path)
+    rgb_image(indices).save(render_path, format="PNG")
 
 
 def analyze_tilemap(
     tilemap: int,
     *,
     render_path: str | None = None,
+    bbox: tuple[int, int, int, int] | None = None,
 ) -> dict[str, Any]:
     """Read tile coordinates, usage, bounds, and source-tile facts."""
     import pyxel
@@ -118,18 +89,11 @@ def analyze_tilemap(
     tm_h: int = tm.height
     imgsrc, source_image = _resolve_imgsrc(tm)
 
-    # Snapshot the tilemap as a (h, w, 2) uint16 array — Pyxel exposes the
-    # tilemap memory as ushort pairs (u, v), little-endian on supported
-    # platforms. `.copy()` once so subsequent script writes don't alias.
-    tm_arr = (
-        np.frombuffer(
-            tm.data_ptr(),
-            dtype=np.uint16,
-            count=tm_w * tm_h * 2,
-        )
-        .reshape((tm_h, tm_w, 2))
-        .copy()
-    )
+    x, y, w, h = bbox if bbox is not None else (0, 0, tm_w, tm_h)
+    tm_arr = np.frombuffer(tm.data_ptr(), dtype=np.uint16).reshape(tm_h, tm_w, 2)[
+        y : y + h, x : x + w
+    ]
+    h, w = tm_arr.shape[:2]
 
     # Detect (0,0) tile presence and non-(0,0) bounding box.
     is_zero = (tm_arr[..., 0] == 0) & (tm_arr[..., 1] == 0)
@@ -141,8 +105,8 @@ def analyze_tilemap(
         min_x, max_x = int(xs.min()), int(xs.max())
         min_y, max_y = int(ys.min()), int(ys.max())
         region: dict[str, int] | None = {
-            "x": min_x,
-            "y": min_y,
+            "x": x + min_x,
+            "y": y + min_y,
             "w": max_x - min_x + 1,
             "h": max_y - min_y + 1,
         }
@@ -165,7 +129,7 @@ def analyze_tilemap(
     zero_tile_nonempty = _zero_zero_is_visible(source_image)
 
     # tiles: full grid only when small enough — return as nested int lists.
-    total_cells = tm_w * tm_h
+    total_cells = w * h
     if total_cells <= _TILES_GRID_LIMIT:
         tiles: list[list[list[int]]] | None = tm_arr.astype(int).tolist()
     else:
@@ -174,16 +138,13 @@ def analyze_tilemap(
     rendered = None
     if render_path:
         rp = Path(render_path).resolve()
-        # Limit render to bounding region (or full tilemap if small)
-        if region is not None:
-            render_w = region["x"] + region["w"]
-            render_h = region["y"] + region["h"]
-            render_w = min(render_w, tm_w)
-            render_h = min(render_h, tm_h)
-        else:
-            render_w = min(tm_w, 64)
-            render_h = min(tm_h, 64)
-        _render_tilemap_png(tilemap, source_image, render_w, render_h, rp)
+        render_tiles = tm_arr
+        if bbox is None:
+            # Keep the historical overview from the origin to the last used tile.
+            render_w = region["x"] + region["w"] if region else 64
+            render_h = region["y"] + region["h"] if region else 64
+            render_tiles = tm_arr[:render_h, :render_w]
+        _render_tilemap_png(render_tiles, source_image, rp)
         rendered = str(rp)
 
     return {
@@ -191,6 +152,7 @@ def analyze_tilemap(
         "size": [tm_w, tm_h],
         "imgsrc": imgsrc,
         "tiles": tiles,
+        "sampled_region": {"x": x, "y": y, "w": w, "h": h},
         "usage": usage,
         "region": region,
         "zero_tile_used": uses_zero_zero,

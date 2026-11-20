@@ -194,6 +194,7 @@ async def test_mcp_metadata_is_complete_and_precise():
         "run",
         "validate",
         "pyxel_info",
+        "lookup_api",
         "read_palette",
         "read_image",
         "read_tilemap",
@@ -203,9 +204,15 @@ async def test_mcp_metadata_is_complete_and_precise():
     for tool in tools:
         assert tool.description and tool.description.strip()
         assert tool.annotations and tool.annotations.title
-        assert tool.annotations.destructive_hint is False
-        # Local files and subprocesses only: no tool reaches an open world.
-        assert tool.annotations.open_world_hint is False
+        executes_script = tool.name in {
+            "run",
+            "read_audio",
+            "read_tilemap",
+            "read_image",
+            "read_palette",
+        }
+        assert tool.annotations.destructive_hint is executes_script
+        assert tool.annotations.open_world_hint is executes_script
         assert tool.output_schema
         assert {"ok", "errors"} <= tool.output_schema["properties"].keys()
 
@@ -277,7 +284,7 @@ def test_server_metadata_identifies_the_package():
     assert mcp.name == "pyxel"
     assert mcp.title == "Pyxel MCP"
     assert mcp.version == server._package_version()
-    assert mcp.instructions and "eight tools" in mcp.instructions
+    assert mcp.instructions and "lookup_api" in mcp.instructions
     assert mcp.website_url == "https://github.com/kitao/pyxel-mcp"
 
 
@@ -466,6 +473,8 @@ async def test_every_tool_round_trips_through_the_sdk(tmp_path):
         ("run", {"script": str(SCRIPTS / "minimal.py"), "frames": 1}, True),
         ("run", {"script": str(SCRIPTS / "crashing_init.py"), "frames": 1}, False),
         ("pyxel_info", {}, True),
+        ("lookup_api", {"name": "cube.Node"}, True),
+        ("lookup_api", {"name": "blt()"}, False),
         ("read_palette", {"script": palette}, True),
         ("read_palette", {"script": str(SCRIPTS / "crashing_init.py")}, False),
         ("read_image", {"script": palette, "image": 0, "w": 8, "h": 8}, True),
@@ -506,7 +515,7 @@ async def test_every_tool_round_trips_through_the_sdk(tmp_path):
     ]
     for name, arguments, expected_ok in calls:
         reply = await mcp.call_tool(name, arguments)
-        assert reply.is_error is False, (name, arguments, reply.content)
+        assert reply.is_error is (not expected_ok), (name, arguments, reply.content)
         assert reply.structured_content["ok"] is expected_ok, (name, arguments)
         assert json.loads(reply.content[0].text) == reply.structured_content
 
@@ -534,3 +543,61 @@ def test_pyxel_info_reports_successful_environment():
 
     assert result["ok"] is True
     assert result["pyxel_version"]
+
+
+def test_editor_resource_all_readers_and_clipped_selection(tmp_path):
+    from mcp.types import AudioContent
+    from PIL import Image
+
+    resource = tmp_path / "level.pyxres"
+    setup = tmp_path / "create.py"
+    setup.write_text(
+        "import pyxel\npyxel.init(8, 8)\n"
+        "pyxel.images.append(pyxel.Image(16, 8))\n"
+        "pyxel.images[3].rect(8, 0, 8, 8, 1)\n"
+        "pyxel.tilemaps[0] = pyxel.Tilemap(4, 3, 3)\n"
+        "pyxel.tilemaps[0].pset(3, 2, (1, 0))\n"
+        "pyxel.sounds[0].set('c2', 't', '7', 'n', 10)\n"
+        f"pyxel.save({str(resource)!r})\npyxel.show()\n"
+    )
+    assert structured(run(str(setup), frames=1))["ok"]
+    resource.with_suffix(".pyxpal").write_text("000000\n123456\n")
+    path = str(resource)
+    palette = structured(server.read_palette(path))
+    assert palette["colors"] == {"0": "#000000", "1": "#123456"}
+    image = structured(read_image(path, image=3, x=8, y=0, w=1, h=1))
+    assert image["pixels"] == [[1]]
+    tilemap = structured(
+        read_tilemap(
+            path,
+            tilemap=0,
+            bbox=(2, 2, 4, 4),
+            render_path=str(tmp_path / "selection.png"),
+        )
+    )
+    assert tilemap["ok"] and tilemap["size"] == [4, 3] and tilemap["imgsrc"] == 3
+    assert tilemap["sampled_region"] == {"x": 2, "y": 2, "w": 2, "h": 1}
+    assert tilemap["region"] == {"x": 3, "y": 2, "w": 1, "h": 1}
+    assert tilemap["tiles"] == [[[0, 0], [1, 0]]]
+    assert tilemap["usage"] == {"1,0": 1}
+    with Image.open(tilemap["rendered"]) as rendered:
+        assert rendered.size == (16, 8)
+        assert rendered.getpixel((0, 0)) == (0, 0, 0)
+        assert rendered.getpixel((8, 0)) == (0x12, 0x34, 0x56)
+    audio = server.read_audio(
+        path, {"sound": 0}, output_path=str(tmp_path / "audio" / "s.wav"), inline=True
+    )
+    assert structured(audio)["peak_amplitude"] > 0
+    block = audio.content[1]
+    assert isinstance(block, AudioContent) and block.mime_type == "audio/wav"
+    assert base64.b64decode(block.data) == Path(structured(audio)["path"]).read_bytes()
+
+
+def test_invalid_editor_resource_and_tilemap_origin(tmp_path):
+    resource = tmp_path / "broken.pyxres"
+    resource.write_bytes(b"invalid")
+    result = server.read_palette(str(resource))
+    assert result.is_error
+    assert structured(result)["errors"][0]["phase"] == "asset_load"
+    reply = read_tilemap(str(SCRIPTS / "tilemap_demo.py"), 0, bbox=(300, 0, 1, 1))
+    assert reply.is_error and structured(reply)["errors"][0]["phase"] == "validation"

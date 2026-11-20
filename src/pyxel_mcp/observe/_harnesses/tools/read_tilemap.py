@@ -51,8 +51,25 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                 )
             )
 
-        result = analyze_tilemap(tilemap=tilemap, render_path=render_path)
-        return result
+        bbox = payload.get("bbox")
+        if bbox is not None:
+            if (
+                not isinstance(bbox, (list, tuple))
+                or len(bbox) != 4
+                or any(type(v) is not int for v in bbox)
+            ):
+                return _empty(
+                    make_validation_error("bbox must contain four integers [x,y,w,h]")
+                )
+            x, y, w, h = bbox
+            tm = pyxel.tilemaps[tilemap]
+            if not (0 <= x < tm.width and 0 <= y < tm.height and w > 0 and h > 0):
+                return _empty(
+                    make_validation_error(
+                        f"invalid bbox {bbox} for tilemap size ({tm.width}, {tm.height})"
+                    )
+                )
+        return analyze_tilemap(tilemap=tilemap, render_path=render_path, bbox=bbox)
 
     try:
         result = run_to_preloop(payload, empty_factory=_empty, observe=observe)

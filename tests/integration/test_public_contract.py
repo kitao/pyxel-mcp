@@ -11,6 +11,7 @@ async def test_tool_surface_contains_only_observation_primitives():
         "run",
         "validate",
         "pyxel_info",
+        "lookup_api",
         "read_palette",
         "read_image",
         "read_tilemap",

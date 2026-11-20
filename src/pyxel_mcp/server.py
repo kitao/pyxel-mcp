@@ -15,16 +15,19 @@ from typing import Annotated, Any
 import pydantic_core
 from mcp.server.mcpserver import MCPServer
 from mcp.types import (
+    AudioContent,
     CallToolResult,
     ContentBlock,
     ImageContent,
     TextContent,
     ToolAnnotations,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from pyxel_mcp._resources import register_resources
+from pyxel_mcp.api import lookup
 from pyxel_mcp.contracts import (
+    ApiResult,
     AudioResult,
     AudioTarget,
     DiffFramesResult,
@@ -52,6 +55,7 @@ except FileNotFoundError:
 # Inline PNGs are cheap for Pyxel-sized screens, but an unbounded multi-frame
 # request could still flood one tool result. Extra frames stay on disk.
 MAX_INLINE_IMAGES = 12
+MAX_INLINE_AUDIO_BYTES = 4 * 1024 * 1024
 
 
 def _package_version() -> str:
@@ -72,15 +76,20 @@ register_resources(mcp)
 
 
 def _annotations(title: str, *, pure: bool) -> ToolAnnotations:
-    # Every tool works on local files and local subprocesses, so none of them
-    # reaches an open world of external entities.
+    # Script tools execute user Python with the permissions of the server.
     return ToolAnnotations(
         title=title,
         read_only_hint=pure,
-        destructive_hint=False,
+        destructive_hint=not pure,
         idempotent_hint=pure,
-        open_world_hint=False,
+        open_world_hint=not pure,
     )
+
+
+AssetPath = Annotated[
+    str,
+    Field(min_length=1, description="Local .pyxres file or trusted Pyxel script path."),
+]
 
 
 def _json_value(value: Any) -> Any:
@@ -99,7 +108,11 @@ def _png_block(path: str) -> ImageContent:
 
 
 def _reply(
-    model: type[BaseModel], result: dict[str, Any], image_paths: Sequence[str] = ()
+    model: type[BaseModel],
+    result: dict[str, Any],
+    image_paths: Sequence[str] = (),
+    *,
+    audio_path: str | None = None,
 ) -> CallToolResult:
     """Build the tool result: structured data, its JSON text, and inline PNGs.
 
@@ -124,14 +137,34 @@ def _reply(
             content.append(_png_block(path))
         except OSError as exc:
             notes.append(f"Could not embed {path}: {exc.strerror or exc}.")
+    if audio_path:
+        try:
+            with Path(audio_path).open("rb") as wav:
+                data = wav.read(MAX_INLINE_AUDIO_BYTES + 1)
+            if len(data) <= MAX_INLINE_AUDIO_BYTES:
+                content.append(
+                    AudioContent(
+                        type="audio",
+                        mime_type="audio/wav",
+                        data=base64.b64encode(data).decode("ascii"),
+                    )
+                )
+            else:
+                notes.append(
+                    "WAV exceeds the 4 MiB inline limit. Use the returned path."
+                )
+        except OSError as exc:
+            notes.append(f"Could not embed {audio_path}: {exc.strerror or exc}.")
     content.extend(
         TextContent(type="text", text=f"[pyxel-mcp] {note}") for note in notes
     )
-    return CallToolResult(content=content, structured_content=structured)
+    return CallToolResult(
+        content=content, structured_content=structured, is_error=not structured["ok"]
+    )
 
 
 def _inline_dir() -> Path:
-    """A fresh directory for PNGs the caller asked to see but not to keep.
+    """A fresh directory for media requested without an output path.
 
     It lives under the system temp directory and is left for the OS to clean,
     so the reported paths stay valid for follow-up `diff_frames` calls.
@@ -140,7 +173,7 @@ def _inline_dir() -> Path:
 
 
 def _discard_if_empty(root: Path | None) -> None:
-    """Drop an inline directory that received no PNG, such as after a crash."""
+    """Drop the temporary directory if the tool produced no artifact."""
     if root is not None and root.is_dir() and not any(root.iterdir()):
         root.rmdir()
 
@@ -151,7 +184,7 @@ def _assign_inline_outputs(snapshots: list[dict[str, Any]]) -> Path | None:
     for index, snap in enumerate(snapshots):
         if snap.get("kind") != "screen_image" or not snap.get("inline"):
             continue
-        if "output" in snap or "output_pattern" in snap:
+        if "frame" not in snap or "output" in snap or "output_pattern" in snap:
             continue
         root = root or _inline_dir()
         snap["output"] = str(root / f"{index}-frame-{snap['frame']}.png")
@@ -159,13 +192,13 @@ def _assign_inline_outputs(snapshots: list[dict[str, Any]]) -> Path | None:
 
 
 def _inline_render_path(
-    inline: bool, render_path: str | None, stem: str
+    inline: bool, render_path: str | None, filename: str
 ) -> tuple[Path | None, str | None]:
     """Pick a temp destination for an inline render when the caller gave none."""
     if not inline or render_path is not None:
         return None, render_path
     root = _inline_dir()
-    return root, str(root / f"{stem}.png")
+    return root, str(root / filename)
 
 
 def _inline_snapshot_paths(result: dict[str, Any]) -> list[str]:
@@ -241,11 +274,24 @@ def pyxel_info() -> Annotated[CallToolResult, PyxelInfoResult]:
 
 
 @mcp.tool(
+    description=(
+        "Look up an installed Pyxel or Cube API by name, e.g. blt, Image.set, or "
+        "cube.Vec3.lerp. Exact names return signatures, available documentation "
+        "and class members. Partial names return up to 30 matching names."
+    ),
+    annotations=_annotations("Look up Pyxel API", pure=True),
+    structured_output=True,
+)
+def lookup_api(name: NonEmptyStr) -> Annotated[CallToolResult, ApiResult]:
+    return _reply(ApiResult, lookup(name))
+
+
+@mcp.tool(
     description="Read the active Pyxel palette and the palette indices used by image banks.",
     annotations=_annotations("Read Pyxel palette", pure=False),
     structured_output=True,
 )
-def read_palette(script: NonEmptyStr) -> Annotated[CallToolResult, PaletteResult]:
+def read_palette(script: AssetPath) -> Annotated[CallToolResult, PaletteResult]:
     return _reply(PaletteResult, dispatch("read_palette", {"script": script}))
 
 
@@ -259,7 +305,7 @@ def read_palette(script: NonEmptyStr) -> Annotated[CallToolResult, PaletteResult
     structured_output=True,
 )
 def read_image(
-    script: NonEmptyStr,
+    script: AssetPath,
     image: NonNegativeInt,
     x: NonNegativeInt = 0,
     y: NonNegativeInt = 0,
@@ -269,7 +315,7 @@ def read_image(
     inline: bool = False,
 ) -> Annotated[CallToolResult, ImageResult]:
     inline_root, render_path = _inline_render_path(
-        inline, render_path, f"image-{image}"
+        inline, render_path, f"image-{image}.png"
     )
     payload = {
         "script": script,
@@ -290,22 +336,29 @@ def read_image(
 @mcp.tool(
     description=(
         "Read Pyxel tile coordinates, usage, bounds, source bank, and optional "
-        "rendered output; inline=true returns the render as image content and "
+        "rendered output. bbox=[x,y,w,h] selects a region in tiles. "
+        "inline=true returns the render as image content and "
         "makes render_path optional."
     ),
     annotations=_annotations("Read tilemap", pure=False),
     structured_output=True,
 )
 def read_tilemap(
-    script: NonEmptyStr,
+    script: AssetPath,
     tilemap: NonNegativeInt,
     render_path: NonEmptyStr | None = None,
     inline: bool = False,
+    bbox: tuple[NonNegativeInt, NonNegativeInt, PositiveInt, PositiveInt] | None = None,
 ) -> Annotated[CallToolResult, TilemapResult]:
     inline_root, render_path = _inline_render_path(
-        inline, render_path, f"tilemap-{tilemap}"
+        inline, render_path, f"tilemap-{tilemap}.png"
     )
-    payload = {"script": script, "tilemap": tilemap, "render_path": render_path}
+    payload = {
+        "script": script,
+        "tilemap": tilemap,
+        "render_path": render_path,
+        "bbox": bbox,
+    }
     try:
         result = dispatch("read_tilemap", payload)
     finally:
@@ -316,22 +369,31 @@ def read_tilemap(
 @mcp.tool(
     description=(
         "Render one Pyxel sound or music slot to WAV and return measurable audio data. "
-        "Notes describe tracker fields, not an MML or PCM transcription."
+        "Set inline=true to return audio content (up to 4 MiB) and omit output_path if desired. "
+        "Notes describe tracker fields."
     ),
     annotations=_annotations("Render audio to WAV", pure=False),
     structured_output=True,
 )
 def read_audio(
-    script: NonEmptyStr,
+    script: AssetPath,
     target: AudioTarget,
-    output_path: NonEmptyStr,
+    output_path: NonEmptyStr | None = None,
+    inline: bool = False,
 ) -> Annotated[CallToolResult, AudioResult]:
+    inline_root, output_path = _inline_render_path(inline, output_path, "audio.wav")
     payload = {
         "script": script,
         "target": _json_value(target),
         "output_path": output_path,
     }
-    return _reply(AudioResult, dispatch("read_audio", payload))
+    try:
+        result = dispatch("read_audio", payload)
+    finally:
+        _discard_if_empty(inline_root)
+    return _reply(
+        AudioResult, result, audio_path=result.get("path") if inline else None
+    )
 
 
 @mcp.tool(

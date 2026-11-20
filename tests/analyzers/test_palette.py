@@ -12,7 +12,7 @@ def _restore_state():
         original = list(pyxel.colors)
         pyxel.images[0].cls(0)
     except Exception:
-        pyxel.init(8, 8)
+        pyxel.init(8, 8, headless=True)
         original = list(pyxel.colors)
     yield
     while len(pyxel.colors) > len(original):

@@ -14,15 +14,13 @@
 </p>
 <p align="center"><sub>Both images come from one <code>run</code> call against Pyxel's bundled <code>10_platformer.py</code>: 150 frames, right held from frame 0, jumps scheduled at frames 25, 70, and 110, a <code>video</code> snapshot, and an inline <code>screen_image</code> snapshot.</sub></p>
 
-## Why
+## Try it
 
-An agent can write a Pyxel game in seconds, but it cannot open a window, press the arrow keys, or look at the screen. Editor-bound engines solve this with MCP servers that live inside the editor. Pyxel has no editor process to attach to, so pyxel-mcp drives the game itself:
+After installing, ask your MCP client to run a bundled game:
 
-- **Headless execution.** Every call runs the script in a fresh subprocess with SDL dummy drivers and a frame budget. Set `random_seed` to seed Python's `random` module and Pyxel's random generator. Other randomness, timing, and external state can still affect the frames.
-- **Input as data.** Buttons, axes, and mouse position are scheduled per frame, so a playtest is a JSON document the agent can rerun and extend.
-- **Stop on the event, not the clock.** `until="score >= 1"` ends the run at the first frame where a game attribute holds, and `"frame": "end"` snapshots capture that moment.
-- **Facts, not scores.** Tools report pixels, values, and measurements. Deciding whether the game is good stays with the agent and the person asking for it.
-- **See the frame in the result.** `inline: true` returns a PNG as MCP image content, so the model looks at the screen without a second file read.
+> Use pyxel_info to find 10_platformer. Hold KEY_RIGHT for 30 frames and show me the first and last frames.
+
+The agent can use the returned script path, send input on frame 0, and request two inline screenshots. No game window or separate image viewer is needed.
 
 ## Install
 
@@ -43,14 +41,14 @@ gemini mcp add pyxel uvx pyxel-mcp
 For Cursor (`~/.cursor/mcp.json`), a project-scoped Claude Code `.mcp.json`, or any other client that reads the common JSON format, add:
 
 ```json
-   {
-     "mcpServers": {
-       "pyxel": {
-         "command": "uvx",
-         "args": ["pyxel-mcp"]
-       }
-     }
-   }
+{
+  "mcpServers": {
+    "pyxel": {
+      "command": "uvx",
+      "args": ["pyxel-mcp"]
+    }
+  }
+}
 ```
 
 VS Code uses `.vscode/mcp.json` with a top-level `servers` key and `"type": "stdio"`; Codex CLI can also be configured in `~/.codex/config.toml` as `[mcp_servers.pyxel]`. Run `uvx pyxel-mcp install` to print every variant.
@@ -64,51 +62,32 @@ claude plugin marketplace add kitao/pyxel-skill && claude plugin install pyxel@p
 Restart the client after changing its configuration. The server writes this diagnostic to stderr:
 
 ```text
-[pyxel-mcp] starting - 8 tools
+[pyxel-mcp] starting - 9 tools
 ```
 
-Python 3.11+ is required, and Pyxel >= 3.0.1 is installed as a dependency. Script tools execute local Python in subprocesses to isolate Pyxel state, but they do not sandbox untrusted code. See [SECURITY.md](https://github.com/kitao/pyxel-mcp/blob/main/SECURITY.md).
-
-## How an agent uses it
-
-```mermaid
-flowchart LR
-    W["Write or edit<br>game.py"] --> V["validate"]
-    V --> R["run<br>inputs · until · snapshots"]
-    R --> O{"Inspect facts<br>state · pixels · log"}
-    O -- "defect" --> W
-    O -- "looks right" --> A["read_image · read_tilemap<br>read_audio · diff_frames"]
-    A --> D["Report evidence"]
-```
-
-The loop is deliberately small. The separate [pyxel-skill](https://github.com/kitao/pyxel-skill) project teaches agents when to use each tool and what counts as enough evidence; this package only supplies the observations.
+Python 3.11+ is required, and Pyxel >= 3.0.3 is installed as a dependency. Script tools execute local Python in subprocesses to isolate Pyxel state, but they do not sandbox untrusted code. See [SECURITY.md](https://github.com/kitao/pyxel-mcp/blob/main/SECURITY.md).
 
 ## Tools
 
-Every `script` argument is a file path, not Python source. Relative asset paths inside the script resolve from the script's directory, as when running `python game.py` from that directory.
+Pass a local file path as `script`. The four asset readers also accept a `.pyxres` file directly, including its sibling palette if present. This lets an agent inspect editor assets before a game exists.
 
 | Tool | Returns |
 |---|---|
+| `lookup_api` | Installed Pyxel and Cube declarations, overloads, class members and available documentation. Use a name such as `Image.set` or `cube.Vec3.lerp`, or search by part of a name. |
 | `validate` | Syntax errors and recognizable Pyxel code patterns, without executing. |
-| `run` | Headless frames, scheduled input, logs, and `state`, `screen_image`, `screen_grid`, or `video` snapshots. |
+| `run` | Frames from `run()`, `show()`, or a manual `flip()` loop, with scheduled input, logs, and `state`, `screen_image`, `screen_grid`, or `video` snapshots. |
 | `pyxel_info` | Installed versions, Pyxel and Cube type stub paths, bundled examples, and resource URIs. |
 | `read_palette` | Palette colors and image-bank indices in use. |
 | `read_image` | Image-bank pixels and an optional PNG render. |
-| `read_tilemap` | Tile coordinates, source bank, usage counts, bounds, and an optional render. |
-| `read_audio` | A rendered sound or music WAV plus measurable audio data. |
+| `read_tilemap` | Tile coordinates, source bank, usage counts, bounds, and an optional PNG. Set `bbox: [x, y, w, h]` in tiles for a specific selection. Up to 4,096 selected cells are returned as a grid. |
+| `read_audio` | A sound or music WAV, duration, peak amplitude, and tracker fields. Set `inline: true` to receive WAV audio in the reply (up to 4 MiB). |
 | `diff_frames` | Pixel differences between two PNG files. |
 
-All tools declare input and output schemas. Every result includes `ok` and `errors`.
+Every tool declares input and output schemas. A result includes `ok` and `errors`, with unsuccessful observations flagged as MCP tool errors. Syntax issues appear under `issues`. Inspect `log` for game output and `warnings` for capture details.
 
-Script tools observe the first `pyxel.run()` call while its enclosing resources
-remain active. `run` drives the callbacks there; the asset readers inspect the
-pre-loop state. `pyxel.quit()` ends a run normally and preserves completed
-frames. Statements after `pyxel.run()` are not executed. Enclosing cleanup runs
-after observation, and cleanup failures are reported with `phase: "script_exit"`.
-Stopping uses internal `BaseException` signals. Scripts or context-manager
-cleanup that suppress these signals are unsupported and may execute post-run code.
+Game scripts run in their own directory with their enclosing resources available. With `pyxel.run()` the MCP drives update and draw. With `pyxel.show()` it observes the displayed image. In manual loops each call to `pyxel.flip()` completes a frame. The frame budget, stop condition, and snapshots apply to all three forms. An explicit quit retains the last completed frame.
 
-Captured PNGs can travel inside the result: set `inline: true` on a `screen_image` snapshot, or `inline=true` on `read_image` and `read_tilemap`, and the PNG is returned as MCP image content next to the structured data. A single inline frame may omit its output path; the file is then written under the system temp directory and its path is still reported, so `diff_frames` and later comparisons keep working. At most 12 images are embedded per call.
+Use `inline: true` for a single screen snapshot, asset PNG, or WAV to receive the media without choosing an output path. The server also returns the temporary file path for follow-up tools. A reply embeds up to 12 PNGs.
 
 ### Pyxel Cube
 
@@ -132,7 +111,7 @@ pre-2.0 resource files. See the
 
 ## Example
 
-Hold right, jump at frame 25, stop as soon as the score changes, and look at that frame:
+For a game with a `score` attribute, hold right, jump at frame 25, and capture the frame when the score reaches 1.
 
 ```json
 {
@@ -152,7 +131,9 @@ Hold right, jump at frame 25, stop as soon as the score changes, and look at tha
 }
 ```
 
-The result reports `until_met`, the reached `frame_count`, the requested state values, the PNG path, and the PNG itself as image content. Artifact paths you choose must be absolute. Read `log` even when `ok` is true, and inspect captured images directly when appearance matters.
+In games that keep state at module level, use a path such as `__main__.player.x` in both `attrs` and `until`. This also works when the update callback is a bound method, as in the bundled platformer.
+
+The result reports `until_met`, the reached `frame_count`, the requested state values, the PNG path, and the PNG itself as image content. Button and axis sets persist until replaced. Mouse wheel deltas, input text, and dropped files apply on the scheduled frame only. Artifact paths you choose must be absolute. Read `log` even when `ok` is true, and inspect captured images directly when appearance matters.
 
 ## Resources
 
@@ -175,7 +156,7 @@ uvx --refresh-package pyxel-mcp --refresh-package pyxel pyxel-mcp install
 
 ## Troubleshooting
 
-- If tools do not appear, look for the `starting - 8 tools` diagnostic and restart the client.
+- If tools do not appear, look for the `starting - 9 tools` diagnostic and restart the client.
 - If `run` fails, inspect `errors`, `exit_status`, and `log`.
 - If a script cannot find an asset, check the path relative to the script file, not to the client's working directory.
 - If a validation category is unfamiliar, read `pyxel://validation-patterns`.

@@ -363,17 +363,29 @@ Combine with `run(until=...)` to capture the moment a condition first holds:
 }
 ```
 
-`until` is a Python expression over App attributes, evaluated after each
-frame. Undefined names count as "not yet satisfied" (warned once in `log`).
+State paths and `until` expressions use the bound update object, or the script module for a free function. Use `__main__.player.x` to access script globals explicitly in either form. The `until` expression runs after each completed frame. Undefined names count as "not yet satisfied" (warned once in `log`).
 The run result reports `until_met` and the reached `frame_count`:
 
 | `until_met` | Meaning |
 |---|---|
-| `true` | The condition held; the run stopped at that frame. |
+| `true` | The condition held and the run stopped at that frame. |
 | `false` | The condition was evaluated at least once and never held before the run ended (cap, crash, or stall). |
 | `null` | It was never evaluated: no `until`, an invalid payload, a crash before the first frame completed, or a timeout. |
 
+## Scheduled input
+
+Each entry in `inputs` has a zero-based `frame`. A supplied `buttons` list or `axes` map replaces the previous set. An empty list or map releases it. Mouse positions persist. The following event delivers text, scroll deltas (horizontal, vertical), and a file list for frame 2 only.
+
+```json
+{"frame": 2, "input_text": "こんにちは", "mouse_wheel": [0, -1], "dropped_files": ["level.tmx"]}
+```
+
+`stall_window_frames` counts consecutive frames with identical selected state and grid observations. Schedule those snapshots on each frame of interest. A frame without a signal breaks the sequence.
+
 ## Script lifecycle
+
+Static screens shown with `pyxel.show()` use the same frame budget. In a manual loop, each `pyxel.flip()` completes a frame, including the first drawing before the first flip. Inputs are available before drawing. A finite loop can end before the budget. If it quits or returns between flips, end snapshots use the last presented frame.
+
 
 `run` drives callbacks synchronously inside the script's first `pyxel.run()`
 call. Enclosing `with` blocks and function-local resources stay active during
@@ -396,7 +408,6 @@ An exception during enclosing cleanup changes the result to `ok: false`,
 completed before that cleanup error remain available, including already
 captured `"end"` snapshots.
 
-The `read_palette`, `read_image`, `read_tilemap`, and `read_audio` tools inspect
-assets at the same `pyxel.run()` checkpoint without executing update/draw.
+The four asset readers load a `.pyxres` file directly or inspect a script at its first run, show, or flip. With callbacks the reader stops before update/draw.
 Quitting before that checkpoint is a `script_import` error for these readers,
 because no pre-loop observation was possible.

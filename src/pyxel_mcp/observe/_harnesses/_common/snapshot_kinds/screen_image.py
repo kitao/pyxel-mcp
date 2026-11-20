@@ -13,9 +13,7 @@ def capture(
 ) -> dict[str, Any]:
     """Save pyxel.screen as a PNG with an integer scale.
 
-    An optional saved frame is used for deferred snapshots after a script quits
-    during a later frame. `pyxel.screen.save` appends ".png" itself, so the suffix
-    is stripped when capturing the live screen.
+    A saved image preserves a completed frame if a later draw is interrupted.
     """
     import pyxel
 
@@ -24,11 +22,7 @@ def capture(
     scale = int(snapshot.get("scale", 1))
 
     if image is None:
-        # Strip .png before passing to save() — Pyxel appends it automatically.
-        base = (
-            out_path.with_suffix("") if out_path.suffix.lower() == ".png" else out_path
-        )
-        pyxel.screen.save(str(base), scale)
+        pyxel.screen.save(str(out_path), scale)
         size = [pyxel.width * scale, pyxel.height * scale]
     else:
         size = [image.width * scale, image.height * scale]

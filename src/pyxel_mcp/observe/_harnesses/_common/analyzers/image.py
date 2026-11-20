@@ -7,6 +7,8 @@ from typing import Any
 
 import numpy as np
 
+from pyxel_mcp.observe._harnesses._common.pixels import rgb_image
+
 _PIXEL_GRID_LIMIT = 4096
 
 
@@ -44,19 +46,8 @@ def _color_count(region: np.ndarray) -> dict[int, int]:
 
 
 def _render_png(region: np.ndarray, render_path: Path) -> None:
-    import pyxel
-    from PIL import Image
-
-    palette_rgb = []
-    for c in pyxel.colors:
-        palette_rgb.append(((c >> 16) & 0xFF, (c >> 8) & 0xFF, c & 0xFF))
-    h, w = region.shape
-    rgb = np.zeros((h, w, 3), dtype=np.uint8)
-    for idx, (r, g, b) in enumerate(palette_rgb):
-        mask = region == idx
-        rgb[mask] = (r, g, b)
     render_path.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(rgb, "RGB").save(render_path)
+    rgb_image(region).save(render_path, format="PNG")
 
 
 def analyze_image(

@@ -1,46 +1,26 @@
-# pyxel-mcp
+# Pyxel MCP
 
-pyxel-mcp exposes eight tools for observing trusted local Pyxel scripts. It reports facts; the caller decides what those facts mean for the current task.
-
-## Contract
-
-- A `script` is a Python file path, never inline source. Script tools execute it in a fresh subprocess and are not a sandbox.
-- Every result has `ok` and `errors`. A successful call may still contain useful `log` or `warnings` fields.
-- Artifact paths must be absolute. Relative assets used by a script resolve from the script's directory.
-- Each call starts from a clean Pyxel process. Reproduce prior input from frame 0 when continuing a scenario.
-- Script tools observe the first `pyxel.run()` call while its enclosing resources remain active. Post-run statements are not executed; enclosing cleanup runs after observation.
-- Stopping uses internal `BaseException` signals. Scripts or context-manager cleanup that suppress these signals are unsupported and may execute post-run code.
-- In `run`, `pyxel.quit()` ends normally and preserves completed frames. `frame_count` and `"end"` snapshots exclude an interrupted update/draw pair. Cleanup failures have error phase `script_exit` and retain prior observations.
+Use the installed Pyxel runtime to inspect its API, run a trusted game, and examine its assets. Call `pyxel_info` for the runtime version and paths to runnable examples.
 
 ## Tools
 
-- `validate`: parse a script and report recognizable Pyxel code patterns without executing it.
-- `run`: advance frames, schedule inputs, stop on an optional App-attribute condition, and capture `state`, `screen_image`, `screen_grid`, or `video` snapshots.
-- `pyxel_info`: report installed versions, Pyxel and Cube type stub paths, examples, and resource URIs.
-- `read_palette`: return palette colors and image-bank palette indices in use.
-- `read_image`: return image-bank pixels for a region and optionally render a PNG.
-- `read_tilemap`: return tile coordinates, source bank, usage counts, bounds, and optional rendered output.
-- `read_audio`: render one sound or music target to WAV and return measurable audio data.
-- `diff_frames`: compare two PNG files pixel by pixel.
+- `lookup_api` returns declarations from the installed Pyxel and Cube stubs. Try `Image.blt`, `cube.Node`, or a partial name such as `raycast`.
+- `validate` checks Python syntax and reports Pyxel code patterns without executing the script.
+- `run` observes callbacks, static screens, and manual flip loops. Set `frames` as a budget. A `screen_image` with `frame: "end"` and `inline: true` returns the last completed frame as a PNG. Use a `screen_grid` with a small `bbox` for exact pixel indices.
+- `read_palette`, `read_image`, `read_tilemap`, and `read_audio` accept either a trusted script or a .pyxres file in the `script` field. For scripts, assets are inspected at the first run, show, or flip. For .pyxres files, Pyxel loads the resource and its matching .pyxpal. Image regions use pixels and tilemap regions use tiles.
+- `diff_frames` compares two saved PNGs and reports the changed pixel count and bounds.
 
-Use `random_seed` when randomness affects a run. Use `until` with snapshots at `"end"` when the target is an event rather than a known frame. Set `inline: true` on a `screen_image` snapshot, or `inline=true` on `read_image` and `read_tilemap`, to receive the PNG as image content in the same result. A single inline frame may omit its output path; the PNG then lands under the system temp directory and its path is still reported. At most 12 images are embedded per call. Use `scale` 2 to 4 so pixel art stays legible. Look at captured pixels whenever appearance matters.
+## Contract
 
-Pyxel 3.0.1 or newer is required. Pyxel Cube (`pyxel.cube`) programs use the same
-`run` inputs and screen snapshots. `pyxel_info` returns `stubs_path` for the base
-API and `cube_stubs_path` for Cube. For numeric Cube state, request component
-paths such as `scene.camera.transform.pos.x`; whole Cube objects are represented
-as text. Asset readers inspect image banks, tilemaps, and audio, not scene graphs
-or meshes. Pyxel 3 removed the old MML syntax and pre-2.0 resource loading.
+Each run starts a fresh process. Pass a local file path in `script` and absolute paths for output files. Game scripts execute with the server's permissions. Results carry `ok` and `errors`. Check `issues` for validation findings, and `exit_status` and `log` for a run.
+
+Frames start at 0. Scheduled button sets, axis maps and mouse positions persist until replaced. Text input, wheel deltas and dropped files apply for one frame. Use `random_seed` to repeat Python and Pyxel random sequences. Use `until` for an event and request snapshots at `"end"` to inspect it. State paths and conditions start from the bound update object's attributes or the script's globals. Use `__main__.player.x` to reach script globals explicitly, including from class-based games. Cube attributes can be read by component, for example `scene.camera.transform.pos.x`.
+
+A script's `pyxel.quit()` preserves completed frames. With manual loops each `flip()` completes a frame. Cleanup errors are reported with the observations already taken. Use `inline: true` for PNG previews or rendered WAV audio. The result also gives a local path.
 
 ## Resources
 
-- `pyxel://run-snapshots-schema`: complete snapshot grammar.
-- `pyxel://validation-patterns`: categories reported by `validate`.
-- `pyxel://palette/default`: default palette table.
-- `pyxel://examples/{name}`: source for a top-level example bundled with the installed Pyxel package.
-- `pyxel://examples/cube/{name}`: source for a bundled Pyxel Cube example.
-
-`pyxel_info` discovers available examples. Append a returned `name` (for example,
-`cube/c01_hello_cube`) to `pyxel://examples/` to read its source. Use the returned
-`path` as the `script` argument to run it with its bundled assets. Full
-game-building guidance belongs in the separate pyxel-skill project.
+- `pyxel://run-snapshots-schema` documents frame selectors, inputs, snapshot formats, limits, and script lifecycle.
+- `pyxel://validation-patterns` explains validation categories.
+- `pyxel://palette/default` lists installed palette constants and RGB values.
+- `pyxel://examples/{name}` and `pyxel://examples/cube/{name}` serve bundled example source. Append the name from `pyxel_info` to `pyxel://examples/`. Pass the returned file path to `run` to include the example's local assets.

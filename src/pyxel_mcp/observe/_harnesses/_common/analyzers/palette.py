@@ -6,6 +6,8 @@ from typing import Any
 
 import numpy as np
 
+from pyxel_mcp.observe._harnesses._common.pixels import engine_colors
+
 
 def _hex(color: int) -> str:
     return f"#{color:06x}"
@@ -26,9 +28,7 @@ def _used_indices() -> list[int]:
 
 
 def analyze_palette() -> dict[str, Any]:
-    import pyxel
-
-    colors = list(pyxel.colors)
+    colors = list(engine_colors)
     return {
         "colors": {index: _hex(color) for index, color in enumerate(colors)},
         "extended_palette": len(colors) > 16,

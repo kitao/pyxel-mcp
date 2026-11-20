@@ -25,6 +25,15 @@ class InputEvent(_InputModel):
     buttons: list[NonEmptyStr] | None = None
     axes: dict[str, AxisValue] | None = None
     mouse_pos: tuple[int, int] | None = None
+    mouse_wheel: tuple[int, int] | None = Field(
+        default=None, description="Horizontal and vertical wheel deltas for this frame."
+    )
+    input_text: str | None = Field(
+        default=None, description="Text entered on this frame."
+    )
+    dropped_files: list[str] | None = Field(
+        default=None, description="File names delivered on this frame."
+    )
 
 
 SnapshotFrame = NonNegativeInt | Literal["end"]
@@ -250,6 +259,14 @@ class PyxelInfoResult(ObservationResult):
     resources: dict[str, str] = Field(default_factory=dict)
 
 
+class ApiResult(ObservationResult):
+    name: str | None = None
+    declarations: list[str] = Field(default_factory=list)
+    members: list[str] = Field(default_factory=list)
+    matches: list[str] = Field(default_factory=list)
+    match_count: int = 0
+
+
 class PaletteResult(ObservationResult):
     colors: dict[int, str] = Field(default_factory=dict)
     extended_palette: bool | None = None
@@ -268,6 +285,7 @@ class ImageResult(ObservationResult):
 
 class TilemapResult(ObservationResult):
     tilemap_index: int | None = None
+    sampled_region: Region | None = None
     size: tuple[int, int] | None = None
     imgsrc: int | None = None
     tiles: list[list[list[int]]] | None = None

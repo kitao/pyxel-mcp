@@ -59,8 +59,47 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Install mcp-publisher
+        with:
+          persist-credentials: false
+      - name: Publish to the MCP Registry with GitHub OIDC
+        # Keep both short-lived tokens in this process. The publisher CLI's
+        # separate login and publish commands share a credential file.
         run: |
-          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
-      - run: ./mcp-publisher login github-oidc
-      - run: ./mcp-publisher publish server.json
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs';
+
+          const registry = 'https://registry.modelcontextprotocol.io';
+          const metadata = readFileSync('server.json', 'utf8');
+          const request = async (step, url, options) => {
+            const response = await fetch(url, { ...options, redirect: 'error' });
+            if (!response.ok) throw new Error(`${step} returned HTTP ${response.status}`);
+            return response;
+          };
+
+          try {
+            const url = new URL(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
+            url.searchParams.set('audience', registry);
+            const identity = await request('GitHub OIDC', url, {
+              headers: { Authorization: `Bearer ${process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}` },
+            });
+            const { value } = await identity.json();
+            if (!value) throw new Error('GitHub OIDC returned no token');
+
+            const exchange = await request('Registry OIDC exchange', registry + '/v0.1/auth/github-oidc', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ oidc_token: value }),
+            });
+            const { registry_token } = await exchange.json();
+            if (!registry_token) throw new Error('Registry OIDC exchange returned no token');
+
+            await request('Registry publish', registry + '/v0.1/publish', {
+              method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${registry_token}` },
+              body: metadata,
+            });
+          } catch (error) {
+            // HTTP response bodies and transport errors can contain credentials.
+            const safe = /^(GitHub OIDC|Registry OIDC exchange|Registry publish) (returned HTTP \d{3}|returned no token)$/;
+            console.error(safe.test(error.message) ? error.message : 'Registry publication request failed');
+            process.exitCode = 1;
+          }
+          JS

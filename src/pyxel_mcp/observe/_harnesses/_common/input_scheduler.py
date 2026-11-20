@@ -36,7 +36,8 @@ class InputScheduler:
         self._prev_held_buttons: set[str] = set()
         self._held_axes: dict[str, float] = {}
         self._prev_held_axes: set[str] = set()
-        self._mouse_pos: tuple[int, int] = (0, 0)
+        self._mouse_pos: tuple[int, int] | None = None
+        self._current_event: dict = {}
         self._next_event_idx = 0
 
     def _validate(self, events: list[InputEvent]) -> None:
@@ -58,11 +59,14 @@ class InputScheduler:
 
     def advance_to_frame(self, frame: int) -> None:
         """Apply all events whose frame <= the given frame, updating held state."""
+        self._current_event = {}
         while (
             self._next_event_idx < len(self.events)
             and self.events[self._next_event_idx]["frame"] <= frame
         ):
             ev = self.events[self._next_event_idx]
+            if ev["frame"] == frame:
+                self._current_event = ev
             if "buttons" in ev and ev["buttons"] is not None:
                 self._held_buttons = set(ev["buttons"])
             if "axes" in ev and ev["axes"] is not None:
@@ -82,7 +86,7 @@ class InputScheduler:
 
     def mouse_pos(self) -> tuple[int, int]:
         """Return the current mouse position as (x, y)."""
-        return self._mouse_pos
+        return self._mouse_pos or (0, 0)
 
     def apply_to_pyxel(self) -> None:
         """Push held state into pyxel using set_btn / set_btnv / set_mouse_pos.
@@ -122,13 +126,14 @@ class InputScheduler:
             pyxel.set_btnv(getattr(pyxel, name), scaled)
         self._prev_held_axes = set(self._held_axes)
 
-        # Mouse position: prefer Pyxel 2.9+ set_mouse_pos; fall back to attribute patch.
-        x, y = self._mouse_pos
-        if hasattr(pyxel, "set_mouse_pos"):
-            pyxel.set_mouse_pos(x, y)
-        else:
-            try:
-                pyxel.mouse_x = x  # type: ignore[attr-defined]
-                pyxel.mouse_y = y  # type: ignore[attr-defined]
-            except (AttributeError, TypeError):
-                pass  # mouse simulation requires Pyxel 2.9+ if attribute is read-only
+        if self._mouse_pos is not None:
+            pyxel.set_mouse_pos(*self._mouse_pos)
+        event = self._current_event
+        if "mouse_wheel" in event:
+            dx, dy = event["mouse_wheel"]
+            pyxel.set_btnv(pyxel.MOUSE_WHEEL_X, dx)
+            pyxel.set_btnv(pyxel.MOUSE_WHEEL_Y, dy)
+        if "input_text" in event:
+            pyxel.set_input_text(event["input_text"])
+        if "dropped_files" in event:
+            pyxel.set_dropped_files(event["dropped_files"])

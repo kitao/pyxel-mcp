@@ -34,7 +34,9 @@ class PreLoopState:
 
     def require_run_called(self) -> None:
         if not self.run_called:
-            raise RunNotCalledError("script did not call pyxel.run during import")
+            raise RunNotCalledError(
+                "script did not call pyxel.run, pyxel.show, or pyxel.flip"
+            )
 
 
 @contextlib.contextmanager
@@ -42,6 +44,8 @@ def headless_pyxel(
     *,
     random_seed: int | None = None,
     on_run: Callable[[PreLoopState], None] | None = None,
+    on_flip: Callable[[PreLoopState], None] | None = None,
+    on_init: Callable[[], None] | None = None,
 ):
     """Context manager: sets SDL headless, intercepts pyxel.run, restores on exit.
 
@@ -84,6 +88,28 @@ def headless_pyxel(
         state.quit_requested = True
         raise QuitRequested
 
+    def _idle():
+        pass
+
+    def _show():
+        # Pyxel.show retains the screen as an image and redraws it every frame.
+        image = pyxel.Image(pyxel.width, pyxel.height)
+        image.blt(0, 0, pyxel.screen, 0, 0, image.width, image.height)
+        _capture_run(
+            _idle, lambda: pyxel.blt(0, 0, image, 0, 0, image.width, image.height)
+        )
+
+    def _flip():
+        if state.run_called:
+            saved_flip()
+        elif on_flip is not None:
+            on_flip(state)
+        else:
+            # Asset readers stop at the first presented frame.
+            _capture_run(_idle, _idle)
+
+    saved_show = pyxel.show
+    saved_flip = pyxel.flip
     saved_run = pyxel.run
     saved_init = pyxel.init
     saved_quit = pyxel.quit
@@ -98,6 +124,8 @@ def headless_pyxel(
         if pyxel.width > 0:
             if random_seed is not None:
                 pyxel.rseed(random_seed)
+            if on_init is not None:
+                on_init()
             return
         # Bind before overriding so positional fps/headless arguments do not
         # conflict with injected keyword arguments.
@@ -121,12 +149,20 @@ def headless_pyxel(
         if random_seed is not None:
             pyxel.rseed(random_seed)
 
+        if on_init is not None:
+            on_init()
+
+    if on_run is not None:
+        pyxel.show = _show
+        pyxel.flip = _flip
     pyxel.init = _headless_init
     pyxel.run = _capture_run
     pyxel.quit = _request_quit
     try:
         yield state
     finally:
+        pyxel.show = saved_show
+        pyxel.flip = saved_flip
         pyxel.run = saved_run
         pyxel.init = saved_init
         pyxel.quit = saved_quit

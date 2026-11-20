@@ -74,6 +74,23 @@ def run_to_preloop(
                 )
             )
 
+    if path.suffix.lower() == ".pyxres":
+        import pyxel
+
+        with headless_pyxel() as state:
+            try:
+                pyxel.init(1, 1, headless=True)
+                pyxel.load(str(path))
+            except Exception as exc:
+                raise PreloopFailed(
+                    empty_factory(
+                        make_error(ErrorPhase.ASSET_LOAD, str(exc), path=str(path))
+                    )
+                ) from exc
+            on_run(state)
+        assert result is not None
+        return result
+
     with headless_pyxel(on_run=on_run) as state:
         try:
             load_script_module(path)

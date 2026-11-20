@@ -52,12 +52,14 @@ class UntilCondition:
         self.pending_warning: str | None = None
         self._warned = False
 
-    def evaluate(self, target: object) -> bool:
+    def evaluate(self, target: object, *, module: object | None = None) -> bool:
         try:
             # Comprehensions, generators and lambdas look up free names in
             # globals, not eval's locals. Share one lazy namespace so those
             # expressions observe the same attributes as a simple comparison.
             namespace = _AttrNamespace(target)
+            if module is not None:
+                namespace["__main__"] = module
             return bool(eval(self._code, namespace, namespace))
         except (NameError, AttributeError) as e:
             if not self._warned:

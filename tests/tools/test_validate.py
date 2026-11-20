@@ -611,3 +611,18 @@ def test_contextually_invalid_python_is_a_syntax_error(tmp_path, source):
     assert result["errors"] == []
     assert result["issues"][0]["category"] == "syntax"
     assert result["issues"][0]["line"] == 1
+
+
+def test_palette_rebinding_and_whitespace_in_pixel_rows(tmp_path):
+    script = tmp_path / "palette.py"
+    script.write_text(
+        "import pyxel\npyxel.colors = [0, 1]\npyxel.colors[:] = [0, 1]\n"
+        "pyxel.images[0].set(0, 0, data=['01  2', '012'])\n"
+        "pyxel.images[0].set(0, 0, data=['01', '012'])\n"
+        "pyxel.blt(*args, **kwargs)\n"
+    )
+    issues = validate_run({"script": str(script)})["issues"]
+    assert [(i["line"], i["category"]) for i in issues] == [
+        (2, "anti_pattern.palette_assignment"),
+        (5, "anti_pattern.ragged_image_set"),
+    ]

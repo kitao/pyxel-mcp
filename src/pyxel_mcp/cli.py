@@ -65,10 +65,7 @@ def _print_install_guide() -> int:
     print("2. Restart the client to load the server.")
     print()
     print("3. Verify it loaded - ask your client:")
-    print('       "What tools does pyxel-mcp expose?"')
-    print("   You should see 8 tools: run, validate, pyxel_info,")
-    print("   read_palette, read_image, read_tilemap, read_audio,")
-    print("   and diff_frames.")
+    print('       "Use pyxel_info to report the installed Pyxel version."')
     return 0
 
 

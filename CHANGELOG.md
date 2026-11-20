@@ -1,5 +1,18 @@
 # Change Log
 
+## 1.5.0
+
+- Require Pyxel 3.0.3. Look up Pyxel and Cube signatures, class members, and available documentation with `lookup_api`.
+- Observe `pyxel.show()` and manual `pyxel.flip()` loops with the same frame budget, input, and snapshots as `pyxel.run()`. Schedule text, wheel movement, and dropped files. Inspect module-level state from class-based games with `__main__` in snapshots and stop conditions.
+- Open `.pyxres` files directly with the four asset readers. Select a tilemap rectangle in tiles and optionally receive WAV audio in the MCP response.
+- Render short palettes consistently across screenshots, video, and asset previews. Detect stalls only when consecutive frames have matching observations.
+- Check image rows with Pyxel’s whitespace rules and flag palette assignments that shadow the engine palette. Report intentional drawing choices as informational findings.
+- Report unsuccessful observations through the MCP error flag and advertise the side effects of executing a trusted local script.
+
+Clients upgrading from 1.4.0 should accept the new `sampled_region` field in
+`read_tilemap` results. Calls returning `ok: false` now also set MCP's
+`isError: true`. The structured result still includes the tool's diagnostics.
+
 ## 1.4.0
 
 - Require Pyxel 3.0.1 or newer and document Pyxel Cube observation and Pyxel 3

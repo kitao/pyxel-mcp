@@ -7,10 +7,11 @@ Music targets and infinitely looping sounds render a fixed 10-second window.
 
 from __future__ import annotations
 
-import struct
 import wave
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 from pyxel_mcp.observe._harnesses._common.artifact_path import absolute_path_error
 from pyxel_mcp.observe._harnesses._common.error_capture import make_validation_error
@@ -69,16 +70,12 @@ def _read_wav_metadata(path: str) -> tuple[int, int, float, float]:
         n_channels = wf.getnchannels()
         n_frames = wf.getnframes()
         duration = n_frames / sample_rate if sample_rate > 0 else 0.0
-        raw = wf.readframes(n_frames)
+        peak = 0
+        while raw := wf.readframes(65536):
+            samples = np.frombuffer(raw, dtype="<i2")
+            peak = max(peak, -int(samples.min()), int(samples.max()))
 
-    if raw:
-        count = n_frames * n_channels
-        samples = struct.unpack(f"<{count}h", raw)
-        peak = max(abs(s) for s in samples) / 32768.0 if samples else 0.0
-    else:
-        peak = 0.0
-
-    return sample_rate, n_channels, duration, peak
+    return sample_rate, n_channels, duration, peak / 32768.0
 
 
 def _build_notes(sound) -> list[dict]:
@@ -177,10 +174,17 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
 
     output_path = payload.get("output_path")
     if not isinstance(output_path, str):
-        return _empty(make_validation_error("missing or non-str `output_path`"))
+        return _empty(
+            make_validation_error(
+                "supply an absolute WAV output_path or set inline=true"
+            )
+        )
     path_error = absolute_path_error(output_path, "output_path")
     if path_error:
         return _empty(make_validation_error(path_error))
+
+    if Path(output_path).suffix.lower() != ".wav":
+        return _empty(make_validation_error("output_path must end with .wav"))
 
     # --- Run script to pre-loop checkpoint ---
     def observe(_state):
@@ -210,33 +214,22 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
 
         if kind == "music":
             # Music: check if all constituent channel lists are empty
-            seqs = (
-                audio_obj.seqs
-                if hasattr(audio_obj, "seqs")
-                else getattr(audio_obj, "snds_list", [])
-            )
-            has_content = any(len(list(ch)) > 0 for ch in seqs)
+            has_content = any(len(ch) for ch in audio_obj.seqs)
             if not has_content:
                 is_empty_slot = True
                 warnings.append(f"music slot {slot} is empty / not populated")
 
         # --- Determine duration and write WAV ---
         if kind == "sound":
-            if hasattr(audio_obj, "total_sec"):
-                duration_hint = audio_obj.total_sec()
-                if duration_hint is None:
-                    duration_hint = 10.0
-                    warnings.append(
-                        "sound target loops indefinitely; rendered a fixed "
-                        "10-second window"
-                    )
-                elif duration_hint <= 0:
-                    is_empty_slot = True
-                    duration_hint = 1.0  # fallback for empty slot
-            else:
-                # Pyxel's tracker speed is measured at 120 ticks per second.
-                n_notes = max(len(list(audio_obj.notes)), 1)
-                duration_hint = n_notes * audio_obj.speed / 120
+            duration_hint = audio_obj.total_sec()
+            if duration_hint is None:
+                duration_hint = 10.0
+                warnings.append(
+                    "sound target loops indefinitely; rendered a fixed 10-second window"
+                )
+            elif duration_hint <= 0:
+                is_empty_slot = True
+                duration_hint = 1.0
         else:
             duration_hint = 10.0  # music renders a fixed 10-second window
             if not is_empty_slot:
@@ -246,6 +239,7 @@ def run(payload: dict[str, Any]) -> dict[str, Any]:
                 )
 
         out_path = str(Path(output_path).resolve())
+        Path(out_path).parent.mkdir(parents=True, exist_ok=True)
         audio_obj.save(out_path, duration_hint)
 
         # --- Read WAV metadata ---
